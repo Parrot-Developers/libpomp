@@ -1,0 +1,127 @@
+pomp - Printf Oriented Message Protocol
+
+This library offers a simple protocol to encode/decode messages and exchange
+them between processes on a socket (inet or local).
+
+A message is composed of a 32-bit id and a payload. The payload is composed
+of any number of typed arguments.
+
+The encoding/decoding is done with printf/scanf like functions with a format
+string and a variable number of arguments. However, no actual string formatting
+is done, the payload is a binary representation of arguments.
+
+The payload contains the type of the arguments as well as the value of the
+arguments, hence making it robust during decoding at runtime.
+
+Both sender and receiver shall provide the format string. How the knowledge of
+the format string is shared is out of the scope of this library. It can simply
+be a shared header with defines.
+
+Key points :
+- no need to use a description language and code generator, the format string
+  indicates the type of the message arguments.
+- the use of printf/scanf like functions allow the compiler to check the
+  coherence between the format string and the actual type of the arguments so
+  the encoding/decoding engine can be generic and safe.
+- as the type of arguments is included in the payload, the decoding engine can
+  check that the provided format string matches the actual message content.
+
+How to use :
+
+1) Instantiate a server and a client context object.
+   They can be in separate processes or in the same one. Communication is
+   done with sockets (inet or local).
+   The server will listen for any number of incoming connections on the given
+   address. Both server and client are notified of the remote peer connection
+   and disconnection as well as the reception of a message.
+   The client/server context object offers a file descriptor that need to
+   be added in an event loop to process io events.
+
+   ctx = pomp_ctx_new(&cb, NULL);
+   pomp_ctx_listen(ctx, addr, addrlen);
+   pomp_ctx_connect(ctx, addr, addrlen);
+
+   The library automatically handles reconnections after timeout and remote
+   disconnections.
+
+2) Send a message.
+   A message can be sent at the context object level or at the connection
+   object level. The difference is mainly for server where a broadcast is done
+   at the context object level.
+
+   uint32_t counter = 10;
+   uint32_t msgid = 42;
+   pomp_ctx_send(ctx, msgid, "%d%s", counter, "PING");
+
+   The message id can be used freely to identify the message, mainly its
+   format string at reception.
+   The format string is a subset of what is supported by a standard printf
+   function but allows the compiler to check that given arguments have the
+   correct type. Basically only format specifier is supported, no extra string
+   shall be given.
+
+3) Receive the message.
+   The reception of a message is indicated in the context object callback. You
+   just need to get the message id and handle the message accordingly.
+
+   uint32_t counter = 0;
+   char *str = NULL;
+   uint32_t msgid = pomp_msg_get_id(msg);
+   pomp_msg_read(msg, "%d%ms", &counter, &str);
+   free(str);
+
+   Again the format string allow the compiler to check that the type of the
+   argument is valid. The decoding engine will also make sure it matches the
+   real message payload.
+   Note that string decoding uses a special string specifier '%ms' that
+   indicate that an allocated string will be returned. This avoid buffer
+   overflows by ensuring corret size of buffer. Caller needs however to free it
+   afterwards. This '%ms' specifier is a GNU extension to scanf but will be
+   part of POSIX specifications.
+
+4) Cleanup.
+   Simply stop and destroy created objects.
+   pomp_ctx_stop(ctx);
+   pomp_ctx_destroy(ctx);
+
+Even if the library can be used without any generated code from description
+files, it can be used as a basic component to build a more complicated protocol
+between 2 entities.
+
+This library should become useful when one wants to exchange messages between
+2 processes. The library handles many aspects of an inter-process communication
+that can be hard to make it right, simple and robust.
+
+Format string specification:
+
+- %hhi : 8-bit signed integer.
+- %hi  : 16-bit signed integer.
+- %i   : 32-bit signed integer.
+- %li  : 32-bit signed integer if __WORDSIZE is 32 else 64-bit signed integer.
+- %lli : 64-bit signed integer.
+Note : variants with %d are also supported for signed integer.
+
+- %hhu : 8-bit unsigned integer.
+- %hu  : 16-bit unsigned integer.
+- %u   : 32-bit unsigned integer.
+- %lu  : 32-bit unsigned integer if __WORDSIZE is 32 else 64-bit signed integer.
+- %llu : 64-bit unsigned integer.
+
+- %s   : string (encoding only).
+- %ms  : string (decoding only). Caller shall free the returned string.
+Note : for decoding, %ms expects a pointer to a string (char **) not just a
+       string (char*) like a standard scanf with %s.
+
+- %p%u : buffer (with its size). For decoding, buffer is still owned by the
+         message, call shall NOT free the returned pointer.
+Note : both %p AND %u shall be given.
+
+- %f   : 32-bit floating point.
+- %lf  : 64-bit floating point.
+Note : variants with %F, %g, %G, %e, %E are also supported for floating point.
+
+- %x   : file descriptor. Can only be sent on a local unix socket.
+Note : for encoding, the file descriptor will be internally duplicated. For
+       decoding, the returned file descriptor shall NOT be closed by caller.
+       However caller shall duplicate it if it needs to use it after the
+       message is released.

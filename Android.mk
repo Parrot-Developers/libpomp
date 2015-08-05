@@ -1,0 +1,29 @@
+LOCAL_PATH := $(call my-dir)
+
+include $(CLEAR_VARS)
+
+LOCAL_MODULE := libpomp
+LOCAL_EXPORT_C_INCLUDE_DIRS := $(LOCAL_PATH)/include
+LOCAL_C_INCLUDES := $(LOCAL_PATH)/include
+LOCAL_CFLAGS := -Wextra -fvisibility=hidden
+
+ifdef NDK_PROJECT_PATH
+    LOCAL_CFLAGS += -DANDROID_NDK
+    LOCAL_EXPORT_C_INCLUDES := $(LOCAL_EXPORT_C_INCLUDE_DIRS)
+    LOCAL_LDLIBS := -llog
+endif
+
+LOCAL_SRC_FILES := \
+	src/pomp_conn.c \
+	src/pomp_ctx.c \
+	src/pomp_decoder.c \
+	src/pomp_encoder.c \
+	src/pomp_log.c \
+	src/pomp_loop.c \
+	src/pomp_msg.c \
+	src/pomp_prot.c \
+	src/pomp_timer.c
+
+LOCAL_MODULE_TAGS := optional
+LOCAL_SHARED_LIBRARIES := liblog
+include $(BUILD_SHARED_LIBRARY)

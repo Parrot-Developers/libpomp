@@ -1,0 +1,28 @@
+# eclipse projects
+.pydevproject
+.cproject
+.project
+.settings/
+
+# backup files
+*~
+*.swp
+
+# python files
+*.pyc
+*.pyo
+
+# compiled files
+*.o
+*.d
+*.so
+
+# autotools generated struff
+build-aux/
+m4/
+configure
+config.h.in
+aclocal.m4
+Makefile.in
+INSTALL
+
