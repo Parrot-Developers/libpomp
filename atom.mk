@@ -55,11 +55,8 @@ LOCAL_MODULE := pomp-ping-cpp
 LOCAL_CATEGORY_PATH := libs/pomp/examples
 LOCAL_DESCRIPTION := Example code for libpomp written in c++
 LOCAL_CXXFLAGS := -std=c++0x
-LOCAL_SRC_FILES := examples/ping.cpp examples/ping_common.c
+LOCAL_SRC_FILES := examples/ping.cpp
 LOCAL_LIBRARIES := libpomp
-ifeq ("$(TARGET_OS)","mingw32")
-LOCAL_LDLIBS += -lws2_32
-endif
 include $(BUILD_EXECUTABLE)
 
 include $(CLEAR_VARS)

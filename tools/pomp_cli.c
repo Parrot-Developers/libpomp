@@ -36,8 +36,6 @@
 #    define _WIN32_WINNT 0x0501
 #  endif /* !_WIN32_WINNT */
 #  include <winsock2.h>
-#  include <ws2tcpip.h>
-#  include <process.h>
 #endif /* _WIN32 */
 
 /* Standard headers */
@@ -54,8 +52,6 @@
 #ifndef _WIN32
 #  include <unistd.h>
 #  include <sys/socket.h>
-#  include <sys/un.h>
-#  include <netdb.h>
 #endif /* !_WIN32 */
 
 /* Need access to advanced API (for loop and timers) */
@@ -83,7 +79,7 @@ struct app {
 	int                     timeout;
 	int                     dump;
 	struct sockaddr         *addr;
-	socklen_t               addrlen;
+	uint32_t                addrlen;
 	int                     hasmsg;
 	uint32_t                msgid;
 	const char              *msgfmt;
@@ -113,86 +109,6 @@ static struct app s_app = {
 		.waitmsg = 0,
 		.expected_msgid = 0,
 };
-
-/**
- */
-static int parse_inet_addr(const char *buf, struct sockaddr *addr,
-		uint32_t *addrlen)
-{
-	int res = -EINVAL;
-	char *ip = NULL, *sep = NULL;
-	struct addrinfo *ai = NULL;
-
-	/* Duplicate string as we need to modify it */
-	ip = strdup(buf);
-	if (ip == NULL)
-		goto out;
-
-	/* Find port separator */
-	sep = strrchr(ip, ':');
-	if (sep == NULL)
-		goto out;
-	*sep = '\0';
-
-	/* Convert address and port (WIN32 returns positive value for errors) */
-	if (getaddrinfo(ip, sep + 1, NULL, &ai) != 0)
-		goto out;
-	if (*addrlen < ai->ai_addrlen)
-		goto out;
-	memcpy(addr, ai->ai_addr, ai->ai_addrlen);
-	*addrlen = ai->ai_addrlen;
-	res = 0;
-
-out:
-	if (ai != NULL)
-		freeaddrinfo(ai);
-	free(ip);
-	return res;
-}
-
-/**
- */
-static int parse_addr(const char *buf, struct sockaddr *addr, uint32_t *addrlen)
-{
-	int res = -EINVAL;
-	struct sockaddr_un *addr_un = NULL;
-
-	if (buf == NULL || addr == NULL || addrlen == NULL)
-		goto out;
-	if (*addrlen < sizeof(struct sockaddr_storage))
-		goto out;
-
-	if (strncmp(buf, "inet:", 5) == 0) {
-		/* Inet v4 address */
-		res = parse_inet_addr(buf + 5, addr, addrlen);
-		if (res < 0)
-			goto out;
-	} else if (strncmp(buf, "inet6:", 6) == 0) {
-		/* Inet v6 address */
-		res = parse_inet_addr(buf + 6, addr, addrlen);
-		if (res < 0)
-			goto out;
-#ifndef _WIN32
-	} else if (strncmp(buf, "unix:", 5) == 0) {
-		/* Unix address */
-		addr_un = (struct sockaddr_un *)addr;
-		memset(addr_un, 0, sizeof(*addr_un));
-		addr_un->sun_family = AF_UNIX;
-		strncpy(addr_un->sun_path, buf + 5, sizeof(addr_un->sun_path));
-		if (buf[5] == '@')
-			addr_un->sun_path[0] = '\0';
-		*addrlen = (uint32_t)sizeof(*addr_un);
-#endif /* !_WIN32 */
-	} else {
-		goto out;
-	}
-
-	/* Success */
-	res = 0;
-
-out:
-	return res;
-}
 
 /**
  *
@@ -352,8 +268,6 @@ static void event_cb(struct pomp_ctx *ctx, enum pomp_event event,
  */
 static void sig_handler(int signum)
 {
-	ssize_t res = 0;
-	uint8_t dummy = 0xff;
 	diag("signal %d(%s) received", signum, strsignal(signum));
 	s_app.running = 0;
 	if (s_app.loop != NULL)
@@ -458,7 +372,7 @@ int main(int argc, char *argv[])
 		memset(&addr_storage, 0, sizeof(addr_storage));
 		s_app.addr = (struct sockaddr *)&addr_storage;
 		s_app.addrlen = sizeof(addr_storage);
-		if (parse_addr(arg_addr, s_app.addr, &s_app.addrlen) < 0) {
+		if (pomp_addr_parse(arg_addr, s_app.addr, &s_app.addrlen) < 0) {
 			diag("Failed to parse address : %s", arg_addr);
 			goto error;
 		}
