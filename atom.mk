@@ -46,11 +46,8 @@ include $(CLEAR_VARS)
 LOCAL_MODULE := pomp-ping
 LOCAL_CATEGORY_PATH := libs/pomp/examples
 LOCAL_DESCRIPTION := Example code for libpomp
-LOCAL_SRC_FILES := examples/ping.c examples/ping_common.c
+LOCAL_SRC_FILES := examples/ping.c
 LOCAL_LIBRARIES := libpomp
-ifeq ("$(TARGET_OS)","mingw32")
-LOCAL_LDLIBS += -lws2_32
-endif
 include $(BUILD_EXECUTABLE)
 
 include $(CLEAR_VARS)

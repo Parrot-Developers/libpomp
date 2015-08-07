@@ -39,7 +39,6 @@
 #    define _WIN32_WINNT 0x0501
 #  endif /* !_WIN32_WINNT */
 #  include <winsock2.h>
-#  include <ws2tcpip.h>
 #  include <process.h>
 #endif /* _WIN32 */
 
@@ -57,8 +56,6 @@
 #ifndef _WIN32
 #  include <unistd.h>
 #  include <sys/socket.h>
-#  include <sys/un.h>
-#  include <netdb.h>
 #endif /* !_WIN32 */
 
 /* Need access to advanced API (for loop and timers) */
@@ -73,10 +70,6 @@ extern "C" {
 #ifdef _WIN32
 typedef unsigned int	uid_t;		/**< User identification */
 typedef unsigned int	gid_t;		/**< Group identification */
-struct sockaddr_un {
-	short		sun_family;	/**< AF_UNIX */
-	char		sun_path[108];	/**< pathname */
-};
 struct ucred {
 	pid_t		pid;		/**< PID of sending process */
 	uid_t		uid;		/**< UID of sending process */
@@ -86,11 +79,6 @@ static inline uid_t getuid() {return 0;}
 static inline gid_t getgid() {return 0;}
 static inline const char *strsignal(int signum) {return "??";}
 #endif /* _WIN32 */
-
-int parse_addr(const char *buf, struct sockaddr *addr, uint32_t *addrlen);
-
-void format_addr(char *buf, uint32_t buflen, const struct sockaddr *addr,
-		uint32_t addrlen);
 
 #ifdef __cplusplus
 }

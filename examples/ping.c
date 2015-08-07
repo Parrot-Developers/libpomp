@@ -77,17 +77,17 @@ static void log_conn_event(struct pomp_conn *conn, int is_server)
 		return;
 	}
 
-	if (local_addr->sa_family == AF_UNIX) {
+	if (pomp_addr_is_unix(local_addr, local_addrlen)) {
 		char addrbuf[128] = "";
 		const struct ucred *peer_cred = NULL;
 
 		/* Format using either local or peer address depending on
 		 * client/server side */
 		if (is_server) {
-			format_addr(addrbuf, sizeof(addrbuf),
+			pomp_addr_format(addrbuf, sizeof(addrbuf),
 					local_addr, local_addrlen);
 		} else {
-			format_addr(addrbuf, sizeof(addrbuf),
+			pomp_addr_format(addrbuf, sizeof(addrbuf),
 					peer_addr, peer_addrlen);
 		}
 
@@ -109,9 +109,9 @@ static void log_conn_event(struct pomp_conn *conn, int is_server)
 		char peer_addrbuf[128] = "";
 
 		/* Format both addresses and log connection */
-		format_addr(local_addrbuf, sizeof(local_addrbuf),
+		pomp_addr_format(local_addrbuf, sizeof(local_addrbuf),
 				local_addr, local_addrlen);
-		format_addr(peer_addrbuf, sizeof(peer_addrbuf),
+		pomp_addr_format(peer_addrbuf, sizeof(peer_addrbuf),
 				peer_addr, peer_addrlen);
 		diag("%s -> %s", local_addrbuf, peer_addrbuf);
 	}
@@ -306,7 +306,7 @@ int main(int argc, char *argv[])
 	memset(&addr_storage, 0, sizeof(addr_storage));
 	addr = (struct sockaddr *)&addr_storage;
 	addrlen = sizeof(addr_storage);
-	if (parse_addr(argv[2], addr, &addrlen) < 0) {
+	if (pomp_addr_parse(argv[2], addr, &addrlen) < 0) {
 		diag("Failed to parse address : %s", argv[2]);
 		usage(argv[0]);
 		exit(EXIT_FAILURE);
