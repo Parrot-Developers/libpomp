@@ -100,18 +100,6 @@ struct ucred {
 	gid_t	gid;	/**< GID of sending process */
 };
 
-#undef close
-#undef read
-#undef write
-#undef fcntl
-#undef errno
-
-#define close	win32_close
-#define read	win32_read
-#define write	win32_write
-#define fcntl	win32_fcntl
-#define errno	((int)GetLastError())
-
 static inline int win32_close(int fd)
 {
 	return closesocket((SOCKET)fd);
@@ -131,6 +119,27 @@ static inline int win32_fcntl(int fd, int cmd, ...)
 {
 	return 0;
 }
+
+static inline int win32_setsockopt(int sockfd, int level, int optname,
+		const void *optval, socklen_t optlen)
+{
+	return setsockopt((SOCKET)sockfd, level, optname,
+			(const char *)optval, optlen);
+}
+
+#undef close
+#undef read
+#undef write
+#undef fcntl
+#undef setsockopt
+#undef errno
+
+#define close		win32_close
+#define read		win32_read
+#define write		win32_write
+#define fcntl		win32_fcntl
+#define setsockopt	win32_setsockopt
+#define errno		((int)GetLastError())
 
 #ifdef __cplusplus
 }

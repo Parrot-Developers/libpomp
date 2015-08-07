@@ -203,7 +203,6 @@ static int pomp_loop_win32_do_get_fd(struct pomp_loop *loop)
 static int pomp_loop_win32_do_wait_and_process(struct pomp_loop *loop,
 		int timeout)
 {
-	int res = 0;
 	struct pomp_fd *pfd = NULL;
 	uint32_t revents = 0;
 	DWORD count = 0, waitres = 0;
@@ -272,7 +271,7 @@ static int pomp_loop_win32_do_wakeup(struct pomp_loop *loop)
 		POMP_LOG_ERRNO("CreateEvent");
 	}
 
-	return 0;
+	return res;
 }
 
 /**
