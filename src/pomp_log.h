@@ -60,29 +60,33 @@ extern "C" {
 
 #define LOG_TAG "pomp"
 #ifdef ANDROID_NDK
-    #include <android/log.h>
-    /** Log as debug */
-    #define POMP_LOGD(_fmt, ...) \
-        __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, _fmt, ##__VA_ARGS__)
-    /** Log as info */
-    #define POMP_LOGI(_fmt, ...) \
-        __android_log_print(ANDROID_LOG_INFO, LOG_TAG, _fmt, ##__VA_ARGS__)
-    /** Log as warning */
-    #define POMP_LOGW(_fmt, ...) \
-        __android_log_print(ANDROID_LOG_WARN, LOG_TAG, _fmt, ##__VA_ARGS__)
-    /** Log as error */
-    #define POMP_LOGE(_fmt, ...) \
-        __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, _fmt, ##__VA_ARGS__)
+
+#include <android/log.h>
+/** Log as debug */
+#define POMP_LOGD(_fmt, ...) \
+	__android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, _fmt, ##__VA_ARGS__)
+/** Log as info */
+#define POMP_LOGI(_fmt, ...) \
+	__android_log_print(ANDROID_LOG_INFO, LOG_TAG, _fmt, ##__VA_ARGS__)
+/** Log as warning */
+#define POMP_LOGW(_fmt, ...) \
+	__android_log_print(ANDROID_LOG_WARN, LOG_TAG, _fmt, ##__VA_ARGS__)
+/** Log as error */
+#define POMP_LOGE(_fmt, ...) \
+	__android_log_print(ANDROID_LOG_ERROR, LOG_TAG, _fmt, ##__VA_ARGS__)
+
 #else
-    #include "cutils/log.h"
-    /** Log as debug */
-    #define POMP_LOGD(_fmt, ...)	ALOGD(_fmt, ##__VA_ARGS__)
-    /** Log as info */
-    #define POMP_LOGI(_fmt, ...)	ALOGI(_fmt, ##__VA_ARGS__)
-    /** Log as warning */
-    #define POMP_LOGW(_fmt, ...)	ALOGW(_fmt, ##__VA_ARGS__)
-    /** Log as error */
-    #define POMP_LOGE(_fmt, ...)	ALOGE(_fmt, ##__VA_ARGS__)
+
+#include "cutils/log.h"
+/** Log as debug */
+#define POMP_LOGD(_fmt, ...)	ALOGD(_fmt, ##__VA_ARGS__)
+/** Log as info */
+#define POMP_LOGI(_fmt, ...)	ALOGI(_fmt, ##__VA_ARGS__)
+/** Log as warning */
+#define POMP_LOGW(_fmt, ...)	ALOGW(_fmt, ##__VA_ARGS__)
+/** Log as error */
+#define POMP_LOGE(_fmt, ...)	ALOGE(_fmt, ##__VA_ARGS__)
+
 #endif
 
 #else /* !BUILD_LIBULOG && !ANDROID */

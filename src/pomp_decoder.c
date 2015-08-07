@@ -409,7 +409,7 @@ again:
 
 		/* File descriptor (hack) */
 		case 'x':
-			if (flags & (FLAG_LL | FLAG_L| FLAG_H | FLAG_HH)) {
+			if (flags & (FLAG_LL | FLAG_L | FLAG_H | FLAG_HH)) {
 				POMP_LOGW("decoder : unsupported format width");
 				res = -EINVAL;
 				goto error;
