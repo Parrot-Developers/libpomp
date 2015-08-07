@@ -45,6 +45,9 @@
 #  ifndef HAVE_ENDIAN_H
 #    define HAVE_ENDIAN_H
 #  endif
+#  ifndef HAVE_NETDB_H
+#    define HAVE_NETDB_H
+#  endif
 #  ifndef HAVE_SYS_EPOLL_H
 #    define HAVE_SYS_EPOLL_H
 #  endif

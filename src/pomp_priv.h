@@ -55,6 +55,9 @@
 #ifdef HAVE_ENDIAN_H
 #  include <endian.h>
 #endif
+#ifdef HAVE_NETDB_H
+#  include <netdb.h>
+#endif
 #ifdef HAVE_SYS_EPOLL_H
 #  include <sys/epoll.h>
 #endif

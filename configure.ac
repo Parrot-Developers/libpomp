@@ -69,6 +69,7 @@ AC_HEADER_STDC
 AC_CHECK_HEADERS([ \
 	endian.h \
 	inttypes.h \
+	netdb.h \
 	unistd.h \
 	sys/epoll.h \
 	sys/eventfd.h \

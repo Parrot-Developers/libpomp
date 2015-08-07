@@ -11,6 +11,7 @@ libpomp_la_LIBADD += -lws2_32
 endif
 
 libpomp_la_SOURCES = \
+	pomp_addr.c \
 	pomp_conn.c \
 	pomp_ctx.c \
 	pomp_decoder.c \

@@ -436,6 +436,46 @@ POMP_API int pomp_msg_dump(const struct pomp_msg *msg,
 POMP_API int pomp_msg_adump(const struct pomp_msg *msg, char **dst);
 
 /*
+ * Address string parsing/formatting utilities.
+ */
+
+/**
+ * Parse a socket address given as a string and convert it to sockaddr.
+ * @param buf: input string.
+ * @param addr: destination structure.
+ * @param addrlen: maximum size of destination structure as input, real size
+ * converted as output. Should be at least sizeof(struct sockaddr_storage)
+ * @return 0 in case of success, negative errno value in case of error.
+ *
+ * Format of string is:
+ * - inet:<host>:<port>: ipv4 address with host name and port.
+ * - inet6:<host>:<port>: ipv6 address with host name and port
+ * - unix:<pathname>: unix local address with file system name.
+ * - unix:@<name>: unix local address with abstract name.
+ */
+POMP_API int pomp_addr_parse(const char *buf, struct sockaddr *addr,
+		uint32_t *addrlen);
+
+/**
+ * Format a socket address into a string.
+ * @param buf: destination buffer
+ * @param buflen: maximum size of destination buffer.
+ * @param addr: address to format.
+ * @param addrlen: size of address.
+ * @return 0 in case of success, negative errno value in case of error.
+ */
+POMP_API int pomp_addr_format(char *buf, uint32_t buflen,
+		const struct sockaddr *addr, uint32_t addrlen);
+
+/**
+ * Determine if a socket address is a unix local one.
+ * @param addr: address to check.
+ * @param addrlen: size of address.
+ * @return 1 if socket is unix local, 0 otherwise.
+ */
+POMP_API int pomp_addr_is_unix(const struct sockaddr *addr, uint32_t addrlen);
+
+/*
  * Advanced API.
  * Always compiled in the library but user code shall explicitly define
  * POMP_ENABLE_ADVANCED_API to use it.

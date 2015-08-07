@@ -36,9 +36,10 @@
 #define _POMP_PRIV_WIN32_H_
 
 #ifndef _WIN32_WINNT
-#  define _WIN32_WINNT 0x0500
+#  define _WIN32_WINNT 0x0501
 #endif /* !_WIN32_WINNT */
 #include <winsock2.h>
+#include <ws2tcpip.h>
 #ifdef _MSC_VER
 #  include <mstcpip.h>
 #endif /* _MSC_VER */

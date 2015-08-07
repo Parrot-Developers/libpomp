@@ -14,6 +14,7 @@ ifdef NDK_PROJECT_PATH
 endif
 
 LOCAL_SRC_FILES := \
+	src/pomp_addr.c \
 	src/pomp_conn.c \
 	src/pomp_ctx.c \
 	src/pomp_decoder.c \
