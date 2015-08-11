@@ -32,6 +32,8 @@
 
 #include "pomp_test.h"
 
+#ifndef WIN32
+
 #define ADDR_UNIX		"/tmp/pomp_test.socket"
 #define ADDR_UNIX_ABSTRACT	"@/tmp/pomp_test.socket"
 
@@ -339,3 +341,5 @@ static CU_TestInfo s_fd_passing_tests[] = {
 	{(char *)"fd_passing", NULL, NULL, s_fd_passing_tests},
 	CU_SUITE_INFO_NULL,
 };
+
+#endif /* !_WIN32 */

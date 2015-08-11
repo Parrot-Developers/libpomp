@@ -15,7 +15,9 @@ LOCAL_EXPORT_C_INCLUDES := \
 
 # Test code needs access to internal functions
 ifndef TARGET_TEST
-LOCAL_CFLAGS += -fvisibility=hidden
+  LOCAL_CFLAGS += -fvisibility=hidden
+else ifeq ("$(TARGET_OS)","mingw32")
+  LOCAL_LDFLAGS += -Wl,--export-all-symbols
 endif
 LOCAL_CFLAGS += -DPOMP_API_EXPORTS
 
@@ -32,7 +34,7 @@ LOCAL_SRC_FILES := \
 	src/pomp_timer.c
 
 ifeq ("$(TARGET_OS)","mingw32")
-LOCAL_LDLIBS += -lws2_32
+  LOCAL_LDLIBS += -lws2_32
 endif
 
 LOCAL_DOXYFILE := Doxyfile
@@ -83,16 +85,18 @@ include $(CLEAR_VARS)
 LOCAL_MODULE := libpomp-vala
 LOCAL_CATEGORY_PATH := libs
 LOCAL_DESCRIPTION := Vala binding for libpomp
-LOCAL_INSTALL_HEADERS := libpomp.vapi:$(TARGET_OUT_STAGING)/usr/share/vala/vapi/
+LOCAL_INSTALL_HEADERS := libpomp.vapi:usr/share/vala/vapi/
 include $(BUILD_CUSTOM)
 
 ###############################################################################
 ###############################################################################
 
 ifdef TARGET_TEST
+
 include $(CLEAR_VARS)
 LOCAL_MODULE := tst-pomp
 LOCAL_C_INCLUDES := $(LOCAL_PATH)/src
+
 LOCAL_SRC_FILES := \
 	tests/pomp_test.c \
 	tests/pomp_test_addr.c \
@@ -101,6 +105,14 @@ LOCAL_SRC_FILES := \
 	tests/pomp_test_loop.c \
 	tests/pomp_test_ipc.c \
 	tests/pomp_test_timer.c
-LOCAL_LIBRARIES := libpomp libulog libcunit
+
+LOCAL_LIBRARIES := libpomp libcunit
+LOCAL_CONDITIONAL_LIBRARIES := OPTIONAL:libulog
+
+ifeq ("$(TARGET_OS)","mingw32")
+  LOCAL_LDLIBS += -lws2_32
+endif
+
 include $(BUILD_EXECUTABLE)
+
 endif

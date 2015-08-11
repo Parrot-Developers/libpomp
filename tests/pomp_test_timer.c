@@ -32,6 +32,8 @@
 
 #include "pomp_test.h"
 
+#ifndef WIN32
+
 /** */
 struct test_data {
 	uint32_t  counter;
@@ -157,3 +159,5 @@ static CU_TestInfo s_timer_tests[] = {
 	{(char *)"timer", NULL, NULL, s_timer_tests},
 	CU_SUITE_INFO_NULL,
 };
+
+#endif /* !_WIN32 */

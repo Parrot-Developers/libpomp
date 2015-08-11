@@ -192,7 +192,7 @@ static const char **get_refdata_argv(int *argc)
 	REFDATA_ARGV_ADD("%" PRIu64, TEST_VAL_U64);
 	REFDATA_ARGV_ADD("%s", TEST_VAL_STR);
 	REFDATA_ARGV_ADD("%.32f", TEST_VAL_F32);
-	REFDATA_ARGV_ADD("%.64lf", TEST_VAL_F64);
+	REFDATA_ARGV_ADD("%.64f", TEST_VAL_F64);
 
 	argv[i] = NULL;
 	*argc = i;
@@ -414,6 +414,7 @@ static void test_buffer_perm(void)
 /** */
 static void test_buffer_fd(void)
 {
+#ifndef _WIN32
 	int res = 0, fd = -1, fd2 = -1;
 	uint32_t i = 0;
 	struct pomp_buffer *buf = NULL;
@@ -559,6 +560,7 @@ static void test_buffer_fd(void)
 		res = close(fds[i][0]); CU_ASSERT_EQUAL(res, 0);
 		res = close(fds[i][1]); CU_ASSERT_EQUAL(res, 0);
 	}
+#endif /* !_WIN32 */
 }
 
 /** */
@@ -730,9 +732,13 @@ static void test_msg_read_write(void)
 
 	/* Dump with buffer allocation */
 	res = pomp_msg_adump(msg, &abuf);
+#ifndef _WIN32
 	CU_ASSERT_EQUAL(res, 0);
 	CU_ASSERT_STRING_EQUAL(abuf, s_msg_dump);
 	free(abuf);
+#else /* _WIN32 */
+	CU_ASSERT_EQUAL(res, -ENOSYS);
+#endif /* _WIN32 */
 
 	/* Copy (with data) */
 	msg2 = pomp_msg_new_copy(msg);
@@ -1339,6 +1345,7 @@ static void test_encoder_argv(void)
 /** */
 static void test_encoder_fd(void)
 {
+#ifndef _WIN32
 	int res = 0;
 	struct pomp_msg msg = POMP_MSG_INITIALIZER;
 	struct pomp_encoder *enc = NULL;
@@ -1412,6 +1419,7 @@ static void test_encoder_fd(void)
 	/* Clear message allocated on stack */
 	res = pomp_msg_clear(&msg);
 	CU_ASSERT_EQUAL(res, 0);
+#endif /* !_WIN32 */
 }
 
 /** */
@@ -2227,6 +2235,7 @@ static void test_decoder_dump(void)
 /** */
 static void test_decoder_fd(void)
 {
+#ifndef _WIN32
 	int res = 0;
 	struct pomp_msg msg = POMP_MSG_INITIALIZER;
 	struct pomp_decoder *dec = NULL;
@@ -2337,6 +2346,7 @@ static void test_decoder_fd(void)
 	/* Clear message allocated on stack */
 	res = pomp_msg_clear(&msg);
 	CU_ASSERT_EQUAL(res, 0);
+#endif /* !_WIN32 */
 }
 
 /** */

@@ -43,15 +43,16 @@
 #include <signal.h>
 #include <inttypes.h>
 
-#include <pthread.h>
+#include <sys/stat.h>
 
+#ifndef _WIN32
+#include <pthread.h>
 #include <sys/poll.h>
 #include <sys/socket.h>
-#include <sys/stat.h>
 #include <sys/wait.h>
-
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#endif /* !_WIN32 */
 
 #define POMP_ENABLE_ADVANCED_API
 #include "libpomp.h"

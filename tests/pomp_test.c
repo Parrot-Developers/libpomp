@@ -32,6 +32,8 @@
 
 #include "pomp_test.h"
 
+#ifndef _WIN32
+
 /** */
 static int *lsof(void)
 {
@@ -99,6 +101,13 @@ static void check_fds(const int *fds1, const int *fds2)
 	}
 }
 
+#else /* _WIN32 */
+
+static int *lsof(void) {return NULL;}
+static void check_fds(const int *fds1, const int *fds2) {}
+
+#endif /* _WIN32 */
+
 /**
  */
 int main(int argc, char *argv[])
@@ -106,19 +115,32 @@ int main(int argc, char *argv[])
 	int *fds1 = NULL;
 	int *fds2 = NULL;
 
+#ifdef _WIN32
+	/* Initialize winsock API */
+	WSADATA wsadata;
+	WSAStartup(MAKEWORD(2, 0), &wsadata);
+#endif /* _WIN32 */
+
 	/* Get initial list of open file descriptors */
 	fds1 = lsof();
 
 	CU_initialize_registry();
 	CU_register_suites(g_suites_basic);
 	CU_register_suites(g_suites_addr);
+#ifndef _WIN32
 	CU_register_suites(g_suites_loop);
 	CU_register_suites(g_suites_timer);
 	CU_register_suites(g_suites_ctx);
 	CU_register_suites(g_suites_ipc);
+#endif /* !_WIN32 */
 	CU_basic_set_mode(CU_BRM_VERBOSE);
 	CU_basic_run_tests();
 	CU_cleanup_registry();
+
+#ifdef _WIN32
+	/* Cleanup winsock API */
+	WSACleanup();
+#endif /* _WIN32 */
 
 	/* Get final list of open file descriptors */
 	fds2 = lsof();
