@@ -258,6 +258,18 @@ again:
 			}
 			goto again;
 
+#ifdef _WIN32
+		case 'I':
+			if (*fmt == '6' && *(fmt + 1) == '4') {
+				fmt += 2;
+				flags |= FLAG_LL;
+				goto again;
+			}
+			POMP_LOGW("encoder : invalid format specifier (%c)", c);
+			res = -EINVAL;
+			break;
+#endif /* _WIN32 */
+
 		/* Signed integer */
 		case 'i': /* NO BREAK */
 		case 'd':
