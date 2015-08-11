@@ -64,6 +64,7 @@
 /**
  */
 extern CU_SuiteInfo g_suites_basic[];
+extern CU_SuiteInfo g_suites_addr[];
 extern CU_SuiteInfo g_suites_loop[];
 extern CU_SuiteInfo g_suites_timer[];
 extern CU_SuiteInfo g_suites_ctx[];

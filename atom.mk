@@ -95,6 +95,7 @@ LOCAL_MODULE := tst-pomp
 LOCAL_C_INCLUDES := $(LOCAL_PATH)/src
 LOCAL_SRC_FILES := \
 	tests/pomp_test.c \
+	tests/pomp_test_addr.c \
 	tests/pomp_test_basic.c \
 	tests/pomp_test_ctx.c \
 	tests/pomp_test_loop.c \

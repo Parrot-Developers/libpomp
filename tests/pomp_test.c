@@ -111,10 +111,12 @@ int main(int argc, char *argv[])
 
 	CU_initialize_registry();
 	CU_register_suites(g_suites_basic);
+	CU_register_suites(g_suites_addr);
 	CU_register_suites(g_suites_loop);
 	CU_register_suites(g_suites_timer);
 	CU_register_suites(g_suites_ctx);
 	CU_register_suites(g_suites_ipc);
+	CU_basic_set_mode(CU_BRM_VERBOSE);
 	CU_basic_run_tests();
 	CU_cleanup_registry();
 
