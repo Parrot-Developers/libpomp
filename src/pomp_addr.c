@@ -46,8 +46,16 @@ static int pomp_addr_parse_inet(const char *buf, struct sockaddr *addr,
 		uint32_t *addrlen)
 {
 	int res = -EINVAL;
+	struct addrinfo hints;
 	char *ip = NULL, *sep = NULL;
 	struct addrinfo *ai = NULL;
+
+	/* Setup hints for getaddrinfo */
+	memset(&hints, 0, sizeof(hints));
+	hints.ai_family = AF_UNSPEC;
+	hints.ai_socktype = 0;
+	hints.ai_flags = AI_NUMERICHOST;
+	hints.ai_protocol = 0;
 
 	/* Duplicate string as we need to modify it */
 	ip = strdup(buf);
@@ -62,10 +70,17 @@ static int pomp_addr_parse_inet(const char *buf, struct sockaddr *addr,
 
 	/* Convert address and port
 	 * WIN32 returns positive value for errors */
-	if (getaddrinfo(ip, sep + 1, NULL, &ai) != 0)
+	res = getaddrinfo(ip, sep + 1, &hints, &ai);
+	if (res != 0) {
+		POMP_LOGE("getaddrinfo(%s:%s): err=%d(%s)", ip, sep + 1,
+				res, gai_strerror(res));
+		res = -EINVAL;
 		goto out;
-	if (*addrlen < ai->ai_addrlen)
+	}
+	if (*addrlen < ai->ai_addrlen) {
+		res = -EINVAL;
 		goto out;
+	}
 	memcpy(addr, ai->ai_addr, ai->ai_addrlen);
 	*addrlen = ai->ai_addrlen;
 	res = 0;
@@ -89,8 +104,6 @@ int pomp_addr_parse(const char *buf, struct sockaddr *addr, uint32_t *addrlen)
 	POMP_RETURN_ERR_IF_FAILED(buf != NULL, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(addr != NULL, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(addrlen != NULL, -EINVAL);
-	POMP_RETURN_ERR_IF_FAILED(*addrlen >= sizeof(struct sockaddr_storage),
-			-EINVAL);
 
 	if (strncmp(buf, "inet:", 5) == 0) {
 		/* Inet v4 address */
@@ -104,6 +117,8 @@ int pomp_addr_parse(const char *buf, struct sockaddr *addr, uint32_t *addrlen)
 			goto out;
 	} else if (strncmp(buf, "unix:", 5) == 0) {
 		/* Unix address */
+		if (*addrlen < sizeof(struct sockaddr_un))
+			goto out;
 		addr_un = (struct sockaddr_un *)addr;
 		memset(addr_un, 0, sizeof(*addr_un));
 		addr_un->sun_family = AF_UNIX;
@@ -134,6 +149,7 @@ int pomp_addr_format(char *buf, uint32_t buflen, const struct sockaddr *addr,
 
 	POMP_RETURN_ERR_IF_FAILED(buf != NULL, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(buflen != 0, -EINVAL);
+	POMP_RETURN_ERR_IF_FAILED(addr != NULL, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(addrlen >= sizeof(struct sockaddr), -EINVAL);
 
 	/* WIN32 returns positive value for errors for getnameinfo */
