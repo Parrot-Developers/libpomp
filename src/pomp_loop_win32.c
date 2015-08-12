@@ -291,6 +291,29 @@ struct pomp_fd *pomp_loop_win32_find_pfd_by_hevt(struct pomp_loop *loop,
 	return NULL;
 }
 
+/**
+ * Register a new fd in loop.
+ * @param loop : loop.
+ * @param hevt : notification to register.
+ * @param cb : callback for notifications.
+ * @param userdata : user data for notifications.
+ * @return fd structure or NULL in case of error.
+ */
+struct pomp_fd *pomp_loop_win32_add_pfd_with_hevt(struct pomp_loop *loop,
+		HANDLE hevt, pomp_fd_event_cb_t cb, void *userdata)
+{
+	struct pomp_fd *pfd = NULL;
+
+	/* Add in loop */
+	pfd = pomp_loop_add_pfd(loop, -1, 0, cb, userdata);
+	if (pfd == NULL)
+		return NULL;
+
+	/* Save event for notification */
+	pfd->hevt = hevt;
+	return pfd;
+}
+
 /** Loop operations for win32 implementation */
 const struct pomp_loop_ops pomp_loop_win32_ops = {
 	.do_new = &pomp_loop_win32_do_new,

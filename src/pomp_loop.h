@@ -132,8 +132,13 @@ struct pomp_fd *pomp_loop_add_pfd(struct pomp_loop *loop, int fd,
 int pomp_loop_remove_pfd(struct pomp_loop *loop, struct pomp_fd *pfd);
 
 #ifdef POMP_HAVE_LOOP_WIN32
+
 struct pomp_fd *pomp_loop_win32_find_pfd_by_hevt(struct pomp_loop *loop,
 		HANDLE hevt);
+
+struct pomp_fd *pomp_loop_win32_add_pfd_with_hevt(struct pomp_loop *loop,
+		HANDLE hevt, pomp_fd_event_cb_t cb, void *userdata);
+
 #endif /* POMP_HAVE_TIMER_WIN32 */
 
 #endif /* !_POMP_TIMER_H_ */

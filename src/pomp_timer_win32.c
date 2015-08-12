@@ -101,13 +101,10 @@ static struct pomp_timer *pomp_timer_win32_new(struct pomp_loop *loop,
 	}
 
 	/* Add it in loop */
-	pfd = pomp_loop_add_pfd(timer->loop, -1, 0,
+	pfd = pomp_loop_win32_add_pfd_with_hevt(timer->loop, timer->htimer,
 			&pomp_timer_win32_cb, timer);
 	if (pfd == NULL)
 		goto error;
-
-	/* Save event for notification */
-	pfd->hevt = timer->htimer;
 
 	/* Success */
 	return timer;
