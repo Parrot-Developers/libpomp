@@ -32,12 +32,12 @@
 
 #include "pomp_test.h"
 
-#ifndef WIN32
-
 /** */
 struct test_data {
 	uint32_t  counter;
 };
+
+#ifndef _WIN32
 
 /** */
 static int setup_timerfd(uint32_t delay, uint32_t period)
@@ -61,7 +61,7 @@ static int setup_timerfd(uint32_t delay, uint32_t period)
 }
 
 /** */
-static void timer_cb(int fd, uint32_t events, void *userdata)
+static void timerfd_cb(int fd, uint32_t events, void *userdata)
 {
 	ssize_t readlen = 0;
 	struct test_data *data = userdata;
@@ -97,7 +97,7 @@ static void test_loop(int is_epoll)
 	CU_ASSERT_TRUE_FATAL(tfd3 >= 0);
 
 	/* Add timer in loop */
-	res = pomp_loop_add(loop, tfd1, POMP_FD_EVENT_IN, &timer_cb, &data);
+	res = pomp_loop_add(loop, tfd1, POMP_FD_EVENT_IN, &timerfd_cb, &data);
 	CU_ASSERT_EQUAL(res, 0);
 
 	res = pomp_loop_has_fd(loop, tfd1);
@@ -107,21 +107,21 @@ static void test_loop(int is_epoll)
 	CU_ASSERT_EQUAL(res, 0);
 
 	/* Invalid add (already in loop) */
-	res = pomp_loop_add(loop, tfd1, POMP_FD_EVENT_IN, &timer_cb, &data);
+	res = pomp_loop_add(loop, tfd1, POMP_FD_EVENT_IN, &timerfd_cb, &data);
 	CU_ASSERT_EQUAL(res, -EEXIST);
 
 	/* Invalid add (NULL param) */
-	res = pomp_loop_add(NULL, tfd1, POMP_FD_EVENT_IN, &timer_cb, &data);
+	res = pomp_loop_add(NULL, tfd1, POMP_FD_EVENT_IN, &timerfd_cb, &data);
 	CU_ASSERT_EQUAL(res, -EINVAL);
 	res = pomp_loop_add(loop, tfd1, POMP_FD_EVENT_IN, NULL, &data);
 	CU_ASSERT_EQUAL(res, -EINVAL);
 
 	/* Invalid add (invalid events) */
-	res = pomp_loop_add(loop, tfd1, 0, &timer_cb, &data);
+	res = pomp_loop_add(loop, tfd1, 0, &timerfd_cb, &data);
 	CU_ASSERT_EQUAL(res, -EINVAL);
 
 	/* Invalid add (invalid fd) */
-	res = pomp_loop_add(loop, -1, POMP_FD_EVENT_IN, &timer_cb, &data);
+	res = pomp_loop_add(loop, -1, POMP_FD_EVENT_IN, &timerfd_cb, &data);
 	CU_ASSERT_EQUAL(res, -EINVAL);
 
 	/* Update events */
@@ -149,9 +149,9 @@ static void test_loop(int is_epoll)
 	CU_ASSERT_EQUAL(res, 0);
 
 	/* Add 2nd and 3rd timer in loop */
-	res = pomp_loop_add(loop, tfd2, POMP_FD_EVENT_IN, &timer_cb, &data);
+	res = pomp_loop_add(loop, tfd2, POMP_FD_EVENT_IN, &timerfd_cb, &data);
 	CU_ASSERT_EQUAL(res, 0);
-	res = pomp_loop_add(loop, tfd3, POMP_FD_EVENT_IN, &timer_cb, &data);
+	res = pomp_loop_add(loop, tfd3, POMP_FD_EVENT_IN, &timerfd_cb, &data);
 	CU_ASSERT_EQUAL(res, 0);
 
 	/* Get loop fd */
@@ -240,7 +240,7 @@ static void test_loop_wakeup(void)
 	CU_ASSERT_PTR_NOT_NULL_FATAL(loop);
 
 	/* Create a thread that will do the wakeup */
-	pthread_create(&thread, NULL, &test_loop_wakeup_thread, loop);
+	res = pthread_create(&thread, NULL, &test_loop_wakeup_thread, loop);
 	CU_ASSERT_EQUAL(res, 0);
 
 	for (i = 0; i < 10; i++) {
@@ -260,7 +260,169 @@ static void test_loop_wakeup(void)
 	CU_ASSERT_EQUAL(res, 0);
 }
 
+#else /* _WIN32 */
+
 /** */
+static HANDLE setup_timer_win32(uint32_t delay, uint32_t period)
+{
+	int res = 0;
+	HANDLE htimer = NULL;
+	LARGE_INTEGER tval;
+
+	htimer = CreateWaitableTimer(NULL, 0, NULL);
+	CU_ASSERT_PTR_NOT_NULL_FATAL(htimer);
+
+	/* Setup timeout, convert ms to 100th of ns */
+	tval.QuadPart = - (LONGLONG)delay * 1000 * 10;
+	res = SetWaitableTimer(htimer, &tval, period, NULL, NULL, 0);
+	CU_ASSERT_EQUAL_FATAL(res, 1);
+
+	return htimer;
+}
+
+/** */
+static void timer_win32_cb(int fd, uint32_t events, void *userdata)
+{
+	struct test_data *data = userdata;
+	data->counter++;
+}
+
+/** */
+static void test_loop(void)
+{
+	int res = 0;
+	HANDLE htimer1 = NULL, htimer2 = NULL, htimer3 = NULL;
+	struct test_data data;
+	struct pomp_loop *loop = NULL;
+	struct pomp_fd *pfd = NULL;
+
+	memset(&data, 0, sizeof(data));
+
+	/* Create loop */
+	loop = pomp_loop_new();
+	CU_ASSERT_PTR_NOT_NULL_FATAL(loop);
+
+	/* Create timers for testing */
+	htimer1 = setup_timer_win32(100, 500);
+	CU_ASSERT_PTR_NOT_NULL_FATAL(htimer1);
+	htimer2 = setup_timer_win32(50, 500);
+	CU_ASSERT_PTR_NOT_NULL_FATAL(htimer2);
+	htimer3 = setup_timer_win32(150, 500);
+	CU_ASSERT_PTR_NOT_NULL_FATAL(htimer3);
+
+	/* Add timer in loop */
+	pfd = pomp_loop_win32_add_pfd_with_hevt(loop, htimer1, &timer_win32_cb, &data);
+	CU_ASSERT_PTR_NOT_NULL(pfd);
+
+	/* Add 2nd and 3rd timer in loop */
+	pfd = pomp_loop_win32_add_pfd_with_hevt(loop, htimer2, &timer_win32_cb, &data);
+	CU_ASSERT_PTR_NOT_NULL(pfd);
+	pfd = pomp_loop_win32_add_pfd_with_hevt(loop, htimer3, &timer_win32_cb, &data);
+	CU_ASSERT_PTR_NOT_NULL(pfd);
+
+	/* Run loop with different timeout first one should have all timers) */
+	res = pomp_loop_wait_and_process(loop, 500);
+	CU_ASSERT_EQUAL(res, 0);
+	res = pomp_loop_wait_and_process(loop, 0);
+	CU_ASSERT_TRUE(res == -ETIMEDOUT || res == 0);
+	res = pomp_loop_wait_and_process(loop, -1);
+	CU_ASSERT_EQUAL(res, 0);
+
+	/* Invalid run (NULL param) */
+	res = pomp_loop_wait_and_process(NULL, 0);
+	CU_ASSERT_EQUAL(res, -EINVAL);
+
+	/* Invalid destroy (NULL param) */
+	res = pomp_loop_destroy(NULL);
+	CU_ASSERT_EQUAL(res, -EINVAL);
+
+	/* Invalid destroy (busy) */
+	res = pomp_loop_destroy(loop);
+	CU_ASSERT_EQUAL(res, -EBUSY);
+
+	/* Remove timers */
+	pfd = pomp_loop_win32_find_pfd_by_hevt(loop, htimer1);
+	CU_ASSERT_PTR_NOT_NULL(pfd);
+	res = pomp_loop_remove_pfd(loop, pfd);
+	CU_ASSERT_EQUAL(res, 0);
+	free(pfd);
+	pfd = pomp_loop_win32_find_pfd_by_hevt(loop, htimer2);
+	CU_ASSERT_PTR_NOT_NULL(pfd);
+	res = pomp_loop_remove_pfd(loop, pfd);
+	CU_ASSERT_EQUAL(res, 0);
+	free(pfd);
+	pfd = pomp_loop_win32_find_pfd_by_hevt(loop, htimer3);
+	CU_ASSERT_PTR_NOT_NULL(pfd);
+	res = pomp_loop_remove_pfd(loop, pfd);
+	CU_ASSERT_EQUAL(res, 0);
+	free(pfd);
+
+	/* Close timers */
+	res = CloseHandle(htimer1);
+	CU_ASSERT_EQUAL(res, 1);
+	res = CloseHandle(htimer2);
+	CU_ASSERT_EQUAL(res, 1);
+	res = CloseHandle(htimer3);
+	CU_ASSERT_EQUAL(res, 1);
+
+	/* Destroy loop */
+	res = pomp_loop_destroy(loop);
+	CU_ASSERT_EQUAL(res, 0);
+}
+
+/** */
+static DWORD WINAPI test_loop_wakeup_thread(void *arg)
+{
+	int res = 0, i = 0;
+	struct pomp_loop *loop = arg;
+
+	for (i = 0; i < 10; i++) {
+		usleep(100 * 1000);
+		res = pomp_loop_wakeup(loop);
+		CU_ASSERT_EQUAL(res, 0);
+	}
+
+	return 0;
+}
+
+/** */
+static void test_loop_wakeup(void)
+{
+	int res = 0, i = 0;
+	struct pomp_loop *loop = NULL;
+	HANDLE hthread = NULL;
+	DWORD threadid = 0;
+
+	/* Create loop */
+	loop = pomp_loop_new();
+	CU_ASSERT_PTR_NOT_NULL_FATAL(loop);
+
+	/* Create a thread that will do the wakeup */
+	hthread = CreateThread(NULL, 0, &test_loop_wakeup_thread, loop, 0, &threadid);
+	CU_ASSERT_PTR_NOT_NULL_FATAL(hthread);
+
+	for (i = 0; i < 10; i++) {
+		/* Execute loop until wakeup, shall not timeout */
+		res = pomp_loop_wait_and_process(loop, 1000);
+		CU_ASSERT_EQUAL(res, 0);
+	}
+
+	res = WaitForSingleObject(hthread, INFINITE);
+	CU_ASSERT_EQUAL(res, WAIT_OBJECT_0);
+	CloseHandle(hthread);
+
+	res = pomp_loop_wakeup(NULL);
+	CU_ASSERT_EQUAL(res, -EINVAL);
+
+	/* Destroy loop */
+	res = pomp_loop_destroy(loop);
+	CU_ASSERT_EQUAL(res, 0);
+}
+
+#endif /* _WIN32 */
+
+/** */
+#ifdef POMP_HAVE_LOOP_EPOLL
 static void test_loop_epoll(void)
 {
 	const struct pomp_loop_ops *loop_ops = NULL;
@@ -269,8 +431,10 @@ static void test_loop_epoll(void)
 	test_loop_wakeup();
 	pomp_loop_set_ops(loop_ops);
 }
+#endif /* POMP_HAVE_LOOP_EPOLL */
 
 /** */
+#ifdef POMP_HAVE_LOOP_POLL
 static void test_loop_poll(void)
 {
 	const struct pomp_loop_ops *loop_ops = NULL;
@@ -279,6 +443,19 @@ static void test_loop_poll(void)
 	test_loop_wakeup();
 	pomp_loop_set_ops(loop_ops);
 }
+#endif /* POMP_HAVE_LOOP_POLL */
+
+/** */
+#ifdef POMP_HAVE_LOOP_WIN32
+static void test_loop_win32(void)
+{
+	const struct pomp_loop_ops *loop_ops = NULL;
+	loop_ops = pomp_loop_set_ops(&pomp_loop_win32_ops);
+	test_loop();
+	test_loop_wakeup();
+	pomp_loop_set_ops(loop_ops);
+}
+#endif /* POMP_HAVE_LOOP_WIN32 */
 
 /* Disable some gcc warnings for test suite descriptions */
 #ifdef __GNUC__
@@ -287,8 +464,19 @@ static void test_loop_poll(void)
 
 /** */
 static CU_TestInfo s_loop_tests[] = {
+
+#ifdef POMP_HAVE_LOOP_EPOLL
 	{(char *)"epoll", &test_loop_epoll},
+#endif /* POMP_HAVE_LOOP_EPOLL */
+
+#ifdef POMP_HAVE_LOOP_POLL
 	{(char *)"poll", &test_loop_poll},
+#endif /* POMP_HAVE_LOOP_POLL */
+
+#ifdef POMP_HAVE_LOOP_WIN32
+	{(char *)"win32", &test_loop_win32},
+#endif /* POMP_HAVE_LOOP_WIN32 */
+
 	CU_TEST_INFO_NULL,
 };
 
@@ -297,5 +485,3 @@ static CU_TestInfo s_loop_tests[] = {
 	{(char *)"loop", NULL, NULL, s_loop_tests},
 	CU_SUITE_INFO_NULL,
 };
-
-#endif /* !_WIN32 */

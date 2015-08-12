@@ -32,8 +32,6 @@
 
 #include "pomp_test.h"
 
-#ifndef WIN32
-
 /** */
 struct test_data {
 	uint32_t  connection;
@@ -111,8 +109,10 @@ static void test_event_cb_t(struct pomp_ctx *ctx, enum pomp_event event,
 	}
 }
 
+#ifndef _WIN32
+
 /** */
-static void run_ctx(struct pomp_ctx *ctx1, struct pomp_ctx *ctx2, uint32_t timeout)
+static void run_ctx(struct pomp_ctx *ctx1, struct pomp_ctx *ctx2, int timeout)
 {
 	int res = 0, nevts = 0;
 	int fd1 = -1, fd2 = -1;
@@ -149,6 +149,45 @@ static void run_ctx(struct pomp_ctx *ctx1, struct pomp_ctx *ctx2, uint32_t timeo
 	} while (nevts > 0);
 	CU_ASSERT_EQUAL(res, 0);
 }
+
+#else /* _WIN32 */
+
+struct run_ctx_data {
+	struct pomp_ctx	*ctx;
+	uint32_t	timeout;
+};
+
+static DWORD WINAPI run_ctx_thread(void *arg)
+{
+	int res = 0;
+	struct run_ctx_data *data = arg;
+	do {
+		res = pomp_ctx_wait_and_process(data->ctx, data->timeout);
+	} while (res == 0);
+	return 0;
+}
+
+static void run_ctx(struct pomp_ctx *ctx1, struct pomp_ctx *ctx2, int timeout)
+{
+	HANDLE hthread1 = NULL, hthread2 = NULL;
+	DWORD threadid1 = 0, threadid2 = 0;
+	struct run_ctx_data data1, data2;
+
+	data1.ctx = ctx1;
+	data1.timeout = timeout;
+	hthread1 = CreateThread(NULL, 0, &run_ctx_thread, &data1, 0, &threadid1);
+
+	data2.ctx = ctx2;
+	data2.timeout = timeout;
+	hthread2 = CreateThread(NULL, 0, &run_ctx_thread, &data2, 0, &threadid2);
+
+	WaitForSingleObject(hthread1, INFINITE);
+	WaitForSingleObject(hthread2, INFINITE);
+	CloseHandle(hthread1);
+	CloseHandle(hthread2);
+}
+
+#endif /* _WIN32 */
 
 /** */
 static void test_ctx(void)
@@ -228,8 +267,11 @@ static void test_ctx(void)
 	loop = pomp_ctx_get_loop(ctx1);
 	CU_ASSERT_PTR_NOT_NULL(loop);
 	fd = pomp_ctx_get_fd(ctx1);
+#ifdef POMP_HAVE_LOOP_EPOLL
 	CU_ASSERT_TRUE(fd >= 0);
-
+#else
+	CU_ASSERT_EQUAL(fd, -ENOSYS);
+#endif
 	/* Invalid process fd (NULL param) */
 	res = pomp_ctx_process_fd(NULL);
 	CU_ASSERT_EQUAL(res, -EINVAL);
@@ -403,5 +445,3 @@ static CU_TestInfo s_ctx_tests[] = {
 	{(char *)"ctx", NULL, NULL, s_ctx_tests},
 	CU_SUITE_INFO_NULL,
 };
-
-#endif /* !_WIN32 */

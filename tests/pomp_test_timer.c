@@ -32,8 +32,6 @@
 
 #include "pomp_test.h"
 
-#ifndef WIN32
-
 /** */
 struct test_data {
 	uint32_t  counter;
@@ -125,6 +123,7 @@ static void test_timer(void)
 }
 
 /** */
+#ifdef POMP_HAVE_TIMER_FD
 static void test_timer_timerfd(void)
 {
 	const struct pomp_timer_ops *timer_ops = NULL;
@@ -132,8 +131,10 @@ static void test_timer_timerfd(void)
 	test_timer();
 	pomp_timer_set_ops(timer_ops);
 }
+#endif /* POMP_HAVE_TIMER_FD */
 
 /** */
+#ifdef POMP_HAVE_TIMER_POSIX
 static void test_timer_posix(void)
 {
 	const struct pomp_timer_ops *timer_ops = NULL;
@@ -141,6 +142,18 @@ static void test_timer_posix(void)
 	test_timer();
 	pomp_timer_set_ops(timer_ops);
 }
+#endif /* POMP_HAVE_TIMER_POSIX */
+
+/** */
+#ifdef POMP_HAVE_TIMER_WIN32
+static void test_timer_win32(void)
+{
+	const struct pomp_timer_ops *timer_ops = NULL;
+	timer_ops = pomp_timer_set_ops(&pomp_timer_win32_ops);
+	test_timer();
+	pomp_timer_set_ops(timer_ops);
+}
+#endif /* POMP_HAVE_TIMER_WIN32 */
 
 /* Disable some gcc warnings for test suite descriptions */
 #ifdef __GNUC__
@@ -149,8 +162,19 @@ static void test_timer_posix(void)
 
 /** */
 static CU_TestInfo s_timer_tests[] = {
+
+#ifdef POMP_HAVE_TIMER_FD
 	{(char *)"timerfd", &test_timer_timerfd},
+#endif /* POMP_HAVE_TIMER_FD */
+
+#ifdef POMP_HAVE_TIMER_POSIX
 	{(char *)"posix", &test_timer_posix},
+#endif /* POMP_HAVE_TIMER_POSIX */
+
+#ifdef POMP_HAVE_TIMER_WIN32
+	{(char *)"win32", &test_timer_win32},
+#endif /* POMP_HAVE_TIMER_WIN32 */
+
 	CU_TEST_INFO_NULL,
 };
 
@@ -159,5 +183,3 @@ static CU_TestInfo s_timer_tests[] = {
 	{(char *)"timer", NULL, NULL, s_timer_tests},
 	CU_SUITE_INFO_NULL,
 };
-
-#endif /* !_WIN32 */
