@@ -73,6 +73,9 @@ struct pomp_conn {
 	/** Socket fd for read/write operations */
 	int			fd;
 
+	/** 1 for DGRAM (fake) connection */
+	int			isdgram;
+
 	/** Flag indicating that connection shall be removed from context */
 	int			removeflag;
 
@@ -175,6 +178,27 @@ static int pomp_io_buffer_write_normal(struct pomp_io_buffer *iobuf,
 	return writelen < 0 ? -errno : (int)writelen;
 }
 
+static int pomp_io_buffer_write_dgram(struct pomp_io_buffer *iobuf,
+		struct pomp_conn *conn)
+{
+	ssize_t writelen = 0;
+
+	/* Write data ignoring interrupts */
+	do {
+		writelen = sendto(conn->fd, iobuf->buf->data + iobuf->off,
+				iobuf->len - iobuf->off, 0,
+				(const struct sockaddr *)&conn->peer_addr,
+				conn->peer_addrlen);
+	} while (writelen < 0 && errno == EINTR);
+
+	/* Log errors except EAGAIN */
+	if (writelen < 0 && !POMP_CONN_WOULD_BLOCK(errno))
+		POMP_LOG_FD_ERRNO("sendto", conn->fd);
+
+	/* Return number of bytes written or error */
+	return writelen < 0 ? -errno : (int)writelen;
+}
+
 /**
  * Write an IO buffer to the given connection with associated file descriptors
  * also transmitted as ancillary data. The internal offset is updated
@@ -251,7 +275,9 @@ static int pomp_io_buffer_write(struct pomp_io_buffer *iobuf,
 	int res = 0;
 
 	/* When offset is 0 and buffer has file descriptors in it, write them */
-	if (iobuf->off == 0 && iobuf->buf->fdcount > 0)
+	if (conn->isdgram)
+		res = pomp_io_buffer_write_dgram(iobuf, conn);
+	else if (iobuf->off == 0 && iobuf->buf->fdcount > 0)
 		res = pomp_io_buffer_write_with_fds(iobuf, conn);
 	else
 		res = pomp_io_buffer_write_normal(iobuf, conn);
@@ -419,13 +445,32 @@ static int pomp_conn_process_read_normal(struct pomp_conn *conn)
 
 	/* Read data ignoring interrupts */
 	do {
-		readlen = read(conn->fd, conn->readbuf,
-				POMP_CONN_READ_SIZE);
+		readlen = read(conn->fd, conn->readbuf, POMP_CONN_READ_SIZE);
 	} while (readlen < 0 && errno == EINTR);
 
 	/* Log errors except EAGAIN */
 	if (readlen < 0 && !POMP_CONN_WOULD_BLOCK(errno))
 		POMP_LOG_FD_ERRNO("read", conn->fd);
+
+	/* Return number of bytes read or error */
+	return readlen < 0 ? -errno : (int)readlen;
+}
+
+static int pomp_conn_process_read_dgram(struct pomp_conn *conn)
+{
+	ssize_t readlen = 0;
+
+	/* Read data ignoring interrupts */
+	conn->peer_addrlen = sizeof(conn->peer_addr);
+	do {
+		readlen = recvfrom(conn->fd, conn->readbuf, POMP_CONN_READ_SIZE,
+				0, (struct sockaddr *)&conn->peer_addr,
+				&conn->peer_addrlen);
+	} while (readlen < 0 && errno == EINTR);
+
+	/* Log errors except EAGAIN */
+	if (readlen < 0 && !POMP_CONN_WOULD_BLOCK(errno))
+		POMP_LOG_FD_ERRNO("recvfrom", conn->fd);
 
 	/* Return number of bytes read or error */
 	return readlen < 0 ? -errno : (int)readlen;
@@ -512,7 +557,9 @@ static void pomp_conn_process_read(struct pomp_conn *conn)
 
 	do {
 		/* Read data */
-		if (POMP_CONN_IS_LOCAL(conn))
+		if (conn->isdgram)
+			res = pomp_conn_process_read_dgram(conn);
+		else if (POMP_CONN_IS_LOCAL(conn))
 			res = pomp_conn_process_read_with_fds(conn);
 		else
 			res = pomp_conn_process_read_normal(conn);
@@ -523,9 +570,16 @@ static void pomp_conn_process_read(struct pomp_conn *conn)
 					(size_t)res);
 		} else if (res == 0 || !POMP_CONN_WOULD_BLOCK(-res)) {
 			/* Error or EOF, finish this connection */
-			conn->removeflag = 1;
+			if (!conn->isdgram)
+				conn->removeflag = 1;
 		}
 	} while (res > 0);
+
+	/* Always reset peer address after reading message on dgram sockets */
+	if (conn->isdgram) {
+		memset(&conn->peer_addr, 0, sizeof(conn->peer_addr));
+		conn->peer_addrlen = 0;
+	}
 }
 
 /**
@@ -594,10 +648,11 @@ static void pomp_conn_cb(int fd, uint32_t revents, void *userdata)
  * @param ctx : associated context.
  * @param loop : associated loop.
  * @param fd : fd to wrap.
+ * @param isdgram : 1 for DGRAM (fake) connection
  * @return connection object or NULL in case of error.
  */
 struct pomp_conn *pomp_conn_new(struct pomp_ctx *ctx,
-		struct pomp_loop *loop, int fd)
+		struct pomp_loop *loop, int fd, int isdgram)
 {
 	int res = 0;
 	struct pomp_conn *conn = NULL;
@@ -618,6 +673,7 @@ struct pomp_conn *pomp_conn_new(struct pomp_ctx *ctx,
 	conn->ctx = ctx;
 	conn->loop = loop;
 	conn->fd = fd;
+	conn->isdgram = isdgram;
 	conn->removeflag = 0;
 	conn->prot = pomp_prot_new();
 	if (conn->prot == NULL)
@@ -638,22 +694,25 @@ struct pomp_conn *pomp_conn_new(struct pomp_ctx *ctx,
 	}
 
 	/* Get peer address information */
-	conn->peer_addrlen = sizeof(conn->peer_addr);
-	if (getpeername(fd, (struct sockaddr *)&conn->peer_addr,
-			&conn->peer_addrlen) < 0) {
-		res = -errno;
-		POMP_LOG_FD_ERRNO("getpeername", fd);
-		conn->peer_addrlen = 0;
+	if (!isdgram) {
+		conn->peer_addrlen = sizeof(conn->peer_addr);
+		if (getpeername(fd, (struct sockaddr *)&conn->peer_addr,
+				&conn->peer_addrlen) < 0) {
+			res = -errno;
+			POMP_LOG_FD_ERRNO("getpeername", fd);
+			conn->peer_addrlen = 0;
 
-		/* Do NOT ignore the 'peer not connected' error, abort now */
-		if (res == -ENOTCONN)
-			goto error;
+			/* Do NOT ignore the 'peer not connected' error,
+			 * abort now */
+			if (res == -ENOTCONN)
+				goto error;
+		}
 	}
 
 	/* Get peer credentials information */
 #ifdef SO_PEERCRED
 	optlen = sizeof(conn->peer_cred);
-	if (conn->peer_addr.ss_family == AF_UNIX) {
+	if (!isdgram && conn->peer_addr.ss_family == AF_UNIX) {
 		if (getsockopt(fd, SOL_SOCKET, SO_PEERCRED,
 				&conn->peer_cred, &optlen) < 0) {
 			POMP_LOG_FD_ERRNO("getsockopt.SO_PEERCRED", fd);
@@ -704,7 +763,7 @@ int pomp_conn_close(struct pomp_conn *conn)
 	pomp_conn_clear_rx_fds(conn);
 
 	/* Properly shutdown the connection */
-	if (shutdown(conn->fd, SHUT_RDWR) < 0)
+	if (!conn->isdgram && shutdown(conn->fd, SHUT_RDWR) < 0)
 		POMP_LOG_FD_ERRNO("shutdown", conn->fd);
 	pomp_loop_remove(conn->loop, conn->fd);
 
@@ -745,6 +804,7 @@ int pomp_conn_disconnect(struct pomp_conn *conn)
 {
 	POMP_RETURN_ERR_IF_FAILED(conn != NULL, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(conn->fd >= 0, -ENOTCONN);
+	POMP_RETURN_ERR_IF_FAILED(!conn->isdgram, -ENOTCONN);
 
 	/* Shutting down connection will ultimately cause an EOF */
 	if (shutdown(conn->fd, SHUT_RDWR) < 0)
@@ -804,6 +864,11 @@ int pomp_conn_send_msg(struct pomp_conn *conn, const struct pomp_msg *msg)
 	POMP_RETURN_ERR_IF_FAILED(msg->buf != NULL, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(msg->buf->data != NULL, -EINVAL);
 
+	/* For dgram socket, the remote address must have been set prior to
+	 * this function call */
+	POMP_RETURN_ERR_IF_FAILED(!conn->isdgram || conn->peer_addrlen != 0,
+			-ENOTCONN);
+
 	/* If buffer has file descriptors in it, the connection must be a
 	 * local unix socket */
 	if (msg->buf->fdcount > 0 && !POMP_CONN_IS_LOCAL(conn)) {
@@ -852,6 +917,27 @@ int pomp_conn_send_msg(struct pomp_conn *conn, const struct pomp_msg *msg)
 	}
 
 	return 0;
+}
+
+int pomp_conn_send_msg_to(struct pomp_conn *conn, const struct pomp_msg *msg,
+		const struct sockaddr *addr, uint32_t addrlen)
+{
+	int res = 0;
+
+	POMP_RETURN_ERR_IF_FAILED(conn != NULL, -EINVAL);
+	POMP_RETURN_ERR_IF_FAILED(msg != NULL, -EINVAL);
+	POMP_RETURN_ERR_IF_FAILED(addr != NULL, -EINVAL);
+	POMP_RETURN_ERR_IF_FAILED(addrlen <= sizeof(conn->peer_addr), -EINVAL);
+	POMP_RETURN_ERR_IF_FAILED(conn->isdgram, -EINVAL);
+
+	/* Save address send message, then clear address */
+	memcpy(&conn->peer_addr, addr, addrlen);
+	conn->peer_addrlen = addrlen;
+	res = pomp_conn_send_msg(conn, msg);
+	memset(&conn->peer_addr, 0, sizeof(conn->peer_addr));
+	conn->peer_addrlen = 0;
+
+	return res;
 }
 
 /*

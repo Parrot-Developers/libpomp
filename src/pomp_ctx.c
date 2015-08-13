@@ -37,11 +37,14 @@
 /** Maximum number of active connections for a server */
 #define POMP_SERVER_MAX_CONN_COUNT	32
 
-/** Reconnection delay for server (in ms) */
+/** Next bind attempt delay for server (in ms) */
 #define POMP_SERVER_RECONNECT_DELAY	2000
 
 /** Reconnection delay for client (in ms) */
 #define POMP_CLIENT_RECONNECT_DELAY	2000
+
+/** Next bind attempt for dgram (in ms) */
+#define POMP_DGRAM_RECONNECT_DELAY	2000
 
 /** Determine if a socket address family is TCP/IP */
 #define POMP_IS_INET(_family) \
@@ -72,8 +75,9 @@
 
 /** Context type*/
 enum pomp_ctx_type {
-	POMP_CTX_TYPE_SERVER = 0,	/**< Server */
-	POMP_CTX_TYPE_CLIENT,		/**< Client */
+	POMP_CTX_TYPE_SERVER = 0,	/**< Server (inet-tcp, unix) */
+	POMP_CTX_TYPE_CLIENT,		/**< Client (inet-tcp, unix) */
+	POMP_CTX_TYPE_DGRAM,		/**< Connection-less (inet-udp) */
 };
 
 /** Client/Server context */
@@ -121,6 +125,14 @@ struct pomp_ctx {
 			/** Current connection with server */
 			struct pomp_conn	*conn;
 		} client;
+
+		/** Dgram specific parameters */
+		struct {
+			/** Socket fd */
+			int			fd;
+			/** Fake connection object that will handle I/O */
+			struct pomp_conn	*conn;
+		} dgram;
 	} u;
 };
 
@@ -242,7 +254,7 @@ static int server_accept_conn(struct pomp_ctx *ctx)
 		fd_socket_setup_keepalive(fd);
 
 	/* Allocate connection structure, transfer ownership of fd */
-	conn = pomp_conn_new(ctx, ctx->loop, fd);
+	conn = pomp_conn_new(ctx, ctx->loop, fd, 0);
 	if (conn == NULL) {
 		res = -ENOMEM;
 		goto error;
@@ -432,7 +444,7 @@ static int client_complete_conn(struct pomp_ctx *ctx)
 		fd_socket_setup_keepalive(ctx->u.client.fd);
 
 	/* Allocate connection structure */
-	conn = pomp_conn_new(ctx, ctx->loop, ctx->u.client.fd);
+	conn = pomp_conn_new(ctx, ctx->loop, ctx->u.client.fd, 0);
 	if (conn == NULL)
 		goto reconnect;
 
@@ -555,6 +567,101 @@ static int client_stop(struct pomp_ctx *ctx)
 }
 
 /**
+ * Start a dgram context.
+ * It will bind to the context address.
+ * @return 0 in case of success, negative errno value in case of error.
+ */
+static int dgram_start(struct pomp_ctx *ctx)
+{
+	int res = 0;
+	int sockopt = 0;
+	struct pomp_conn *conn = NULL;
+
+	/* Create dgram socket */
+	ctx->u.dgram.fd = socket(ctx->addr->sa_family, SOCK_DGRAM, 0);
+	if (ctx->u.dgram.fd < 0) {
+		res = -errno;
+		POMP_LOG_ERRNO("socket");
+		goto error;
+	}
+
+	/* Setup socket flags */
+	res = fd_setup_flags(ctx->u.dgram.fd);
+	if (res < 0)
+		goto error;
+
+	/* Allow reuse of address */
+	sockopt = 1;
+	if (setsockopt(ctx->u.dgram.fd, SOL_SOCKET, SO_REUSEADDR,
+			&sockopt, sizeof(sockopt)) < 0) {
+		res = -errno;
+		POMP_LOG_FD_ERRNO("setsockopt.SO_REUSEADDR", ctx->u.dgram.fd);
+		goto error;
+	}
+
+	/* Bind to address  */
+	if (bind(ctx->u.dgram.fd, ctx->addr, ctx->addrlen) < 0) {
+		/* Handle case where address do not match a existent
+		 * interface to try again later */
+		if (errno != EADDRNOTAVAIL) {
+			res = -errno;
+			POMP_LOG_FD_ERRNO("bind", ctx->u.dgram.fd);
+			goto error;
+		}
+		goto reconnect;
+	}
+
+	/* Allocate connection structure */
+	conn = pomp_conn_new(ctx, ctx->loop, ctx->u.dgram.fd, 1);
+	if (conn == NULL)
+		goto reconnect;
+
+	/* Save connection, transfer ownership of fd */
+	ctx->u.dgram.conn = conn;
+	ctx->u.dgram.fd = -1;
+
+	return 0;
+
+	/* Cleanup and reconnect  */
+reconnect:
+	if (ctx->u.dgram.fd >= 0) {
+		close(ctx->u.dgram.fd);
+		ctx->u.dgram.fd = -1;
+	}
+
+	/* Try a reconnection */
+	return pomp_timer_set(ctx->timer, POMP_DGRAM_RECONNECT_DELAY);
+
+	/* Cleanup in case of error */
+error:
+	if (ctx->u.dgram.fd >= 0) {
+		close(ctx->u.dgram.fd);
+		ctx->u.dgram.fd = -1;
+	}
+	return res;
+}
+
+/**
+ * Stop a dgram context.
+ * @param ctx : context.
+ * @return 0 in case of success, negative errno value in case of error.
+ */
+static int dgram_stop(struct pomp_ctx *ctx)
+{
+	/* Remove fake connection */
+	if (ctx->u.dgram.conn != NULL)
+		pomp_ctx_remove_conn(ctx, ctx->u.dgram.conn);
+
+	/* Unbind socket (normally the fd was owned by fake connection) */
+	if (ctx->u.dgram.fd >= 0) {
+		close(ctx->u.dgram.fd);
+		ctx->u.dgram.fd = -1;
+	}
+
+	return 0;
+}
+
+/**
  * Function called when the timer is triggered.
  * @param timer : timer
  * @param userdata : context object.
@@ -567,10 +674,19 @@ static void timer_cb(struct pomp_timer *timer, void *userdata)
 	pomp_timer_clear(ctx->timer);
 
 	/* Try reconnecting the client/server */
-	if (ctx->type == POMP_CTX_TYPE_SERVER)
+	switch (ctx->type) {
+	case POMP_CTX_TYPE_SERVER:
 		server_start(ctx);
-	else
+		break;
+
+	case POMP_CTX_TYPE_CLIENT:
 		client_start(ctx);
+		break;
+
+	case POMP_CTX_TYPE_DGRAM:
+		dgram_start(ctx);
+		break;
+	}
 }
 
 /*
@@ -664,21 +780,31 @@ static int pomp_ctx_start(struct pomp_ctx *ctx, enum pomp_ctx_type type,
 	/* Save type */
 	ctx->type = type;
 
-	/* Setup server/client specific stuff */
-	if (ctx->type == POMP_CTX_TYPE_SERVER) {
+	/* Setup server/client/dgram specific stuff */
+	switch (ctx->type) {
+	case POMP_CTX_TYPE_SERVER:
 		ctx->u.server.fd = -1;
 		ctx->u.server.conns = NULL;
 		ctx->u.server.conncount = 0;
-	} else {
+		res = server_start(ctx);
+		break;
+
+	case POMP_CTX_TYPE_CLIENT:
 		ctx->u.client.fd = -1;
 		ctx->u.client.conn = NULL;
+		res = client_start(ctx);
+		break;
+
+	case POMP_CTX_TYPE_DGRAM:
+		ctx->u.dgram.fd = -1;
+		res = dgram_start(ctx);
+		break;
+
+	default:
+		res = -EINVAL;
+		break;
 	}
 
-	/* Start server/client */
-	if (ctx->type == POMP_CTX_TYPE_SERVER)
-		res = server_start(ctx);
-	else
-		res = client_start(ctx);
 	return res;
 }
 
@@ -703,17 +829,35 @@ int pomp_ctx_connect(struct pomp_ctx *ctx,
 /*
  * See documentation in public header.
  */
+int pomp_ctx_bind(struct pomp_ctx *ctx,
+		const struct sockaddr *addr, uint32_t addrlen)
+{
+	return pomp_ctx_start(ctx, POMP_CTX_TYPE_DGRAM, addr, addrlen);
+}
+
+/*
+ * See documentation in public header.
+ */
 int pomp_ctx_stop(struct pomp_ctx *ctx)
 {
 	POMP_RETURN_ERR_IF_FAILED(ctx != NULL, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(ctx->addr != NULL, -EINVAL);
 
-	/* Stop server/client */
+	/* Stop server/client/dgram */
 	ctx->stopping = 1;
-	if (ctx->type == POMP_CTX_TYPE_SERVER)
+	switch (ctx->type) {
+	case POMP_CTX_TYPE_SERVER:
 		server_stop(ctx);
-	else
+		break;
+
+	case POMP_CTX_TYPE_CLIENT:
 		client_stop(ctx);
+		break;
+
+	case POMP_CTX_TYPE_DGRAM:
+		dgram_stop(ctx);
+		break;
+	}
 
 	/* Free common resources */
 	pomp_timer_clear(ctx->timer);
@@ -802,22 +946,46 @@ int pomp_ctx_send_msg(struct pomp_ctx *ctx, const struct pomp_msg *msg)
 	POMP_RETURN_ERR_IF_FAILED(ctx != NULL, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(msg != NULL, -EINVAL);
 
-	if (ctx->type == POMP_CTX_TYPE_SERVER) {
+	switch (ctx->type) {
+	case POMP_CTX_TYPE_SERVER:
 		/* Broadcast to all connections, ignore errors */
 		conn = ctx->u.server.conns;
 		while (conn != NULL) {
 			(void)pomp_conn_send_msg(conn, msg);
 			conn = pomp_conn_get_next(conn);
 		}
-	} else {
+		break;
+
+	case POMP_CTX_TYPE_CLIENT:
 		/* Send if connected */
 		if (ctx->u.client.conn != NULL)
 			res = pomp_conn_send_msg(ctx->u.client.conn, msg);
 		else
 			res = -ENOTCONN;
+		break;
+
+	case POMP_CTX_TYPE_DGRAM:
+		res = -ENOTCONN;
+		break;
 	}
 
 	return res;
+}
+
+/*
+ * See documentation in public header.
+ */
+POMP_API int pomp_ctx_send_msg_to(struct pomp_ctx *ctx,
+		const struct pomp_msg *msg,
+		const struct sockaddr *addr, uint32_t addrlen)
+{
+	POMP_RETURN_ERR_IF_FAILED(ctx != NULL, -EINVAL);
+	POMP_RETURN_ERR_IF_FAILED(msg != NULL, -EINVAL);
+	POMP_RETURN_ERR_IF_FAILED(addr != NULL, -EINVAL);
+	POMP_RETURN_ERR_IF_FAILED(ctx->type == POMP_CTX_TYPE_DGRAM, -EINVAL);
+	POMP_RETURN_ERR_IF_FAILED(ctx->u.dgram.conn != NULL, -EINVAL);
+
+	return pomp_conn_send_msg_to(ctx->u.dgram.conn, msg, addr, addrlen);
 }
 
 /*
@@ -868,10 +1036,12 @@ int pomp_ctx_remove_conn(struct pomp_ctx *ctx, struct pomp_conn *conn)
 	POMP_RETURN_ERR_IF_FAILED(conn != NULL, -EINVAL);
 
 	/* Notify user */
-	pomp_ctx_notify_event(ctx, POMP_EVENT_DISCONNECTED, conn);
+	if (ctx->type != POMP_CTX_TYPE_DGRAM)
+		pomp_ctx_notify_event(ctx, POMP_EVENT_DISCONNECTED, conn);
 
 	/* Remove from server / client */
-	if (ctx->type == POMP_CTX_TYPE_SERVER) {
+	switch (ctx->type) {
+	case POMP_CTX_TYPE_SERVER:
 		if (ctx->u.server.conns == conn) {
 			/* This was the first in the list */
 			ctx->u.server.conns = pomp_conn_get_next(conn);
@@ -892,11 +1062,21 @@ int pomp_ctx_remove_conn(struct pomp_ctx *ctx, struct pomp_conn *conn)
 				break;
 			}
 		}
-	} else {
+		break;
+
+	case POMP_CTX_TYPE_CLIENT:
 		if (ctx->u.client.conn == conn) {
 			ctx->u.client.conn = NULL;
 			found = 1;
 		}
+		break;
+
+	case POMP_CTX_TYPE_DGRAM:
+		if (ctx->u.dgram.conn == conn) {
+			ctx->u.dgram.conn = NULL;
+			found = 1;
+		}
+		break;
 	}
 
 	if (!found)

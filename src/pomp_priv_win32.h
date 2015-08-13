@@ -110,9 +110,23 @@ static inline ssize_t win32_read(int fd, void *buf, size_t len)
 	return (ssize_t)recv((SOCKET)fd, buf, (int)len, 0);
 }
 
+static inline ssize_t win32_recvfrom(int fd, void *buf, size_t len,
+		int flags, struct sockaddr *addr, socklen_t *addrlen)
+{
+	return (ssize_t)recvfrom((SOCKET)fd, (char *)buf, (int)len,
+			flags, addr, addrlen);
+}
+
 static inline ssize_t win32_write(int fd, const void *buf, size_t len)
 {
 	return (ssize_t)send((SOCKET)fd, buf, (int)len, 0);
+}
+
+static inline ssize_t win32_sendto(int fd, const void *buf, size_t len,
+		int flags, const struct sockaddr *addr, socklen_t addrlen)
+{
+	return (ssize_t)sendto((SOCKET)fd, (const char *)buf, (int)len,
+			flags, addr, addrlen);
 }
 
 static inline int win32_fcntl(int fd, int cmd, ...)
@@ -129,14 +143,18 @@ static inline int win32_setsockopt(int sockfd, int level, int optname,
 
 #undef close
 #undef read
+#undef recvfrom
 #undef write
+#undef sendto
 #undef fcntl
 #undef setsockopt
 #undef errno
 
 #define close		win32_close
 #define read		win32_read
+#define recvfrom	win32_recvfrom
 #define write		win32_write
+#define sendto		win32_sendto
 #define fcntl		win32_fcntl
 #define setsockopt	win32_setsockopt
 #define errno		((int)GetLastError())

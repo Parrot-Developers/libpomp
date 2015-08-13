@@ -80,6 +80,8 @@ struct app {
 	int                     dump;
 	struct sockaddr         *addr;
 	uint32_t                addrlen;
+	struct sockaddr         *addrto;
+	uint32_t                addrtolen;
 	int                     hasmsg;
 	uint32_t                msgid;
 	const char              *msgfmt;
@@ -97,6 +99,8 @@ static struct app s_app = {
 		.dump = 0,
 		.addr = NULL,
 		.addrlen = 0,
+		.addrto = NULL,
+		.addrtolen = 0,
 		.hasmsg = 0,
 		.msgid = 0,
 		.msgfmt = NULL,
@@ -185,7 +189,13 @@ static int send_msg()
 	}
 
 	/* Send it */
-	res = pomp_ctx_send_msg(s_app.ctx, msg);
+	if (s_app.addrto != NULL) {
+		res = pomp_ctx_send_msg_to(s_app.ctx, msg,
+				s_app.addrto, s_app.addrtolen);
+	} else {
+		res = pomp_ctx_send_msg(s_app.ctx, msg);
+	}
+
 	if (res < 0) {
 		diag("pomp_ctx_send_msg: err=%d(%s)", res, strerror(-res));
 		goto error;
@@ -278,16 +288,17 @@ static void sig_handler(int signum)
  */
 static void usage(const char *progname)
 {
-	fprintf(stderr, "usage: %s [<options>] <addr> [<msgid> [<fmt> [<args>...]]]\n",
+	fprintf(stderr, "usage: %s [<options>] <addr> [[<addrto>] <msgid> [<fmt> [<args>...]]]\n",
 			progname);
 	fprintf(stderr, "Send a pomp message on a socket or dump messages\n");
 	fprintf(stderr, "received on a socket\n");
 	fprintf(stderr, "\n");
 	fprintf(stderr, "  <options>: see below\n");
-	fprintf(stderr, "  <addr> : address\n");
-	fprintf(stderr, "  <msgid>: message id\n");
-	fprintf(stderr, "  <fmt>  : message format\n");
-	fprintf(stderr, "  <args> : message arguments\n");
+	fprintf(stderr, "  <addr>  : address\n");
+	fprintf(stderr, "  <addrto>: address to send message to for udp\n");
+	fprintf(stderr, "  <msgid> : message id\n");
+	fprintf(stderr, "  <fmt>   : message format\n");
+	fprintf(stderr, "  <args>  : message arguments\n");
 	fprintf(stderr, "\n");
 	fprintf(stderr, "<addr> format:\n");
 	fprintf(stderr, "  inet:<addr>:<port>\n");
@@ -298,6 +309,7 @@ static void usage(const char *progname)
 	fprintf(stderr, "  -h --help   : print this help message and exit\n");
 	fprintf(stderr, "  -s --server : use a server socket\n");
 	fprintf(stderr, "  -c --client : use a client socket (default)\n");
+	fprintf(stderr, "  -u --udp    : use a udp socket\n");
 	fprintf(stderr, "  -d --dump   : stay connected and dump messages\n");
 	fprintf(stderr, "  -w --wait   : wait until a message is received\n");
 	fprintf(stderr, "                with the given message id\n");
@@ -312,10 +324,13 @@ int main(int argc, char *argv[])
 {
 	int res = 0;
 	int server = 0;
+	int udp = 0;
 	int argidx = 0;
 	const char *arg_addr = NULL;
+	const char *arg_addrto = NULL;
 	const char *arg_msgid = NULL;
 	struct sockaddr_storage addr_storage;
+	struct sockaddr_storage addrto_storage;
 
 	/* Parse options */
 	for (argidx = 1; argidx < argc; argidx++) {
@@ -333,6 +348,9 @@ int main(int argc, char *argv[])
 		} else if (strcmp(argv[argidx], "-c") == 0
 				|| strcmp(argv[argidx], "--client") == 0) {
 			server = 0;
+		} else if (strcmp(argv[argidx], "-u") == 0
+				|| strcmp(argv[argidx], "--udp") == 0) {
+			udp = 1;
 		} else if (strcmp(argv[argidx], "-d") == 0
 				|| strcmp(argv[argidx], "--dump") == 0) {
 			s_app.dump = 1;
@@ -381,6 +399,25 @@ int main(int argc, char *argv[])
 		goto error;
 	}
 
+	/* Get destination address for udp (optional if dumping) */
+	if (udp) {
+		if (argc - argidx >= 1) {
+			arg_addrto = argv[argidx++];
+
+			/* Parse address */
+			memset(&addrto_storage, 0, sizeof(addrto_storage));
+			s_app.addrto = (struct sockaddr *)&addrto_storage;
+			s_app.addrtolen = sizeof(addrto_storage);
+			if (pomp_addr_parse(arg_addrto, s_app.addrto, &s_app.addrtolen) < 0) {
+				diag("Failed to parse address : %s", arg_addrto);
+				goto error;
+			}
+		} else if (!s_app.dump) {
+			diag("Missing destination address");
+			goto error;
+		}
+	}
+
 	/* Get message id (optional if dumping) */
 	if (argc - argidx >= 1) {
 		arg_msgid = argv[argidx++];
@@ -411,15 +448,28 @@ int main(int argc, char *argv[])
 	if (s_app.timeout >= 0)
 		setup_timeout();
 
-	/* Connect or listen */
-	if (server)
+	/* Connect or listen or bind */
+	if (udp)
+		res = pomp_ctx_bind(s_app.ctx, s_app.addr, s_app.addrlen);
+	else if (server)
 		res = pomp_ctx_listen(s_app.ctx, s_app.addr, s_app.addrlen);
 	else
 		res = pomp_ctx_connect(s_app.ctx, s_app.addr, s_app.addrlen);
 	if (res < 0) {
-		diag("pomp_ctx_%s : err=%d(%s)", server ? "listen" : "connect",
+		diag("pomp_ctx_%s : err=%d(%s)", udp ? "bind" :
+				server ? "listen" : "connect",
 				res, strerror(-res));
 		goto error;
+	}
+
+	if (udp) {
+		/* Send message now for udp */
+		if (s_app.hasmsg)
+			send_msg();
+
+		/* Do not run loop if not dumping or waiting */
+		if (!s_app.dump && !s_app.waitmsg)
+			goto out;
 	}
 
 	/* Run loop */

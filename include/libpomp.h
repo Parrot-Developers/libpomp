@@ -145,6 +145,16 @@ POMP_API int pomp_ctx_connect(struct pomp_ctx *ctx,
 		const struct sockaddr *addr, uint32_t addrlen);
 
 /**
+ * Bind a connection-less context (inet-udp).
+ * @param ctx : context.
+ * @param addr : address to bind to.
+ * @param addrlen : address size.
+ * @return 0 in case of success, negative errno value in case of error.
+ */
+POMP_API int pomp_ctx_bind(struct pomp_ctx *ctx,
+		const struct sockaddr *addr, uint32_t addrlen);
+
+/**
  * Stop the context. It will disconnects all peers (with notification). The
  * context structure itself is not freed. It can be used again with listen or
  * connect.
@@ -221,6 +231,18 @@ POMP_API struct pomp_conn *pomp_ctx_get_conn(const struct pomp_ctx *ctx);
  */
 POMP_API int pomp_ctx_send_msg(struct pomp_ctx *ctx,
 		const struct pomp_msg *msg);
+
+/**
+ * Send a message on dgram context to a remote address.
+ * @param ctx : context.
+ * @param msg : message to send.
+ * @param addr : destination address.
+ * @param addrlen : address size.
+ * @return 0 in case of success, negative errno value in case of error.
+ */
+POMP_API int pomp_ctx_send_msg_to(struct pomp_ctx *ctx,
+		const struct pomp_msg *msg,
+		const struct sockaddr *addr, uint32_t addrlen);
 
 /**
  * Format and send a message to a context.

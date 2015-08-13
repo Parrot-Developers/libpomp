@@ -185,7 +185,7 @@ int pomp_ctx_notify_msg(struct pomp_ctx *ctx, struct pomp_conn *conn,
 /* Connection functions not part of public API */
 
 struct pomp_conn *pomp_conn_new(struct pomp_ctx *ctx,
-		struct pomp_loop *loop, int fd);
+		struct pomp_loop *loop, int fd, int isdgram);
 
 int pomp_conn_destroy(struct pomp_conn *conn);
 
@@ -194,6 +194,9 @@ int pomp_conn_close(struct pomp_conn *conn);
 struct pomp_conn *pomp_conn_get_next(const struct pomp_conn *conn);
 
 int pomp_conn_set_next(struct pomp_conn *conn, struct pomp_conn *next);
+
+int pomp_conn_send_msg_to(struct pomp_conn *conn, const struct pomp_msg *msg,
+		const struct sockaddr *addr, uint32_t addrlen);
 
 /* Decoder functions not part of public API */
 
