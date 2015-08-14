@@ -76,11 +76,6 @@
 #  ifndef HAVE_NETINET_TCP_H
 #    define HAVE_NETINET_TCP_H
 #  endif
-#  ifdef __USE_GNU
-#    ifndef HAVE_ASPRINTF
-#      define HAVE_ASPRINTF
-#    endif
-#  endif
 #endif
 
 #if defined(_POSIX_C_SOURCE) && (_POSIX_C_SOURCE >= 199309L)

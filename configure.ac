@@ -81,9 +81,6 @@ AC_CHECK_HEADERS([ \
 	netinet/tcp.h \
 ])
 
-dnl Check for asprintf
-AC_CHECK_FUNCS(asprintf)
-
 dnl Check for POSIX timers
 AC_CHECK_FUNCS(timer_create, [], [
 	AC_CHECK_LIB(rt, timer_create, [

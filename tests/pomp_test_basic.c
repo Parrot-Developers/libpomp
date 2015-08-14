@@ -732,13 +732,9 @@ static void test_msg_read_write(void)
 
 	/* Dump with buffer allocation */
 	res = pomp_msg_adump(msg, &abuf);
-#ifndef _WIN32
 	CU_ASSERT_EQUAL(res, 0);
 	CU_ASSERT_STRING_EQUAL(abuf, s_msg_dump);
 	free(abuf);
-#else /* _WIN32 */
-	CU_ASSERT_EQUAL(res, -ENOSYS);
-#endif /* _WIN32 */
 
 	/* Copy (with data) */
 	msg2 = pomp_msg_new_copy(msg);

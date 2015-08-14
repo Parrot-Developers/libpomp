@@ -457,80 +457,62 @@ struct pomp_decoder_dump_ctx {
 	char		*dst;	/**< Destination buffer */
 	uint32_t	maxdst;	/**< Max length of destination */
 	uint32_t	pos;	/**< Current position in destination */
-	int (*append)(struct pomp_decoder_dump_ctx *ctx, const char *fmt, ...);
+	int		grow;	/**< Automatically grow destination */
 };
 
 /**
  * Append text to dump buffer.
  * @param ctx : dump context.
+ * @param addlen : approximative length of new text that with be appended.
  * @param fmt : text format.
  * @param ... : format arguments.
  * @return 0 in case of success, negative errno value in case of error.
  */
-POMP_ATTRIBUTE_FORMAT_PRINTF(2, 3)
-static int dump_append(struct pomp_decoder_dump_ctx *ctx, const char *fmt, ...)
+POMP_ATTRIBUTE_FORMAT_PRINTF(3, 4)
+static int dump_append(struct pomp_decoder_dump_ctx *ctx, uint32_t addlen,
+		const char *fmt, ...)
 {
 	int res = 0;
+	void *newdst = NULL;
+	uint32_t newmaxdst = 0;
 	va_list args;
+
+	/* Resize destination buffer if needed */
+	if (ctx->pos + addlen >= ctx->maxdst && ctx->grow) {
+		newmaxdst = POMP_BUFFER_ALIGN_ALLOC_SIZE(ctx->pos + addlen + 1);
+		newdst = realloc(ctx->dst, newmaxdst);
+		if (newdst == NULL)
+			return -ENOMEM;
+		ctx->dst = newdst;
+		ctx->maxdst = newmaxdst;
+	}
+
+	/* Stop now if destination is already full */
+	if (ctx->pos >= ctx->maxdst)
+		return 0;
+
+	/* Format text */
 	va_start(args, fmt);
 	res = vsnprintf(ctx->dst + ctx->pos, ctx->maxdst - ctx->pos, fmt, args);
 	if (res >= 0) {
-		ctx->pos += (uint32_t)res;
+		if ((uint32_t)res >= ctx->maxdst - ctx->pos) {
+			POMP_LOGW("decoder : dump truncated");
+			ctx->pos = ctx->maxdst;
+		} else {
+			ctx->pos += (uint32_t)res;
+		}
 		res = 0;
+#ifdef _WIN32
+	} else {
+		/* WIN32 indicates truncation with negative result ... */
+		POMP_LOGW("decoder : dump truncated");
+		ctx->pos = ctx->maxdst;
+		res = 0;
+#endif /* _WIN32 */
 	}
 	va_end(args);
+
 	return res;
-}
-
-/**
- * Append some text to a string.
- * @param str : string to which the text will be appended. If it points to NULL,
- * will be allocated suitably to contain the text corresponding to the format
- * and it's arguments. If not, the string pointed to must have been allocated
- * dynamically and will be reallocated to hold the original content of the
- * string, plus that of the apended text.
- * @param fmt : text format.
- * @param args : format arguments.
- * @return 0 in case of success, negative errno value in case of error.
- */
-POMP_ATTRIBUTE_FORMAT_PRINTF(2, 3)
-static int adump_append(struct pomp_decoder_dump_ctx *ctx, const char *fmt, ...)
-{
-#ifndef HAVE_ASPRINTF
-	return -ENOSYS;
-#else  /* !HAVE_ASPRINTF */
-	int ret;
-	char *suffix = NULL;
-	va_list args;
-	size_t len;
-	int suffix_len;
-	char *dst;
-
-	if (ctx == NULL || fmt == NULL)
-		return -EINVAL;
-	len = ctx->dst != NULL ? strlen(ctx->dst) : 0;
-
-	va_start(args, fmt);
-	suffix_len = vasprintf(&suffix, fmt, args);
-	va_end(args);
-	if (suffix_len < 0)
-		return -ENOMEM;
-
-	dst = realloc(ctx->dst, len + suffix_len + 1);
-	if (dst == NULL) {
-		ret = -errno;
-		goto out;
-	}
-	ctx->dst = dst;
-
-	snprintf(ctx->dst + len, suffix_len + 1, "%s", suffix);
-
-	ret = 0;
-out:
-	free(suffix);
-
-	return ret;
-#endif /* !HAVE_ASPRINTF */
 }
 
 /**
@@ -548,6 +530,20 @@ static int dump_append_buf(struct pomp_decoder_dump_ctx *ctx,
 }
 
 /**
+ * Maximum number of characters required to print a decimal value
+ * U64: 18446744073709551615
+ * I64: -9223372036854775808
+ */
+#define MAX_DEC  24
+
+/**
+ * Maximum number of characters required to print a floating point value.
+ * %.7g formatting string is used
+ * -2.225074e-308
+ */
+#define MAX_FLT  16
+
+/**
  * Decoder dump callback.
  * @param dec : decoder.
  * @param type : type of argument.
@@ -556,7 +552,7 @@ static int dump_append_buf(struct pomp_decoder_dump_ctx *ctx,
  * @param userdata : decoder dump context;
  * @return 1 to continue dump, 0 to stop it.
  */
-static int pomp_decoder_dump_cb(struct pomp_decoder *dec, uint8_t type,
+static int decoder_dump_cb(struct pomp_decoder *dec, uint8_t type,
 		const union pomp_value *v, uint32_t buflen, void *userdata)
 {
 	int res = 0;
@@ -564,58 +560,59 @@ static int pomp_decoder_dump_cb(struct pomp_decoder *dec, uint8_t type,
 
 	switch (type) {
 	case POMP_PROT_DATA_TYPE_I8:
-		res = ctx->append(ctx, ", I8:%d", v->i8);
+		res = dump_append(ctx, 5 + MAX_DEC, ", I8:%d", v->i8);
 		break;
 
 	case POMP_PROT_DATA_TYPE_U8:
-		res = ctx->append(ctx, ", U8:%u", v->u8);
+		res = dump_append(ctx, 5 + MAX_DEC, ", U8:%u", v->u8);
 		break;
 
 	case POMP_PROT_DATA_TYPE_I16:
-		res = ctx->append(ctx, ", I16:%d", v->i16);
+		res = dump_append(ctx, 6 + MAX_DEC, ", I16:%d", v->i16);
 		break;
 
 	case POMP_PROT_DATA_TYPE_U16:
-		res = ctx->append(ctx, ", U16:%u", v->u16);
+		res = dump_append(ctx, 6 + MAX_DEC, ", U16:%u", v->u16);
 		break;
 
 	case POMP_PROT_DATA_TYPE_I32:
-		res = ctx->append(ctx, ", I32:%d", v->i32);
+		res = dump_append(ctx, 6 + MAX_DEC, ", I32:%d", v->i32);
 		break;
 
 	case POMP_PROT_DATA_TYPE_U32:
-		res = ctx->append(ctx, ", U32:%u", v->u32);
+		res = dump_append(ctx, 6 + MAX_DEC, ", U32:%u", v->u32);
 		break;
 
 	case POMP_PROT_DATA_TYPE_I64:
-		res = ctx->append(ctx, ", I64:%" PRIi64, v->i64);
+		res = dump_append(ctx, 6 + MAX_DEC, ", I64:%" PRIi64, v->i64);
 		break;
 
 	case POMP_PROT_DATA_TYPE_U64:
-		res = ctx->append(ctx, ", U64:%" PRIu64, v->u64);
+		res = dump_append(ctx, 6 + MAX_DEC, ", U64:%" PRIu64, v->u64);
 		break;
 
 	case POMP_PROT_DATA_TYPE_STR:
-		res = ctx->append(ctx, ", STR:'%s'", v->cstr);
+		res = dump_append(ctx, 6 + (uint32_t)strlen(v->cstr),
+				", STR:'%s'", v->cstr);
 		break;
 
 	case POMP_PROT_DATA_TYPE_BUF:
-		res = ctx->append(ctx, ", BUF:");
+		res = dump_append(ctx, 6, ", BUF:");
 		if (res < 0)
 			goto out;
 		res = dump_append_buf(ctx, v->cbuf, buflen);
 		break;
 
 	case POMP_PROT_DATA_TYPE_F32:
-		res = ctx->append(ctx, ", F32:%f", v->f32);
+		res = dump_append(ctx, 6 + MAX_FLT, ", F32:%.7g", v->f32);
 		break;
 
 	case POMP_PROT_DATA_TYPE_F64:
-		res = ctx->append(ctx, ", F64:%f", v->f64);
+		res = dump_append(ctx, 6 + MAX_FLT, ", F64:%.7g", v->f64);
 		break;
 
 	case POMP_PROT_DATA_TYPE_FD:
-		res = ctx->append(ctx, ", FD:%d", v->fd);
+		res = dump_append(ctx, 5 + MAX_DEC, ", FD:%d", v->fd);
 		break;
 
 	default:
@@ -625,8 +622,48 @@ static int pomp_decoder_dump_cb(struct pomp_decoder *dec, uint8_t type,
 	}
 
 out:
-	/* Continue if no errors*/
-	return res == 0;
+	/* Continue if no errors and destination not full */
+	return res == 0 && (ctx->pos < ctx->maxdst || ctx->grow);
+}
+
+/**
+ * Decoder dump.
+ * @param dec : decoder.
+ * @param ctx : dump context.
+ * @return 0 in case of success, negative errno value in case of error.
+ */
+static int decoder_dump(struct pomp_decoder *dec,
+		struct pomp_decoder_dump_ctx *ctx)
+{
+	int res = 0;
+
+	/* Message id */
+	res = dump_append(ctx, 4 + MAX_DEC, "{ID:%u", dec->msg->msgid);
+	if (res < 0)
+		goto out;
+
+	/* Arguments */
+	res = pomp_decoder_walk(dec, &decoder_dump_cb, ctx, 1);
+	if (res < 0)
+		goto out;
+
+	res = dump_append(ctx, 1, "}");
+
+out:
+
+	/* Add ellipsis if needed */
+	if (ctx->pos >= ctx->maxdst && ctx->maxdst >= 5 && !ctx->grow) {
+		ctx->dst[ctx->maxdst - 5] = '.';
+		ctx->dst[ctx->maxdst - 4] = '.';
+		ctx->dst[ctx->maxdst - 3] = '.';
+		ctx->dst[ctx->maxdst - 2] = '}';
+	}
+
+	/* Make sure it is null terminated */
+	if (ctx->maxdst >= 1)
+		ctx->dst[ctx->maxdst - 1] = '\0';
+
+	return res;
 }
 
 /*
@@ -634,7 +671,6 @@ out:
  */
 int pomp_decoder_dump(struct pomp_decoder *dec, char *dst, uint32_t maxdst)
 {
-	int res = 0;
 	struct pomp_decoder_dump_ctx ctx;
 	POMP_RETURN_ERR_IF_FAILED(dec != NULL, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(dec->msg != NULL, -EINVAL);
@@ -646,32 +682,9 @@ int pomp_decoder_dump(struct pomp_decoder *dec, char *dst, uint32_t maxdst)
 	ctx.dst = dst;
 	ctx.maxdst = maxdst;
 	ctx.pos = 0;
-	ctx.append = dump_append;
+	ctx.grow = 0;
 
-	/* Message id */
-	res = ctx.append(&ctx, "{ID:%u", dec->msg->msgid);
-	if (res < 0)
-		goto out;
-
-	/* Arguments */
-	res = pomp_decoder_walk(dec, &pomp_decoder_dump_cb, &ctx, 1);
-
-out:
-	ctx.append(&ctx, "}");
-
-	/* Add ellipsis if needed */
-	if (ctx.pos >= maxdst && maxdst >= 5) {
-		dst[maxdst - 5] = '.';
-		dst[maxdst - 4] = '.';
-		dst[maxdst - 3] = '.';
-		dst[maxdst - 2] = '}';
-	}
-
-	/* Make sure it is null terminated */
-	if (maxdst >= 1)
-		dst[maxdst - 1] = '\0';
-
-	return res;
+	return decoder_dump(dec, &ctx);
 }
 
 int pomp_decoder_adump(struct pomp_decoder *dec, char **dst)
@@ -687,31 +700,17 @@ int pomp_decoder_adump(struct pomp_decoder *dec, char **dst)
 
 	/* Setup dump context */
 	memset(&ctx, 0, sizeof(ctx));
-	ctx.append = adump_append;
+	ctx.dst = NULL;
+	ctx.maxdst = 0;
+	ctx.pos = 0;
+	ctx.grow = 1;
 
-	/* Message id */
-	res = ctx.append(&ctx, "{ID:%u", dec->msg->msgid);
+	res = decoder_dump(dec, &ctx);
+
 	if (res < 0)
-		goto error;
-
-	/* Arguments */
-	res = pomp_decoder_walk(dec, &pomp_decoder_dump_cb, &ctx, 1);
-	if (res < 0)
-		goto error;
-
-	res = ctx.append(&ctx, "}");
-	if (res < 0)
-		goto error;
-
-	*dst = ctx.dst;
-
-	return 0;
-
-	/* Cleanup in case of error */
-error:
-	if (ctx.dst != NULL)
 		free(ctx.dst);
-
+	else
+		*dst = ctx.dst;
 	return res;
 }
 

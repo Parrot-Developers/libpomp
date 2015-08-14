@@ -243,23 +243,12 @@ static void event_cb(struct pomp_ctx *ctx, enum pomp_event event,
 
 	case POMP_EVENT_MSG:
 		if (s_app.dump) {
-#ifdef _WIN32
-			buf = calloc(1, 1024);
-			res = pomp_msg_dump(msg, buf, 1024);
-			if (res < 0) {
-				diag("pomp_msg_dump: err=%d(%s)", res,
-						strerror(-res));
-				free(buf);
-				return;
-			}
-#else /* !_WIN32 */
 			res = pomp_msg_adump(msg, &buf);
 			if (res < 0) {
 				diag("pomp_msg_adump: err=%d(%s)", res,
 						strerror(-res));
 				return;
 			}
-#endif /* !_WIN32 */
 			diag("MSG: %s", buf);
 			free(buf);
 		}
