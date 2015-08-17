@@ -228,7 +228,7 @@ static int pomp_loop_win32_do_wait_and_process(struct pomp_loop *loop,
 		return -ETIMEDOUT;
 
 	/* Make sure wait result is expected */
-	if (waitres < WAIT_OBJECT_0 || waitres >= WAIT_OBJECT_0 + count) {
+	if ((int)waitres < WAIT_OBJECT_0 || waitres >= WAIT_OBJECT_0 + count) {
 		POMP_LOGW("Unexpected wait result : %u", waitres);
 		return 0;
 	}

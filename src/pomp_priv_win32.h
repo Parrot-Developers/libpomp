@@ -113,7 +113,7 @@ static inline ssize_t win32_read(int fd, void *buf, size_t len)
 static inline ssize_t win32_recvfrom(int fd, void *buf, size_t len,
 		int flags, struct sockaddr *addr, socklen_t *addrlen)
 {
-	return (ssize_t)recvfrom((SOCKET)fd, (char *)buf, (int)len,
+	return (ssize_t)recvfrom((SOCKET)fd, buf, (int)len,
 			flags, addr, addrlen);
 }
 
@@ -125,7 +125,7 @@ static inline ssize_t win32_write(int fd, const void *buf, size_t len)
 static inline ssize_t win32_sendto(int fd, const void *buf, size_t len,
 		int flags, const struct sockaddr *addr, socklen_t addrlen)
 {
-	return (ssize_t)sendto((SOCKET)fd, (const char *)buf, (int)len,
+	return (ssize_t)sendto((SOCKET)fd, buf, (int)len,
 			flags, addr, addrlen);
 }
 
