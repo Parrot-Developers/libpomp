@@ -660,7 +660,7 @@ out:
 	}
 
 	/* Make sure it is null terminated */
-	if (ctx->maxdst >= 1)
+	if (ctx->dst != NULL && ctx->maxdst >= 1)
 		ctx->dst[ctx->maxdst - 1] = '\0';
 
 	return res;
