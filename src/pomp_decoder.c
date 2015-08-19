@@ -488,7 +488,7 @@ static int dump_append(struct pomp_decoder_dump_ctx *ctx, uint32_t addlen,
 	}
 
 	/* Stop now if destination is already full */
-	if (ctx->pos >= ctx->maxdst)
+	if (ctx->dst == NULL || ctx->pos >= ctx->maxdst)
 		return 0;
 
 	/* Format text */
