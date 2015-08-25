@@ -500,6 +500,11 @@ public:
 		return pomp_ctx_connect(mCtx, addr, addrlen);
 	}
 
+	/** Bind a connection-less context (inet-udp). */
+	inline int bind(const struct sockaddr *addr, uint32_t addrlen) {
+		return pomp_ctx_bind(mCtx, addr, addrlen);
+	}
+
 	/** Stop the context. It will disconnects all peers (with notification). */
 	inline int stop() {
 		return pomp_ctx_stop(mCtx);
