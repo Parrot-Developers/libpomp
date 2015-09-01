@@ -661,6 +661,16 @@ POMP_API int pomp_timer_destroy(struct pomp_timer *timer);
 POMP_API int pomp_timer_set(struct pomp_timer *timer, uint32_t delay);
 
 /**
+ * Set a periodic timer.
+ * @param timer : timer to set.
+ * @param delay : initial expiration delay in milliseconds.
+ * @param period : period in milliseconds.
+ * @return 0 in case of success, negative errno value in case of error.
+ */
+POMP_API int pomp_timer_set_periodic(struct pomp_timer *timer, uint32_t delay,
+		uint32_t period);
+
+/**
  * Clear a timer.
  * @param timer : timer to clear.
  * @return 0 in case of success, negative errno value in case of error.

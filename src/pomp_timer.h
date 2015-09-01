@@ -65,7 +65,8 @@ struct pomp_timer_ops {
 	int (*timer_destroy)(struct pomp_timer *timer);
 
 	/** Implementation specific 'set' operation. */
-	int (*timer_set)(struct pomp_timer *timer, uint32_t delay);
+	int (*timer_set)(struct pomp_timer *timer, uint32_t delay,
+			uint32_t period);
 
 	/** Implementation specific 'clear' operation. */
 	int (*timer_clear)(struct pomp_timer *timer);

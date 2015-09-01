@@ -101,6 +101,20 @@ static void test_timer(void)
 	CU_ASSERT_EQUAL(res, -ETIMEDOUT);
 	CU_ASSERT_EQUAL(data.counter, 1);
 
+	/* Periodic timer */
+	data.counter = 0;
+	res = pomp_timer_set_periodic(timer, 500, 1000);
+	CU_ASSERT_EQUAL(res, 0);
+	res = pomp_loop_wait_and_process(loop, 750);
+	CU_ASSERT_EQUAL(res, 0);
+	CU_ASSERT_EQUAL(data.counter, 1);
+	res = pomp_loop_wait_and_process(loop, 1250);
+	CU_ASSERT_EQUAL(res, 0);
+	CU_ASSERT_EQUAL(data.counter, 2);
+	res = pomp_loop_wait_and_process(loop, 1250);
+	CU_ASSERT_EQUAL(res, 0);
+	CU_ASSERT_EQUAL(data.counter, 3);
+
 	/* Invalid set (NULL param) */
 	res = pomp_timer_set(NULL, 500);
 	CU_ASSERT_EQUAL(res, -EINVAL);

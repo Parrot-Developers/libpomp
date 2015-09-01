@@ -86,7 +86,16 @@ int pomp_timer_destroy(struct pomp_timer *timer)
  */
 int pomp_timer_set(struct pomp_timer *timer, uint32_t delay)
 {
-	return (*s_pomp_timer_ops->timer_set)(timer, delay);
+	return (*s_pomp_timer_ops->timer_set)(timer, delay, 0);
+}
+
+/*
+ * See documentation in public header.
+ */
+int pomp_timer_set_periodic(struct pomp_timer *timer, uint32_t delay,
+		uint32_t period)
+{
+	return (*s_pomp_timer_ops->timer_set)(timer, delay, period);
 }
 
 /*

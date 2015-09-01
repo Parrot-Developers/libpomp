@@ -182,15 +182,16 @@ error:
 /**
  * @see pomp_timer_set.
  */
-static int pomp_timer_posix_set(struct pomp_timer *timer, uint32_t delay)
+static int pomp_timer_posix_set(struct pomp_timer *timer, uint32_t delay,
+		uint32_t period)
 {
 	int res = 0;
 	struct itimerspec newval, oldval;
 	POMP_RETURN_ERR_IF_FAILED(timer != NULL, -EINVAL);
 
 	/* Setup timeout */
-	newval.it_interval.tv_sec = 0;
-	newval.it_interval.tv_nsec = 0;
+	newval.it_interval.tv_sec = (time_t)(period / 1000);
+	newval.it_interval.tv_nsec = (long int)((period % 1000) * 1000 * 1000);
 	newval.it_value.tv_sec = (time_t)(delay / 1000);
 	newval.it_value.tv_nsec = (long int)((delay % 1000) * 1000 * 1000);
 	if (timer_settime(timer->id, 0, &newval, &oldval) < 0) {
@@ -207,7 +208,7 @@ static int pomp_timer_posix_set(struct pomp_timer *timer, uint32_t delay)
 static int pomp_timer_posix_clear(struct pomp_timer *timer)
 {
 	POMP_RETURN_ERR_IF_FAILED(timer != NULL, -EINVAL);
-	return pomp_timer_posix_set(timer, 0);
+	return pomp_timer_posix_set(timer, 0, 0);
 }
 
 /** Timer operations for 'posix' implementation */

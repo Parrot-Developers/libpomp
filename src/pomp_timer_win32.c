@@ -119,7 +119,8 @@ error:
 /**
  * @see pomp_timer_set.
  */
-static int pomp_timer_win32_set(struct pomp_timer *timer, uint32_t delay)
+static int pomp_timer_win32_set(struct pomp_timer *timer, uint32_t delay,
+		uint32_t period)
 {
 	int res = 0;
 	LARGE_INTEGER tval;
@@ -128,7 +129,8 @@ static int pomp_timer_win32_set(struct pomp_timer *timer, uint32_t delay)
 
 	/* Convert ms to 100th of ns */
 	tval.QuadPart = - (LONGLONG)delay * 1000 * 10;
-	if (!SetWaitableTimer(timer->htimer, &tval, 0, NULL, NULL, 0)) {
+	if (!SetWaitableTimer(timer->htimer, &tval, (LONG)period,
+			NULL, NULL, 0)) {
 		res = -errno;
 		POMP_LOG_ERRNO("SetWaitableTimer");
 		return res;
