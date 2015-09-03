@@ -232,7 +232,8 @@ static void event_cb(struct pomp_ctx *ctx, enum pomp_event event,
 		/* Exit loop if not dumping message */
 		if (!s_app.dump && !s_app.waitmsg)
 			s_app.running = 0;
-		cancel_timeout();
+		else if (!s_app.waitmsg)
+			cancel_timeout();
 		break;
 
 	case POMP_EVENT_DISCONNECTED:
@@ -252,8 +253,10 @@ static void event_cb(struct pomp_ctx *ctx, enum pomp_event event,
 			diag("MSG: %s", buf);
 			free(buf);
 		}
-		if (s_app.waitmsg && pomp_msg_get_id(msg) == s_app.msgid)
+		if (s_app.waitmsg &&
+				pomp_msg_get_id(msg) == s_app.expected_msgid) {
 			s_app.running = 0;
+		}
 		break;
 
 	default:
