@@ -94,6 +94,9 @@ struct pomp_ctx {
 	/** Fd loop */
 	struct pomp_loop	*loop;
 
+	/** 0 if loop is internal, 1 if external */
+	int			extloop;
+
 	/** Timer for connection retries */
 	struct pomp_timer	*timer;
 
@@ -708,8 +711,41 @@ const char *pomp_event_str(enum pomp_event event)
 struct pomp_ctx *pomp_ctx_new(pomp_event_cb_t cb, void *userdata)
 {
 	struct pomp_ctx *ctx = NULL;
+	struct pomp_loop *loop = NULL;
 
 	POMP_RETURN_VAL_IF_FAILED(cb != NULL, -EINVAL, NULL);
+
+	/* Create a loop */
+	loop = pomp_loop_new();
+	if (loop == NULL)
+		goto error;
+
+	/* Create context with the loop */
+	ctx = pomp_ctx_new_with_loop(cb, userdata, loop);
+	if (ctx == NULL)
+		goto error;
+
+	/* The loop is actually internal, not external now */
+	ctx->extloop = 0;
+	return ctx;
+
+	/* Cleanup in case of error */
+error:
+	if (loop != NULL)
+		pomp_loop_destroy(loop);
+	return NULL;
+}
+
+/*
+ * See documentation in public header.
+ */
+struct pomp_ctx *pomp_ctx_new_with_loop(pomp_event_cb_t cb,
+		void *userdata, struct pomp_loop *loop)
+{
+	struct pomp_ctx *ctx = NULL;
+
+	POMP_RETURN_VAL_IF_FAILED(cb != NULL, -EINVAL, NULL);
+	POMP_RETURN_VAL_IF_FAILED(loop != NULL, -EINVAL, NULL);
 
 	/* Allocate context structure */
 	ctx = calloc(1, sizeof(*ctx));
@@ -719,11 +755,8 @@ struct pomp_ctx *pomp_ctx_new(pomp_event_cb_t cb, void *userdata)
 	/* Save parameters */
 	ctx->eventcb = cb;
 	ctx->userdata = userdata;
-
-	/* Create loop */
-	ctx->loop = pomp_loop_new();
-	if (ctx->loop == NULL)
-		goto error;
+	ctx->loop = loop;
+	ctx->extloop = 1;
 
 	/* Allocate timer */
 	ctx->timer = pomp_timer_new(ctx->loop, &timer_cb, ctx);
@@ -748,7 +781,7 @@ int pomp_ctx_destroy(struct pomp_ctx *ctx)
 	POMP_RETURN_ERR_IF_FAILED(ctx->addr == NULL, -EBUSY);
 	if (ctx->timer != NULL)
 		pomp_timer_destroy(ctx->timer);
-	if (ctx->loop != NULL)
+	if (ctx->loop != NULL && !ctx->extloop)
 		pomp_loop_destroy(ctx->loop);
 	free(ctx);
 	return 0;

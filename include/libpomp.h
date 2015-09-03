@@ -519,6 +519,17 @@ struct pomp_timer;
  */
 
 /**
+ * Create a new context structure in an existing loop.
+ * @param cb : function to be called when connection/disconnection/message
+ * events occur.
+ * @param userdata : user data to give in cb.
+ * @param loop: loop to use.
+ * @return context structure or NULL in case of error.
+ */
+POMP_API struct pomp_ctx *pomp_ctx_new_with_loop(pomp_event_cb_t cb,
+		void *userdata, struct pomp_loop *loop);
+
+/**
  * Get the internal loop structure of the context.
  * @param ctx : context.
  * @return loop structure or NULL in case of error.
