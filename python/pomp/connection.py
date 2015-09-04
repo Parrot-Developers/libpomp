@@ -58,27 +58,42 @@ def activateSocketKeepalive(sock, keepidle=5, keepintvl=1, keepcnt=2):
 class Connection(object):
     _WRITE_STOP = 1
     _WRITE_MSG = 2
+    _WRITE_MSG_TO = 3
 
-    def __init__(self, ctx, sock):
+    def __init__(self, ctx, sock, isDgram=False):
         self.ctx = ctx
         self.sock = sock
+        self.isDgram = isDgram
         self.running = False
         self.readThread = None
         self.writeThread = None
         self.writeHandler = None
         self.cond = threading.Condition()
+        self.localAddr = (self.sock.family, self.sock.getsockname())
+        if not isDgram:
+            self.peerAddr = (self.sock.family, self.sock.getpeername())
+        else:
+            self.peerAddr = None
 
     def getLocalAddr(self):
-        return (self.sock.family, self.sock.getsockname())
+        return self.localAddr
 
     def getPeerAddr(self):
-        return (self.sock.family, self.sock.getpeername())
+        return self.peerAddr
 
 #    def getPeerCred(self):
 #        return self.sock.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED)
 
     def sendMsg(self, msg):
-        self.writeHandler.post((Connection._WRITE_MSG, msg))
+        if self.isDgram:
+            assert self.peerAddr is not None
+            self.writeHandler.post((Connection._WRITE_MSG_TO, msg, self.peerAddr))
+        else:
+            self.writeHandler.post((Connection._WRITE_MSG, msg))
+
+    def sendMsgTo(self, msg, addr):
+        assert self.isDgram
+        self.writeHandler.post((Connection._WRITE_MSG_TO, msg, addr))
 
     def send(self, msgid, fmt, *args):
         msg = Message()
@@ -96,7 +111,8 @@ class Connection(object):
         # Put socket in blocking mode and activate keep alive
         self.sock.setblocking(True)
         if self.sock.family == socket.AF_INET or self.sock.family == socket.AF_INET6:
-            activateSocketKeepalive(self.sock)
+            if not self.isDgram:
+                activateSocketKeepalive(self.sock)
 
         # Start everything !
         self.running = True
@@ -140,14 +156,19 @@ class Connection(object):
             prot = Protocol()
             while self.running:
                 # Read and decode data into messages and notify them
-                buf = self.sock.recv(1024)
-                if not buf:
+                if self.isDgram:
+                    (buf, self.peerAddr) = self.sock.recvfrom(1024)
+                else:
+                    buf = self.sock.recv(1024)
+                if not buf and not self.isDgram:
                     break
                 off = 0
                 while off < len(buf):
                     (off, rxMsg) = prot.decode(buf, off)
                     if rxMsg is not None:
                         self.ctx.notifyMessage(self, rxMsg)
+                if self.isDgram:
+                    self.peerAddr
         except (OSError, IOError) as ex:
             _log.warning("recv: err=%d(%s)", ex.errno, ex.strerror)
 
@@ -176,6 +197,12 @@ class Connection(object):
                 self.sock.sendall(txMsg.buf.getData())
             except (OSError, IOError) as ex:
                 _log.warning("send: err=%d(%s)", ex.errno, ex.strerror)
+        elif what == Connection._WRITE_MSG_TO:
+            (what, txMsg, addr) = req
+            try:
+                self.sock.sendto(txMsg.buf.getData(), addr)
+            except (OSError, IOError) as ex:
+                _log.warning("sendto: err=%d(%s)", ex.errno, ex.strerror)
         elif what == Connection._WRITE_STOP:
             looper.exitLoop()
         else:

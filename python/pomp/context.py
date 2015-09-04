@@ -48,6 +48,7 @@ _CONN_MSG = 2
 
 _SERVER_RECONNECT_DELAY = 2.0
 _CLIENT_RECONNECT_DELAY = 2.0
+_DGRAM_RECONNECT_DELAY = 2.0
 
 #===============================================================================
 #===============================================================================
@@ -72,20 +73,29 @@ class Context(object):
         self.sockThread = None
         self.mainHandler = None
         self.running = False
-        self.server = False
+        self.isDgram = False
         self.cond = threading.Condition()
 
     def listen(self, family, addr):
         assert self.sockAddr is None
         self.sockFamily = family
         self.sockAddr = addr
+        self.isDgram = False
         self._start(16, self._runServer)
 
     def connect(self, family, addr):
         assert self.sockAddr is None
         self.sockFamily = family
         self.sockAddr = addr
+        self.isDgram = False
         self._start(1, self._runClient)
+
+    def bind(self, family, addr):
+        assert self.sockAddr is None
+        self.sockFamily = family
+        self.sockAddr = addr
+        self.isDgram = True
+        self._start(1, self._runDgram)
 
     def getConnections(self):
         return self.connections
@@ -172,12 +182,14 @@ class Context(object):
     def _doConnAdd(self, conn):
         self.connections.append(conn)
         conn.start()
-        self.eventHandler.onConnected(self, conn)
+        if not self.isDgram:
+            self.eventHandler.onConnected(self, conn)
 
     def _doConnRemove(self, conn):
         # Could be called again during close or disconnection
         if conn in self.connections:
-            self.eventHandler.onDisconnected(self, conn)
+            if not self.isDgram:
+                self.eventHandler.onDisconnected(self, conn)
             self.connections.remove(conn)
             conn.close()
             self.semaphore.release()
@@ -283,12 +295,51 @@ class Context(object):
             # Retry again later
             self._waitForRetry(_CLIENT_RECONNECT_DELAY)
 
-    def _setupSock(self):
+    def _runDgram(self):
+        while self.running:
+            # Open a socket
+            if not self._setupSock(socktype=socket.SOCK_DGRAM):
+                break
+
+            # Bind to address
+            bound = False
+            try:
+                self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                self.sock.bind(self.sockAddr)
+                bound = True
+            except (OSError, IOError) as ex:
+                # Some errors are expected
+                if self.running and ex.errno != errno.EADDRNOTAVAIL:
+                    _log.warning("bind: err=%d(%s)", ex.errno, ex.strerror)
+
+            # Create connection object, give ownership of socket
+            if bound:
+                try:
+                    self.cond.acquire()
+                    conn = Connection(self, self.sock, isDgram=True)
+                    self.sock = None
+                    self.mainHandler.post((_CONN_ADD, conn, None))
+                finally:
+                    self.cond.release()
+            else:
+                # Release our token
+                self.semaphore.release()
+
+            # Cleanup socket
+            self._cleanupSock()
+
+            # Wait for current connection if any to complete
+            self.semaphore.acquire()
+
+            # Retry again later
+            self._waitForRetry(_DGRAM_RECONNECT_DELAY)
+
+    def _setupSock(self, socktype=socket.SOCK_STREAM):
         try:
             self.cond.acquire()
             if not self.running:
                 return False
-            self.sock = socket.socket(self.sockFamily, socket.SOCK_STREAM)
+            self.sock = socket.socket(self.sockFamily, socktype)
         finally:
             self.cond.release()
         return True
