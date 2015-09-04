@@ -87,7 +87,7 @@ class Decoder(object):
             elif datatype == protocol.DATA_TYPE_STR:
                 buf.write(", STR:'%s'" % self.readStr())
             elif datatype == protocol.DATA_TYPE_BUF:
-                buf.write(", BUF:'%s'" % self.readBuf())
+                buf.write(", BUF:'%s'" % repr(self.readBuf()))
             elif datatype == protocol.DATA_TYPE_F32:
                 buf.write(", F32:%s" % str(self.readF32()))
             elif datatype == protocol.DATA_TYPE_F64:
