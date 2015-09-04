@@ -41,7 +41,7 @@ import pomp
 #===============================================================================
 #===============================================================================
 _USAGE = (
-    "usage: %prog [<options>] <addr> [<msgid> [<fmt> [<args>...]]]\n"
+    "usage: %prog [<options>] <addr> [[<addrto>] <msgid> [<fmt> [<args>...]]]\n"
     "Send a pomp message on a socket or dump messages\n"
     "received on a socket\n"
     "\n"
@@ -65,6 +65,7 @@ class App(object):
         self.sockFamily = None
         self.sockAddr = None
         self.server = options.server
+        self.udp = options.udp
         self.dump = options.dump
         self.timeout = options.timeout
         self.hasmsg = False
@@ -86,7 +87,9 @@ class App(object):
 
         # Create pomp context
         self.ctx = pomp.Context(self)
-        if self.server:
+        if self.udp:
+            self.ctx.bind(self.sockFamily, self.sockAddr)
+        elif self.server:
             self.ctx.listen(self.sockFamily, self.sockAddr)
         else:
             self.ctx.connect(self.sockFamily, self.sockAddr)
@@ -240,6 +243,12 @@ def parseArgs():
         action="store_false",
         default=False,
         help="use a client socket (default)")
+
+    parser.add_option("-u", "--udp",
+        dest="udp",
+        action="store_true",
+        default=False,
+        help="use a udp socket")
 
     parser.add_option("-d", "--dump",
         dest="dump",
