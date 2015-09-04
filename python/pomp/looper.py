@@ -52,12 +52,17 @@ class _Loop(object):
     def run(self):
         self._running = True
         while self._running:
-            try:
-                # Use timeout so we can interrupt wait
-                (handler, req) = self._queue.get(timeout=0.1)
-                handler.cb(req)
-            except queue.Empty:
-                pass
+            # Use timeout so we can interrupt wait
+            self.step(timeout=0.1)
+
+    def step(self, timeout=0):
+        try:
+            (handler, req) = self._queue.get(timeout=timeout)
+            handler.cb(req)
+            return True
+        except queue.Empty:
+            return False
+
 
     def exit(self):
         self._running = False
@@ -89,6 +94,13 @@ def prepareLoop(loop=None):
 def runLoop():
     _tls.loop.run()
     _tls.loop = None
+
+#===============================================================================
+#===============================================================================
+def stepLoop(maxMsg=32):
+    count = 0
+    while _tls.loop.step() and count < maxMsg:
+        count += 1
 
 #===============================================================================
 #===============================================================================
