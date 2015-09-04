@@ -380,8 +380,15 @@ public:
 		pomp_timer_destroy(mTimer);
 	}
 
-	inline int set(uint32_t delay) {
-		return pomp_timer_set(mTimer, delay);
+	inline int set(uint32_t delay, uint32_t period = 0) {
+		if (period == 0)
+			return pomp_timer_set(mTimer, delay);
+		else
+			return pomp_timer_set_periodic(mTimer, delay, period);
+	}
+
+	inline int setPeriodic(uint32_t delay, uint32_t period) {
+		return pomp_timer_set_periodic(mTimer, delay, period);
 	}
 
 	inline int clear() {
@@ -427,6 +434,7 @@ private:
 	EventHandler     *mEventHandler;  /**< Event handler */
 	ConnectionArray  mConnections;    /**< Connection array */
 	Loop             *mLoop;          /**< Associated loop */
+	bool             mExtLoop;        /**< True if loop is external */
 
 private:
 	/** Find our own connection object from internal one */
@@ -477,16 +485,24 @@ private:
 
 public:
 	/** Constructor. */
-	inline Context(EventHandler *eventHandler) {
-		mCtx = pomp_ctx_new(&Context::eventCb, this);
-		mEventHandler = eventHandler;
-		mLoop = NULL;
+	inline Context(EventHandler *eventHandler, Loop *loop = NULL) {
+		if (loop == NULL) {
+			mCtx = pomp_ctx_new(&Context::eventCb, this);
+			mEventHandler = eventHandler;
+			mLoop = NULL;
+			mExtLoop = false;
+		} else {
+			mCtx = pomp_ctx_new_with_loop(&Context::eventCb, this, loop->mLoop);
+			mEventHandler = eventHandler;
+			mLoop = loop;
+			mExtLoop = true;
+		}
 	}
 
 	/** Destructor */
 	inline ~Context() {
 		pomp_ctx_destroy(mCtx);
-		if (mLoop != NULL)
+		if (mLoop != NULL && !mExtLoop)
 			delete mLoop;
 	}
 
@@ -550,6 +566,11 @@ public:
 	/** Send a message to all connections. */
 	inline int sendMsg(const Message &msg) {
 		return pomp_ctx_send_msg(mCtx, msg.getMsg());
+	}
+
+	/** Send a message on dgram context to a remote address. */
+	inline int sendMsgTo(const Message &msg, const struct sockaddr *addr, uint32_t addrlen) {
+		return pomp_ctx_send_msg_to(mCtx, msg.getMsg(), addr, addrlen);
 	}
 
 	/** Format and send a message to all connections. */
