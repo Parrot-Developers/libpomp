@@ -29,6 +29,8 @@
 # THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #===============================================================================
 
+import socket
+
 from pomp.context import Context
 from pomp.context import EventHandler
 from pomp.message import Message
@@ -36,3 +38,30 @@ from pomp.encoder import Encoder
 from pomp.encoder import EncodeException
 from pomp.decoder import Decoder
 from pomp.decoder import DecodeException
+
+#===============================================================================
+#===============================================================================
+def parseInetAddr(family, buf):
+    sep = buf.rfind(":")
+    if sep < 0:
+        raise ValueError()
+    host = buf[:sep]
+    port = int(buf[sep+1:])
+    return (family, (host, port))
+
+#===============================================================================
+#===============================================================================
+def parseAddr(buf):
+    if buf.startswith("inet:"):
+        return parseInetAddr(socket.AF_INET, buf[5:])
+    elif buf.startswith("inet6:"):
+        return parseInetAddr(socket.AF_INET6, buf[6:])
+    elif buf.startswith("unix:"):
+        path = buf[5:]
+        if path.startswith("@"):
+            path = "\x00" + path[1:] + (108 - len(path)) * "\x00"
+        else:
+            path += (108 - len(path)) * "\x00"
+        return (socket.AF_UNIX, path)
+    else:
+        raise ValueError("Unable to parse address: '%s" % buf)

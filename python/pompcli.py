@@ -154,33 +154,6 @@ class App(object):
 
 #===============================================================================
 #===============================================================================
-def parseInetAddr(family, buf):
-    sep = buf.rfind(":")
-    if sep < 0:
-        raise ValueError()
-    host = buf[:sep]
-    port = int(buf[sep+1:])
-    return (family, (host, port))
-
-#===============================================================================
-#===============================================================================
-def parseAddr(buf):
-    if buf.startswith("inet:"):
-        return parseInetAddr(socket.AF_INET, buf[5:])
-    elif buf.startswith("inet6:"):
-        return parseInetAddr(socket.AF_INET6, buf[6:])
-    elif buf.startswith("unix:"):
-        path = buf[5:]
-        if path.startswith("@"):
-            path = "\x00" + path[1:] + (108 - len(path)) * "\x00"
-        else:
-            path += (108 - len(path)) * "\x00"
-        return (socket.AF_UNIX, path)
-    else:
-        raise ValueError()
-
-#===============================================================================
-#===============================================================================
 def main():
     (options, args) = parseArgs()
     setupLog(options)
@@ -190,7 +163,7 @@ def main():
     # Get address
     if len(args) > 0:
         try:
-            (app.sockFamily, app.sockAddr) = parseAddr(args[0])
+            (app.sockFamily, app.sockAddr) = pomp.parseAddr(args[0])
         except (ValueError, socket.error):
             sys.stderr.write("Failed to parse address: %s\n" % args[0])
             sys.exit(1)
