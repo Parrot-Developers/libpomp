@@ -37,6 +37,7 @@ struct test_data {
 	uint32_t  connection;
 	uint32_t  disconnection;
 	uint32_t  msg;
+	int       isdgram;
 };
 
 /** */
@@ -50,6 +51,7 @@ static void test_event_cb_t(struct pomp_ctx *ctx, enum pomp_event event,
 	const struct sockaddr *addr = NULL;
 	uint32_t addrlen = 0;
 	const struct ucred *cred = NULL;
+	int isunix = 0;
 
 	switch (event) {
 	case POMP_EVENT_CONNECTED:
@@ -59,6 +61,7 @@ static void test_event_cb_t(struct pomp_ctx *ctx, enum pomp_event event,
 		CU_ASSERT_TRUE(addr != NULL);
 		addr = pomp_conn_get_peer_addr(conn, &addrlen);
 		CU_ASSERT_TRUE(addr != NULL);
+		isunix = addr->sa_family == AF_UNIX;
 
 		/* Invalid get addr (NULL param) */
 		addr = pomp_conn_get_local_addr(NULL, &addrlen);
@@ -71,10 +74,12 @@ static void test_event_cb_t(struct pomp_ctx *ctx, enum pomp_event event,
 		CU_ASSERT_TRUE(addr == NULL);
 
 		/* Invalid get credentials (bad type or NULL param) */
-		cred = pomp_conn_get_peer_cred(conn);
-		CU_ASSERT_TRUE(cred == NULL);
-		cred = pomp_conn_get_peer_cred(NULL);
-		CU_ASSERT_TRUE(cred == NULL);
+		if (!isunix) {
+			cred = pomp_conn_get_peer_cred(conn);
+			CU_ASSERT_TRUE(cred == NULL);
+			cred = pomp_conn_get_peer_cred(NULL);
+			CU_ASSERT_TRUE(cred == NULL);
+		}
 		break;
 
 	case POMP_EVENT_DISCONNECTED:
@@ -86,6 +91,17 @@ static void test_event_cb_t(struct pomp_ctx *ctx, enum pomp_event event,
 		if (pomp_msg_get_id(msg) == 1) {
 			res = pomp_conn_send(conn, 2, "%s", eventstr);
 			CU_ASSERT_EQUAL(res, 0);
+		}
+
+		if (data->isdgram) {
+			res = pomp_conn_disconnect(conn);
+			CU_ASSERT_EQUAL(res, -ENOTCONN);
+
+			/* Internal function invalid arguments checks */
+			res = pomp_conn_send_msg_to(NULL, msg, addr, addrlen);
+			CU_ASSERT_EQUAL(res, -EINVAL);
+			res = pomp_conn_send_msg_to(conn, NULL, addr, addrlen);
+			CU_ASSERT_EQUAL(res, -EINVAL);
 		}
 
 		/* Internal function invalid arguments checks */
@@ -190,30 +206,25 @@ static void run_ctx(struct pomp_ctx *ctx1, struct pomp_ctx *ctx2, int timeout)
 #endif /* _WIN32 */
 
 /** */
-static void test_ctx(void)
+static void test_ctx(const struct sockaddr *addr1, uint32_t addrlen1,
+		const struct sockaddr *addr2, uint32_t addrlen2,
+		int isdgram)
 {
 	int res = 0;
 	struct test_data data;
-	struct sockaddr_in addr_in;
-	struct sockaddr *addr = NULL;
-	uint32_t addrlen = 0;
 	struct pomp_ctx *ctx1 = NULL;
 	struct pomp_ctx *ctx2 = NULL;
 	struct pomp_loop *loop = NULL;
 	struct pomp_conn *conn = NULL;
+	struct pomp_msg *msg = NULL;
 	int fd = -1;
 	uint32_t i = 0;
 	void *buf = NULL;
 
 	memset(&data, 0, sizeof(data));
-
-	/* Setup test address */
-	memset(&addr_in, 0, sizeof(addr_in));
-	addr_in.sin_family = AF_INET;
-	addr_in.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-	addr_in.sin_port = htons(5656);
-	addr = (struct sockaddr *)&addr_in;
-	addrlen = sizeof(addr_in);
+	data.isdgram = isdgram;
+	msg = pomp_msg_new();
+	CU_ASSERT_PTR_NOT_NULL_FATAL(msg);
 
 	/* Create context */
 	ctx1 = pomp_ctx_new(&test_event_cb_t, &data);
@@ -222,38 +233,74 @@ static void test_ctx(void)
 	/* Invalid create (NULL param) */
 	ctx2 = pomp_ctx_new(NULL, &data);
 	CU_ASSERT_PTR_NULL(ctx2);
+	ctx2 = pomp_ctx_new_with_loop(NULL, &data, NULL);
+	CU_ASSERT_PTR_NULL(ctx2);
+	ctx2 = pomp_ctx_new_with_loop(&test_event_cb_t, &data, NULL);
+	CU_ASSERT_PTR_NULL(ctx2);
 
 	/* Create 2nd context */
 	ctx2 = pomp_ctx_new(&test_event_cb_t, &data);
 	CU_ASSERT_PTR_NOT_NULL_FATAL(ctx2);
 
-	/* Invalid start server (NULL param) */
-	res = pomp_ctx_listen(NULL, addr, addrlen);
-	CU_ASSERT_EQUAL(res, -EINVAL);
-	res = pomp_ctx_listen(ctx1, NULL, addrlen);
-	CU_ASSERT_EQUAL(res, -EINVAL);
+	if (!isdgram) {
+		/* Invalid start server (NULL param) */
+		res = pomp_ctx_listen(NULL, addr1, addrlen1);
+		CU_ASSERT_EQUAL(res, -EINVAL);
+		res = pomp_ctx_listen(ctx1, NULL, addrlen1);
+		CU_ASSERT_EQUAL(res, -EINVAL);
 
-	/* Start as server 1st context */
-	res = pomp_ctx_listen(ctx1, addr, addrlen);
-	CU_ASSERT_EQUAL(res, 0);
+		/* Start as server 1st context */
+		res = pomp_ctx_listen(ctx1, addr1, addrlen1);
+		CU_ASSERT_EQUAL(res, 0);
 
-	/* Invalid start server (busy) */
-	res = pomp_ctx_listen(ctx1, addr, addrlen);
-	CU_ASSERT_EQUAL(res, -EBUSY);
+		/* Invalid start server (busy) */
+		res = pomp_ctx_listen(ctx1, addr1, addrlen1);
+		CU_ASSERT_EQUAL(res, -EBUSY);
+	} else {
+		/* Invalid bind (NULL param) */
+		res = pomp_ctx_bind(NULL, addr1, addrlen1);
+		CU_ASSERT_EQUAL(res, -EINVAL);
+		res = pomp_ctx_bind(ctx1, NULL, addrlen1);
+		CU_ASSERT_EQUAL(res, -EINVAL);
 
-	/* Invalid start client (NULL param) */
-	res = pomp_ctx_connect(NULL, addr, addrlen);
-	CU_ASSERT_EQUAL(res, -EINVAL);
-	res = pomp_ctx_connect(ctx2, NULL, addrlen);
-	CU_ASSERT_EQUAL(res, -EINVAL);
+		/* Bind 1st context */
+		res = pomp_ctx_bind(ctx1, addr1, addrlen1);
+		CU_ASSERT_EQUAL(res, 0);
 
-	/* Start as client 2nd context */
-	res = pomp_ctx_connect(ctx2, addr, addrlen);
-	CU_ASSERT_EQUAL(res, 0);
+		/* Invalid bind (busy) */
+		res = pomp_ctx_bind(ctx1, addr1, addrlen1);
+		CU_ASSERT_EQUAL(res, -EBUSY);
+	}
 
-	/* Invalid start client (busy) */
-	res = pomp_ctx_connect(ctx2, addr, addrlen);
-	CU_ASSERT_EQUAL(res, -EBUSY);
+	if (!isdgram) {
+		/* Invalid start client (NULL param) */
+		res = pomp_ctx_connect(NULL, addr2, addrlen2);
+		CU_ASSERT_EQUAL(res, -EINVAL);
+		res = pomp_ctx_connect(ctx2, NULL, addrlen2);
+		CU_ASSERT_EQUAL(res, -EINVAL);
+
+		/* Start as client 2nd context */
+		res = pomp_ctx_connect(ctx2, addr2, addrlen2);
+		CU_ASSERT_EQUAL(res, 0);
+
+		/* Invalid start client (busy) */
+		res = pomp_ctx_connect(ctx2, addr2, addrlen2);
+		CU_ASSERT_EQUAL(res, -EBUSY);
+	} else {
+		/* Invalid bind (NULL param) */
+		res = pomp_ctx_bind(NULL, addr2, addrlen2);
+		CU_ASSERT_EQUAL(res, -EINVAL);
+		res = pomp_ctx_bind(ctx2, NULL, addrlen2);
+		CU_ASSERT_EQUAL(res, -EINVAL);
+
+		/* Bind 2nd context */
+		res = pomp_ctx_bind(ctx2, addr2, addrlen2);
+		CU_ASSERT_EQUAL(res, 0);
+
+		/* Invalid bind (busy) */
+		res = pomp_ctx_bind(ctx2, addr2, addrlen2);
+		CU_ASSERT_EQUAL(res, -EBUSY);
+	}
 
 	/* Invalid get loop (NULL param) */
 	loop = pomp_ctx_get_loop(NULL);
@@ -278,43 +325,77 @@ static void test_ctx(void)
 
 	/* Run contexts (they shall connect each other) */
 	run_ctx(ctx1, ctx2, 100);
-	CU_ASSERT_EQUAL(data.connection, 2);
+	if (!isdgram) {
+		CU_ASSERT_EQUAL(data.connection, 2);
 
-	/* Get remote connections */
-	conn = pomp_ctx_get_next_conn(ctx1, NULL);
-	CU_ASSERT_PTR_NOT_NULL(conn);
-	conn = pomp_ctx_get_next_conn(ctx1, conn);
-	CU_ASSERT_PTR_NULL(conn);
-	conn = pomp_ctx_get_conn(ctx2);
-	CU_ASSERT_PTR_NOT_NULL(conn);
+		/* Get remote connections */
+		conn = pomp_ctx_get_next_conn(ctx1, NULL);
+		CU_ASSERT_PTR_NOT_NULL(conn);
+		conn = pomp_ctx_get_next_conn(ctx1, conn);
+		CU_ASSERT_PTR_NULL(conn);
+		conn = pomp_ctx_get_conn(ctx2);
+		CU_ASSERT_PTR_NOT_NULL(conn);
 
-	/* Invalid get remote connections */
-	conn = pomp_ctx_get_next_conn(ctx2, NULL);
-	CU_ASSERT_PTR_NULL(conn);
-	conn = pomp_ctx_get_conn(ctx1);
-	CU_ASSERT_PTR_NULL(conn);
-	conn = pomp_ctx_get_next_conn(NULL, NULL);
-	CU_ASSERT_PTR_NULL(conn);
-	conn = pomp_ctx_get_conn(NULL);
-	CU_ASSERT_PTR_NULL(conn);
+		/* Invalid get remote connections */
+		conn = pomp_ctx_get_next_conn(ctx2, NULL);
+		CU_ASSERT_PTR_NULL(conn);
+		conn = pomp_ctx_get_conn(ctx1);
+		CU_ASSERT_PTR_NULL(conn);
+		conn = pomp_ctx_get_next_conn(NULL, NULL);
+		CU_ASSERT_PTR_NULL(conn);
+		conn = pomp_ctx_get_conn(NULL);
+		CU_ASSERT_PTR_NULL(conn);
+	}
 
 	/* Exchange some message */
-	res = pomp_ctx_send(ctx1, 1, "%s", "hello1->2");
-	CU_ASSERT_EQUAL(res, 0);
-	res = pomp_ctx_send(ctx2, 1, "%s", "hello2->1");
-	CU_ASSERT_EQUAL(res, 0);
+	if (!isdgram) {
+		res = pomp_ctx_send(ctx1, 1, "%s", "hello1->2");
+		CU_ASSERT_EQUAL(res, 0);
+		res = pomp_ctx_send(ctx2, 1, "%s", "hello2->1");
+		CU_ASSERT_EQUAL(res, 0);
 
-	/* Invalid send (NULL param) */
-	res = pomp_ctx_send(NULL, 1, "%s", "hello1->2");
-	CU_ASSERT_EQUAL(res, -EINVAL);
-	res = pomp_ctx_send_msg(ctx1, NULL);
-	CU_ASSERT_EQUAL(res, -EINVAL);
+		/* Invalid send (NULL param) */
+		res = pomp_ctx_send(NULL, 1, "%s", "hello1->2");
+		CU_ASSERT_EQUAL(res, -EINVAL);
+		res = pomp_ctx_send_msg(ctx1, NULL);
+		CU_ASSERT_EQUAL(res, -EINVAL);
 
-	/* Invalid send (bad format) */
-	res = pomp_ctx_send(ctx1, 1, "%o", 1);
-	CU_ASSERT_EQUAL(res, -EINVAL);
-	res = pomp_conn_send(pomp_ctx_get_conn(ctx2), 1, "%o", 1);
-	CU_ASSERT_EQUAL(res, -EINVAL);
+		/* Invalid send (bad format) */
+		res = pomp_ctx_send(ctx1, 1, "%o", 1);
+		CU_ASSERT_EQUAL(res, -EINVAL);
+		res = pomp_conn_send(pomp_ctx_get_conn(ctx2), 1, "%o", 1);
+		CU_ASSERT_EQUAL(res, -EINVAL);
+
+		/* Invalid send to (bad type) */
+		res = pomp_ctx_send_msg_to(ctx2, msg, addr1, addrlen1);
+		CU_ASSERT_EQUAL(res, -EINVAL);
+	} else {
+		res = pomp_msg_clear(msg);
+		CU_ASSERT_EQUAL(res, 0);
+		res = pomp_msg_write(msg, 1, "%s", "hello1->2");
+		CU_ASSERT_EQUAL(res, 0);
+		res = pomp_ctx_send_msg_to(ctx1, msg, addr2, addrlen2);
+		CU_ASSERT_EQUAL(res, 0);
+
+		res = pomp_msg_clear(msg);
+		CU_ASSERT_EQUAL(res, 0);
+		res = pomp_msg_write(msg, 1, "%s", "hello2->1");
+		CU_ASSERT_EQUAL(res, 0);
+		res = pomp_ctx_send_msg_to(ctx2, msg, addr1, addrlen1);
+		CU_ASSERT_EQUAL(res, 0);
+
+		/* Invalid send (not connected) */
+		res = pomp_ctx_send_msg(ctx2, msg);
+		CU_ASSERT_EQUAL(res, -ENOTCONN);
+
+		/* Invalid send to (NULL param) */
+		res = pomp_ctx_send_msg_to(NULL, msg, addr1, addrlen1);
+		CU_ASSERT_EQUAL(res, -EINVAL);
+		res = pomp_ctx_send_msg_to(ctx2, NULL, addr1, addrlen1);
+		CU_ASSERT_EQUAL(res, -EINVAL);
+		res = pomp_ctx_send_msg_to(ctx2, msg, NULL, addrlen1);
+		CU_ASSERT_EQUAL(res, -EINVAL);
+	}
 
 	/* Run contexts (they shall have answered each other) */
 	run_ctx(ctx1, ctx2, 100);
@@ -326,30 +407,46 @@ static void test_ctx(void)
 	res = pomp_ctx_wait_and_process(NULL, 100);
 	CU_ASSERT_EQUAL(res, -EINVAL);
 
-	/* Overflow server by writing on client side without running loop */
-	buf = calloc(1, 1024);
-	CU_ASSERT_PTR_NOT_NULL_FATAL(buf);
-	for (i = 0; i < 1024; i++) {
-		res = pomp_ctx_send(ctx2, 3, "%p%u", buf, 1024);
-		CU_ASSERT_EQUAL(res, 0);
-	}
-	free(buf);
+	/* Wakeup */
+	res = pomp_ctx_wakeup(ctx1);
+	CU_ASSERT_EQUAL(res, 0);
+	res = pomp_ctx_wait_and_process(ctx1, 100);
+	CU_ASSERT_EQUAL(res, 0);
 
-	/* Run contexts (to unlock writes) */
-	run_ctx(ctx1, ctx2, 1000);
-	CU_ASSERT_EQUAL(data.msg, 4 + 1024);
+	/* Invalid wakeup (NULL param) */
+	res = pomp_ctx_wakeup(NULL);
+	CU_ASSERT_EQUAL(res, -EINVAL);
+
+	/* Overflow server by writing on client side without running loop */
+	if (!isdgram) {
+		buf = calloc(1, 1024);
+		CU_ASSERT_PTR_NOT_NULL_FATAL(buf);
+		for (i = 0; i < 1024; i++) {
+			res = pomp_ctx_send(ctx2, 3, "%p%u", buf, 1024);
+			CU_ASSERT_EQUAL(res, 0);
+		}
+		free(buf);
+
+		/* Run contexts (to unlock writes) */
+		run_ctx(ctx1, ctx2, 1000);
+		CU_ASSERT_EQUAL(data.msg, 4 + 1024);
+	}
 
 	/* Disconnect client from server */
-	res = pomp_conn_disconnect(pomp_ctx_get_next_conn(ctx1, NULL));
-	CU_ASSERT_EQUAL(res, 0);
+	if (!isdgram) {
+		res = pomp_conn_disconnect(pomp_ctx_get_next_conn(ctx1, NULL));
+		CU_ASSERT_EQUAL(res, 0);
+	}
 
 	/* Run contexts (they shall disconnect each other) */
 	run_ctx(ctx1, ctx2, 100);
-	CU_ASSERT_EQUAL(data.disconnection, 2);
+	if (!isdgram) {
+		CU_ASSERT_EQUAL(data.disconnection, 2);
 
-	/* Invalid send (client not connected) */
-	res = pomp_ctx_send(ctx2, 1, "%s", "hello2->1");
-	CU_ASSERT_EQUAL(res, -ENOTCONN);
+		/* Invalid send (client not connected) */
+		res = pomp_ctx_send(ctx2, 1, "%s", "hello2->1");
+		CU_ASSERT_EQUAL(res, -ENOTCONN);
+	}
 
 	/* Invalid destroy (NULL param) */
 	res = pomp_ctx_destroy(NULL);
@@ -380,6 +477,56 @@ static void test_ctx(void)
 	CU_ASSERT_EQUAL(res, 0);
 	res = pomp_ctx_destroy(ctx2);
 	CU_ASSERT_EQUAL(res, 0);
+
+	res = pomp_msg_destroy(msg);
+	CU_ASSERT_EQUAL(res, 0);
+}
+
+/** */
+static void test_ctx_inet_tcp(void)
+{
+	struct sockaddr_in addr_in;
+
+	memset(&addr_in, 0, sizeof(addr_in));
+	addr_in.sin_family = AF_INET;
+	addr_in.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+	addr_in.sin_port = htons(5656);
+
+	test_ctx((const struct sockaddr *)&addr_in, sizeof(addr_in),
+			(const struct sockaddr *)&addr_in, sizeof(addr_in), 0);
+}
+
+/** */
+static void test_ctx_inet_udp(void)
+{
+	struct sockaddr_in addr_in1;
+	struct sockaddr_in addr_in2;
+
+	memset(&addr_in1, 0, sizeof(addr_in1));
+	addr_in1.sin_family = AF_INET;
+	addr_in1.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+	addr_in1.sin_port = htons(5656);
+
+	memset(&addr_in2, 0, sizeof(addr_in2));
+	addr_in2.sin_family = AF_INET;
+	addr_in2.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+	addr_in2.sin_port = htons(5657);
+
+	test_ctx((const struct sockaddr *)&addr_in1, sizeof(addr_in1),
+			(const struct sockaddr *)&addr_in2, sizeof(addr_in2), 1);
+}
+
+/** */
+static void test_ctx_unix(void)
+{
+	struct sockaddr_un addr_un;
+
+	memset(&addr_un, 0, sizeof(addr_un));
+	addr_un.sun_family = AF_UNIX;
+	strcpy(addr_un.sun_path, "/tmp/tst-pomp");
+
+	test_ctx((const struct sockaddr *)&addr_un, sizeof(addr_un),
+			(const struct sockaddr *)&addr_un, sizeof(addr_un), 0);
 }
 
 /** */
@@ -435,7 +582,9 @@ static void test_invalid_addr(void)
 
 /** */
 static CU_TestInfo s_ctx_tests[] = {
-	{(char *)"ctx", &test_ctx},
+	{(char *)"ctx_inet_tcp", &test_ctx_inet_tcp},
+	{(char *)"ctx_inet_udp", &test_ctx_inet_udp},
+	{(char *)"ctx_unix", &test_ctx_unix},
 	{(char *)"ctx_invalid_addr", &test_invalid_addr},
 	CU_TEST_INFO_NULL,
 };
