@@ -39,10 +39,16 @@ How to use :
 
    ctx = pomp_ctx_new(&cb, NULL);
    pomp_ctx_listen(ctx, addr, addrlen);
+     or
    pomp_ctx_connect(ctx, addr, addrlen);
+   fd = pomp_ctx_get_fd(ctx);
 
    The library automatically handles reconnections after timeout and remote
    disconnections.
+
+  Note: retrieving the fd of the context to put it in an external event loop
+        is only available under linux. For other systems, please take a look
+        at the loop API.
 
 2) Send a message.
    A message can be sent at the context object level or at the connection
@@ -113,7 +119,7 @@ Note : for decoding, %ms expects a pointer to a string (char **) not just a
        string (char*) like a standard scanf with %s.
 
 - %p%u : buffer (with its size). For decoding, buffer is still owned by the
-         message, call shall NOT free the returned pointer.
+         message, caller shall NOT free the returned pointer.
 Note : both %p AND %u shall be given.
 
 - %f   : 32-bit floating point.
