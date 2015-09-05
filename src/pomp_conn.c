@@ -60,6 +60,8 @@ struct pomp_io_buffer {
 	size_t			off;	/**< Offset in buffer */
 	struct pomp_buffer	*buf;	/**< Associated buffer data */
 	struct pomp_io_buffer	*next;	/**< Next IO buffer in chain */
+	struct sockaddr_storage	addr;	/**< Destination address for dgram */
+	uint32_t		addrlen;/**< Destination address for dgram */
 };
 
 /** Connection structure */
@@ -187,8 +189,8 @@ static int pomp_io_buffer_write_dgram(struct pomp_io_buffer *iobuf,
 	do {
 		writelen = sendto(conn->fd, iobuf->buf->data + iobuf->off,
 				iobuf->len - iobuf->off, 0,
-				(const struct sockaddr *)&conn->peer_addr,
-				conn->peer_addrlen);
+				(const struct sockaddr *)&iobuf->addr,
+				iobuf->addrlen);
 	} while (writelen < 0 && errno == EINTR);
 
 	/* Log errors except EAGAIN */
@@ -848,10 +850,17 @@ const struct ucred *pomp_conn_get_peer_cred(struct pomp_conn *conn)
 		return NULL;
 }
 
-/*
- * See documentation in public header.
+/**
+ * Send a message on the given connection. For dgram socket, it will sent it
+ * to given peer address or internal one if responding to a received message.
+ * @param conn : connection.
+ * @param msg : message.
+ * @param addr : peer address.
+ * @param addrlen : peer address length.
+ * @return 0 in case of success, negative errno value in case of error.
  */
-int pomp_conn_send_msg(struct pomp_conn *conn, const struct pomp_msg *msg)
+int pomp_conn_send_msg_to(struct pomp_conn *conn, const struct pomp_msg *msg,
+		const struct sockaddr *addr, uint32_t addrlen)
 {
 	int res = 0;
 	size_t off = 0;
@@ -864,10 +873,17 @@ int pomp_conn_send_msg(struct pomp_conn *conn, const struct pomp_msg *msg)
 	POMP_RETURN_ERR_IF_FAILED(msg->buf != NULL, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(msg->buf->data != NULL, -EINVAL);
 
-	/* For dgram socket, the remote address must have been set prior to
-	 * this function call */
-	POMP_RETURN_ERR_IF_FAILED(!conn->isdgram || conn->peer_addrlen != 0,
-			-ENOTCONN);
+	/* For dgram socket, the remote address must be present or we must
+	 * have one internally (for example when responding to a received
+	 * message) */
+	if (conn->isdgram && addr == NULL) {
+		if (conn->peer_addrlen == 0)
+			return -EINVAL;
+		addr = (const struct sockaddr *)&conn->peer_addr;
+		addrlen = conn->peer_addrlen;
+	}
+	if (addrlen > sizeof(struct sockaddr_storage))
+		return -EINVAL;
 
 	/* If buffer has file descriptors in it, the connection must be a
 	 * local unix socket */
@@ -884,6 +900,10 @@ int pomp_conn_send_msg(struct pomp_conn *conn, const struct pomp_msg *msg)
 		tmpiobuf.len = msg->buf->len;
 		tmpiobuf.off = 0;
 		tmpiobuf.next = NULL;
+		if (conn->isdgram) {
+			memcpy(&tmpiobuf.addr, addr, addrlen);
+			tmpiobuf.addrlen = addrlen;
+		}
 
 		/* Write it */
 		res = pomp_io_buffer_write(&tmpiobuf, conn);
@@ -902,10 +922,14 @@ int pomp_conn_send_msg(struct pomp_conn *conn, const struct pomp_msg *msg)
 	iobuf = pomp_io_buffer_new(msg->buf, off);
 	if (iobuf == NULL)
 		return -ENOMEM;
+	if (conn->isdgram) {
+		memcpy(&iobuf->addr, addr, addrlen);
+		iobuf->addrlen = addrlen;
+	}
 
-	POMP_LOGD("conn=%p fd=%d enter async mode", conn, conn->fd);
 	if (conn->tailbuf == NULL) {
 		/* No previous pending buffer */
+		POMP_LOGD("conn=%p fd=%d enter async mode", conn, conn->fd);
 		conn->headbuf = iobuf;
 		conn->tailbuf = iobuf;
 		pomp_loop_update(conn->loop, conn->fd,
@@ -919,25 +943,12 @@ int pomp_conn_send_msg(struct pomp_conn *conn, const struct pomp_msg *msg)
 	return 0;
 }
 
-int pomp_conn_send_msg_to(struct pomp_conn *conn, const struct pomp_msg *msg,
-		const struct sockaddr *addr, uint32_t addrlen)
+/*
+ * See documentation in public header.
+ */
+int pomp_conn_send_msg(struct pomp_conn *conn, const struct pomp_msg *msg)
 {
-	int res = 0;
-
-	POMP_RETURN_ERR_IF_FAILED(conn != NULL, -EINVAL);
-	POMP_RETURN_ERR_IF_FAILED(msg != NULL, -EINVAL);
-	POMP_RETURN_ERR_IF_FAILED(addr != NULL, -EINVAL);
-	POMP_RETURN_ERR_IF_FAILED(addrlen <= sizeof(conn->peer_addr), -EINVAL);
-	POMP_RETURN_ERR_IF_FAILED(conn->isdgram, -EINVAL);
-
-	/* Save address send message, then clear address */
-	memcpy(&conn->peer_addr, addr, addrlen);
-	conn->peer_addrlen = addrlen;
-	res = pomp_conn_send_msg(conn, msg);
-	memset(&conn->peer_addr, 0, sizeof(conn->peer_addr));
-	conn->peer_addrlen = 0;
-
-	return res;
+	return pomp_conn_send_msg_to(conn, msg, NULL, 0);
 }
 
 /*
