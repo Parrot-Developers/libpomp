@@ -60,6 +60,7 @@
 #endif
 #ifdef HAVE_SYS_EPOLL_H
 #  include <sys/epoll.h>
+#  define POMP_HAVE_LOOP_EPOLL
 #endif
 #ifdef HAVE_SYS_EVENTFD_H
 #  include <sys/eventfd.h>
@@ -71,14 +72,17 @@
 #endif
 #ifdef HAVE_SYS_POLL_H
 #  include <sys/poll.h>
+#  define POMP_HAVE_LOOP_POLL
 #endif
 #ifdef HAVE_SYS_SOCKET_H
 #  include <sys/socket.h>
 #endif
 #ifdef HAVE_SYS_TIMERFD_H
 #  include <sys/timerfd.h>
+#  define POMP_HAVE_TIMER_FD
 #elif defined(__linux__)
 #  include "sys_timerfd.h"
+#  define POMP_HAVE_TIMER_FD
 #endif
 #ifdef HAVE_SYS_UN_H
 #  include <sys/un.h>
@@ -88,15 +92,6 @@
 #endif
 
 /* Detect available implementations */
-#if !defined(POMP_HAVE_LOOP_EPOLL) && defined(HAVE_SYS_EPOLL_H)
-#  define POMP_HAVE_LOOP_EPOLL
-#endif
-#if !defined(POMP_HAVE_LOOP_POLL) && defined(HAVE_SYS_POLL_H)
-#  define POMP_HAVE_LOOP_POLL
-#endif
-#if !defined(POMP_HAVE_TIMER_FD) && defined(HAVE_SYS_TIMERFD_H)
-#  define POMP_HAVE_TIMER_FD
-#endif
 #if !defined(POMP_HAVE_TIMER_POSIX) && defined(HAVE_TIMER_CREATE)
 #  define POMP_HAVE_TIMER_POSIX
 #endif
