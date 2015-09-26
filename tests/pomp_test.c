@@ -146,7 +146,8 @@ int main(int argc, char *argv[])
 	fds2 = lsof();
 
 	/* Check for leaks */
-	check_fds(fds1, fds2);
+	if (fds1 != NULL && fds2 != NULL)
+		check_fds(fds1, fds2);
 
 	/* Free resources */
 	free(fds1);
