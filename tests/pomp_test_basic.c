@@ -34,14 +34,14 @@
 
 #define TEST_MSGID	(42)
 
-#define TEST_VAL_I8	(-32)
-#define TEST_VAL_U8	(212u)
-#define TEST_VAL_I16	(-1000)
-#define TEST_VAL_U16	(23000u)
-#define TEST_VAL_I32	(-71000)
-#define TEST_VAL_U32	(3000000000u)
-#define TEST_VAL_I64	(-4000000000ll)
-#define TEST_VAL_U64	(10000000000000000000ull)
+#define TEST_VAL_I8	((int8_t)(-32))
+#define TEST_VAL_U8	((uint8_t)(212u))
+#define TEST_VAL_I16	((int16_t)(-1000))
+#define TEST_VAL_U16	((uint16_t)(23000u))
+#define TEST_VAL_I32	((int32_t)(-71000))
+#define TEST_VAL_U32	((uint32_t)(3000000000u))
+#define TEST_VAL_I64	((int64_t)(-4000000000ll))
+#define TEST_VAL_U64	((uint64_t)(10000000000000000000ull))
 #define TEST_VAL_STR	"Hello World !!!"
 #define TEST_VAL_BUF	"hELLO wORLD ???"
 #define TEST_VAL_BUFLEN	15
