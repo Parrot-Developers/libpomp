@@ -125,7 +125,7 @@ static void test_event_cb_t(struct pomp_ctx *ctx, enum pomp_event event,
 	}
 }
 
-#ifndef _WIN32
+#ifdef __linux__
 
 /** */
 static void run_ctx(struct pomp_ctx *ctx1, struct pomp_ctx *ctx2, int timeout)
@@ -166,7 +166,45 @@ static void run_ctx(struct pomp_ctx *ctx1, struct pomp_ctx *ctx2, int timeout)
 	CU_ASSERT_EQUAL(res, 0);
 }
 
-#else /* _WIN32 */
+#endif /* __linux__ */
+
+#ifdef __FreeBSD__
+
+struct run_ctx_data {
+	struct pomp_ctx	*ctx;
+	uint32_t	timeout;
+};
+
+static void *run_ctx_thread(void *arg)
+{
+	int res = 0;
+	struct run_ctx_data *data = arg;
+	do {
+		res = pomp_ctx_wait_and_process(data->ctx, data->timeout);
+	} while (res == 0);
+	return 0;
+}
+
+static void run_ctx(struct pomp_ctx *ctx1, struct pomp_ctx *ctx2, int timeout)
+{
+	pthread_t thread1, thread2;
+	struct run_ctx_data data1, data2;
+
+	data1.ctx = ctx1;
+	data1.timeout = timeout;
+	pthread_create(&thread1, NULL, &run_ctx_thread,  &data1);
+
+	data2.ctx = ctx2;
+	data2.timeout = timeout;
+	pthread_create(&thread2, NULL, &run_ctx_thread,  &data2);
+
+	pthread_join(thread1, NULL);
+	pthread_join(thread2, NULL);
+}
+
+#endif /* __FreeBSD__ */
+
+#ifdef _WIN32
 
 struct run_ctx_data {
 	struct pomp_ctx	*ctx;
@@ -324,7 +362,7 @@ static void test_ctx(const struct sockaddr *addr1, uint32_t addrlen1,
 	CU_ASSERT_EQUAL(res, -EINVAL);
 
 	/* Run contexts (they shall connect each other) */
-	run_ctx(ctx1, ctx2, 100);
+	run_ctx(ctx1, ctx2, 1000);
 	if (!isdgram) {
 		CU_ASSERT_EQUAL(data.connection, 2);
 
@@ -398,7 +436,7 @@ static void test_ctx(const struct sockaddr *addr1, uint32_t addrlen1,
 	}
 
 	/* Run contexts (they shall have answered each other) */
-	run_ctx(ctx1, ctx2, 100);
+	run_ctx(ctx1, ctx2, 1000);
 	CU_ASSERT_EQUAL(data.msg, 4);
 
 	/* Dummy run */
@@ -439,7 +477,7 @@ static void test_ctx(const struct sockaddr *addr1, uint32_t addrlen1,
 	}
 
 	/* Run contexts (they shall disconnect each other) */
-	run_ctx(ctx1, ctx2, 100);
+	run_ctx(ctx1, ctx2, 1000);
 	if (!isdgram) {
 		CU_ASSERT_EQUAL(data.disconnection, 2);
 

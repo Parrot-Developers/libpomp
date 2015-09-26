@@ -37,7 +37,7 @@ struct test_data {
 	uint32_t  counter;
 };
 
-#ifndef _WIN32
+#ifdef __linux__
 
 /** */
 static int setup_timerfd(uint32_t delay, uint32_t period)
@@ -46,7 +46,7 @@ static int setup_timerfd(uint32_t delay, uint32_t period)
 	int tfd = -1;
 	struct itimerspec newval, oldval;
 
-	tfd = timerfd_create(CLOCK_MONOTONIC, TFD_CLOEXEC|TFD_NONBLOCK);
+	tfd = timerfd_create(CLOCK_MONOTONIC, TFD_CLOEXEC | TFD_NONBLOCK);
 	CU_ASSERT_TRUE_FATAL(tfd >= 0);
 
 	/* Setup timeout */
@@ -213,6 +213,17 @@ static void test_loop(int is_epoll)
 	CU_ASSERT_EQUAL(res, 0);
 }
 
+#endif /* __linux__ */
+
+#ifdef __FreeBSD__
+static void test_loop(int is_epoll)
+{
+	/* TODO */
+}
+#endif /* __FreeBSD__*/
+
+#ifndef _WIN32
+
 /** */
 static void *test_loop_wakeup_thread(void *arg)
 {
@@ -260,7 +271,9 @@ static void test_loop_wakeup(void)
 	CU_ASSERT_EQUAL(res, 0);
 }
 
-#else /* _WIN32 */
+#endif /* !_WIN32 */
+
+#ifdef _WIN32
 
 /** */
 static HANDLE setup_timer_win32(uint32_t delay, uint32_t period)

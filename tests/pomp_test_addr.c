@@ -51,7 +51,8 @@ static const char s_inet6_saddr_str[] = "inet6:fe80::5842:5cff:fe6b:ec7e:1234";
 static const struct sockaddr_in6 s_inet6_saddr = {
 	.sin6_family = AF_INET6,
 	.sin6_port = 0xd204,
-	.sin6_addr.s6_addr16 = {0x80fe, 0x0000, 0x0000, 0x0000, 0x4258, 0xff5c, 0x6bfe, 0x7eec},
+	.sin6_addr.s6_addr = {0xfe, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+			0x58, 0x42, 0x5c, 0xff, 0xfe, 0x6b, 0xec, 0x7e},
 };
 
 static const char s_unix_saddr_str_1[] = "unix:/tmp/foo";
@@ -86,7 +87,7 @@ static const struct test_data s_data[] = {
 static void test_addr(void)
 {
 	int res = 0;
-	size_t i = 0;
+	size_t i = 0, j = 0;
 	struct sockaddr_storage addr;
 	uint32_t addrlen = 0;
 	char buf[156] = "";
@@ -99,14 +100,22 @@ static void test_addr(void)
 		res = pomp_addr_parse(s_data[i].str, (struct sockaddr *)&addr, &addrlen);
 		CU_ASSERT_EQUAL(res, 0);
 		CU_ASSERT_EQUAL(addrlen, s_data[i].addrlen);
-		CU_ASSERT_EQUAL(memcmp(&addr, s_data[i].addr, s_data[i].addrlen), 0);
+
+		/* Compare only after familiy field (FreeBSD has an extra len field) */
+		CU_ASSERT_EQUAL(memcmp(&addr.ss_family,
+				&s_data[i].addr->sa_family,
+				s_data[i].addrlen - offsetof(struct sockaddr, sa_family)), 0);
 
 		/* Parse, input length exactly needed */
 		addrlen = s_data[i].addrlen;
 		res = pomp_addr_parse(s_data[i].str, (struct sockaddr *)&addr, &addrlen);
 		CU_ASSERT_EQUAL(res, 0);
 		CU_ASSERT_EQUAL(addrlen, s_data[i].addrlen);
-		CU_ASSERT_EQUAL(memcmp(&addr, s_data[i].addr, s_data[i].addrlen), 0);
+
+		/* Compare only after familiy field (FreeBSD has an extra len field) */
+		CU_ASSERT_EQUAL(memcmp(&addr.ss_family,
+				&s_data[i].addr->sa_family,
+				s_data[i].addrlen - offsetof(struct sockaddr, sa_family)), 0);
 
 		/* Parse, input length smaller that needed */
 		addrlen = s_data[i].addrlen - 1;

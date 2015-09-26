@@ -1,5 +1,7 @@
 /**
- * @file pomp_test.h
+ * @file pomp_priv_bsd.h
+ *
+ * @brief private headers for 'bsd'.
  *
  * @author yves-marie.morgan@parrot.com
  *
@@ -30,46 +32,14 @@
  *
  */
 
-#ifndef _POMP_TEST_H_
-#define _POMP_TEST_H_
+#ifndef _POMP_PRIV_BSD_H_
+#define _POMP_PRIV_BSD_H_
 
-#define _GNU_SOURCE
-
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
-#include <ctype.h>
-#include <dirent.h>
-#include <signal.h>
-#include <inttypes.h>
-#include <stddef.h>
-
-#include <sys/stat.h>
-
-#ifndef _WIN32
-#include <pthread.h>
-#include <sys/poll.h>
-#include <sys/socket.h>
-#include <sys/wait.h>
 #include <netinet/in.h>
-#include <arpa/inet.h>
-#endif /* !_WIN32 */
 
-#define POMP_ENABLE_ADVANCED_API
-#include "libpomp.h"
-#include "pomp_priv.h"
+#ifndef SOL_TCP
+#  define SOL_TCP	IPPROTO_TCP
+#endif
 
-#include <CUnit/CUnit.h>
-#include <CUnit/Basic.h>
-#include <CUnit/Automated.h>
+#endif /* !_POMP_PRIV_BSD_H_ */
 
-/**
- */
-extern CU_SuiteInfo g_suites_basic[];
-extern CU_SuiteInfo g_suites_addr[];
-extern CU_SuiteInfo g_suites_loop[];
-extern CU_SuiteInfo g_suites_timer[];
-extern CU_SuiteInfo g_suites_ctx[];
-extern CU_SuiteInfo g_suites_ipc[];
-
-#endif /* !_POMP_TEST_H_ */
