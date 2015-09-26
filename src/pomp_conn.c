@@ -109,7 +109,7 @@ struct pomp_conn {
 	socklen_t		peer_addrlen;
 
 	/** Remote peer credential for local sockets */
-	struct ucred		peer_cred;
+	struct pomp_cred	peer_cred;
 
 	/** Received file descriptors on local unix socket connection */
 	int			*fds;
@@ -660,6 +660,7 @@ struct pomp_conn *pomp_conn_new(struct pomp_ctx *ctx,
 	struct pomp_conn *conn = NULL;
 #ifdef SO_PEERCRED
 	socklen_t optlen = 0;
+	struct ucred cred;
 #endif /* SO_PEERCRED */
 
 	POMP_RETURN_VAL_IF_FAILED(ctx != NULL, -EINVAL, NULL);
@@ -713,11 +714,16 @@ struct pomp_conn *pomp_conn_new(struct pomp_ctx *ctx,
 
 	/* Get peer credentials information */
 #ifdef SO_PEERCRED
-	optlen = sizeof(conn->peer_cred);
 	if (!isdgram && conn->peer_addr.ss_family == AF_UNIX) {
+		memset(&cred, 0, sizeof(cred));
+		optlen = sizeof(cred);
 		if (getsockopt(fd, SOL_SOCKET, SO_PEERCRED,
-				&conn->peer_cred, &optlen) < 0) {
+				&cred, &optlen) < 0) {
 			POMP_LOG_FD_ERRNO("getsockopt.SO_PEERCRED", fd);
+		} else {
+			conn->peer_cred.pid = cred.pid;
+			conn->peer_cred.uid = cred.uid;
+			conn->peer_cred.gid = cred.gid;
 		}
 	}
 #endif /* SO_PEERCRED */
@@ -841,7 +847,7 @@ const struct sockaddr *pomp_conn_get_peer_addr(struct pomp_conn *conn,
 /*
  * See documentation in public header.
  */
-const struct ucred *pomp_conn_get_peer_cred(struct pomp_conn *conn)
+const struct pomp_cred *pomp_conn_get_peer_cred(struct pomp_conn *conn)
 {
 	POMP_RETURN_VAL_IF_FAILED(conn != NULL, -EINVAL, NULL);
 	if (conn->peer_addr.ss_family == AF_UNIX)

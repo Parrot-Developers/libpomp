@@ -50,7 +50,7 @@ static void test_event_cb_t(struct pomp_ctx *ctx, enum pomp_event event,
 	const char *eventstr = pomp_event_str(event);
 	const struct sockaddr *addr = NULL;
 	uint32_t addrlen = 0;
-	const struct ucred *cred = NULL;
+	const struct pomp_cred *cred = NULL;
 	int isunix = 0;
 
 	switch (event) {

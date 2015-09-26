@@ -204,7 +204,7 @@ public:
 	}
 
 	/** Get connection remote peer credentials for local sockets. */
-	inline const struct ucred *getPeerCred() {
+	inline const struct pomp_cred *getPeerCred() {
 		return pomp_conn_get_peer_cred(mConn);
 	}
 

@@ -79,7 +79,7 @@ static void log_conn_event(struct pomp_conn *conn, int is_server)
 
 	if (pomp_addr_is_unix(local_addr, local_addrlen)) {
 		char addrbuf[128] = "";
-		const struct ucred *peer_cred = NULL;
+		const struct pomp_cred *peer_cred = NULL;
 
 		/* Format using either local or peer address depending on
 		 * client/server side */

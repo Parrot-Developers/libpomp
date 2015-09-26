@@ -12,11 +12,11 @@
 namespace Pomp {
 
     [Compact]
-    [CCode (cname = "struct ucred", cheader_filename = "sys/socket.h", destroy_function = "")]
-    public struct Ucred {
-        Posix.pid_t pid;
-        Posix.uid_t uid;
-        Posix.gid_t gid;
+    [CCode (cname = "struct pomp_cred", destroy_function = "")]
+    public struct Cred {
+        uint32 pid;
+        uint32 uid;
+        uint32 gid;
     }
 
     [CCode (cname = "enum pomp_event", cprefix = "POMP_EVENT_", has_type_id = false)]
@@ -55,7 +55,7 @@ namespace Pomp {
         public int disconnect();
         public Posix.SockAddr *get_local_addr(out uint32 addrlen);
         public Posix.SockAddr *get_peer_addr(out uint32 addrlen);
-        public unowned Ucred? get_peer_cred();
+        public unowned Cred? get_peer_cred();
         public int send_msg(Message msg);
         [PrintfFormat]
         public int send(uint32 msgid, string fmt, ...);

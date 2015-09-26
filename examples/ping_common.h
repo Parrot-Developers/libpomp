@@ -70,11 +70,6 @@ extern "C" {
 #ifdef _WIN32
 typedef unsigned int	uid_t;		/**< User identification */
 typedef unsigned int	gid_t;		/**< Group identification */
-struct ucred {
-	pid_t		pid;		/**< PID of sending process */
-	uid_t		uid;		/**< UID of sending process */
-	gid_t		gid;		/**< GID of sending process */
-};
 static inline uid_t getuid() {return 0;}
 static inline gid_t getgid() {return 0;}
 static inline const char *strsignal(int signum) {return "??";}

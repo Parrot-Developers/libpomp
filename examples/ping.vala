@@ -273,12 +273,12 @@ public class App : GLib.Object {
             }
 
             /* Get peer credentials */
-            unowned Pomp.Ucred? peer_cred = conn.get_peer_cred();
+            unowned Pomp.Cred? peer_cred = conn.get_peer_cred();
             if (peer_cred == null) {
                 GLib.message("%s pid=%d,uid=%lu,gid=%lu -> unknown",
                         addr_str, Posix.getpid(), Posix.getuid(), Posix.getgid());
             } else {
-                GLib.message("%s pid=%d,uid=%lu,gid=%lu -> pid=%d,uid=%lu,gid=%lu",
+                GLib.message("%s pid=%d,uid=%lu,gid=%lu -> pid=%u,uid=%u,gid=%u",
                         addr_str, Posix.getpid(), Posix.getuid(), Posix.getgid(),
                         peer_cred.pid,
                         peer_cred.uid,

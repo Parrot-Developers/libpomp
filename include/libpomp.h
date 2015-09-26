@@ -67,7 +67,6 @@ extern "C" {
 
 /* Forward declarations */
 struct sockaddr;
-struct ucred;
 struct pomp_ctx;
 struct pomp_conn;
 struct pomp_msg;
@@ -77,6 +76,13 @@ enum pomp_event {
 	POMP_EVENT_CONNECTED = 0,	/**< Peer is connected */
 	POMP_EVENT_DISCONNECTED,	/**< Peer is disconnected */
 	POMP_EVENT_MSG,			/**< Message received from peer */
+};
+
+/** Peer credentials for local sockets */
+struct pomp_cred {
+	uint32_t	pid;	/**< PID of sending process */
+	uint32_t	uid;	/**< UID of sending process */
+	uint32_t	gid;	/**< GID of sending process */
 };
 
 /**
@@ -306,7 +312,8 @@ POMP_API const struct sockaddr *pomp_conn_get_peer_addr(struct pomp_conn *conn,
  * @param conn : connection
  * @return connection remote peer credentials or NULL if not a local socket.
  */
-POMP_API const struct ucred *pomp_conn_get_peer_cred(struct pomp_conn *conn);
+POMP_API const struct pomp_cred *pomp_conn_get_peer_cred(
+		struct pomp_conn *conn);
 
 /**
  * Send a message to the peer of the connection.
