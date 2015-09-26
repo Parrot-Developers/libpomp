@@ -11,6 +11,10 @@ if BUILD_EXAMPLES
 SUBDIRS += examples
 endif
 
+if BUILD_TESTS
+SUBDIRS += tests
+endif
+
 EXTRA_DIST = \
 	libpomp.pc.in
 

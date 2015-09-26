@@ -57,6 +57,20 @@ AC_ARG_ENABLE(examples,
 )
 AM_CONDITIONAL(BUILD_EXAMPLES, test "x$BUILD_EXAMPLES" = "xyes")
 
+dnl building of tests
+AC_ARG_ENABLE(tests,
+	AS_HELP_STRING([--enable-tests],[enable building tests]),
+	[
+		case "${enableval}" in
+		yes) BUILD_TESTS=yes ;;
+		no)  BUILD_TESTS=no ;;
+		*)   AC_MSG_ERROR(bad value ${enableval} for --enable-tests) ;;
+		esac
+	],
+	[BUILD_TESTS=no]
+)
+AM_CONDITIONAL(BUILD_TESTS, test "x$BUILD_TESTS" = "xyes")
+
 AC_PROG_CC
 AC_PROG_CXX
 AC_PROG_INSTALL
@@ -94,6 +108,13 @@ AC_CHECK_FUNCS(timer_create, [], [
 	])
 ])
 
+dnl Check for cunit if test are enabled
+AS_IF([test "x$BUILD_TESTS" = "xyes"], [
+	PKG_CHECK_MODULES([CUNIT], [cunit])
+	AC_SUBST(CUNIT_CFLAGS)
+	AC_SUBST(CUNIT_LIBS)
+])
+
 LT_INIT
 
 AC_CONFIG_HEADERS([config.h])
@@ -101,6 +122,7 @@ AC_CONFIG_FILES([
 	Makefile 
 	src/Makefile
 	examples/Makefile
+	tests/Makefile
 	tools/Makefile
 	libpomp.pc
 ])

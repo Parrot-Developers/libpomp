@@ -2,9 +2,13 @@
 lib_LTLIBRARIES = libpomp.la
 
 libpomp_la_CPPFLAGS = -I$(top_srcdir)/include
-libpomp_la_CFLAGS = -fvisibility=hidden -DPOMP_API_EXPORTS
+libpomp_la_CFLAGS = -DPOMP_API_EXPORTS
 libpomp_la_LDFLAGS = -no-undefined
 libpomp_la_LIBADD = $(LIBS)
+
+if !BUILD_TESTS
+libpomp_la_CFLAGS += -fvisibility=hidden
+endif
 
 if OS_WIN32
 libpomp_la_LIBADD += -lws2_32
