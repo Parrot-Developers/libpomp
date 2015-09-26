@@ -622,7 +622,9 @@ static void test_invalid_addr(void)
 static CU_TestInfo s_ctx_tests[] = {
 	{(char *)"ctx_inet_tcp", &test_ctx_inet_tcp},
 	{(char *)"ctx_inet_udp", &test_ctx_inet_udp},
+#ifndef _WIN32
 	{(char *)"ctx_unix", &test_ctx_unix},
+#endif /* !_WIN32 */
 	{(char *)"ctx_invalid_addr", &test_invalid_addr},
 	CU_TEST_INFO_NULL,
 };
