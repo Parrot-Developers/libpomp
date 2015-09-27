@@ -35,6 +35,7 @@
 #include "pomp_priv.h"
 
 /* Include all available implementations */
+#include "pomp_timer_kqueue.c"
 #include "pomp_timer_linux.c"
 #include "pomp_timer_posix.c"
 #include "pomp_timer_win32.c"
@@ -43,6 +44,8 @@
 static const struct pomp_timer_ops *s_pomp_timer_ops =
 #if defined(POMP_HAVE_TIMER_FD)
 	&pomp_timer_fd_ops;
+#elif defined(POMP_HAVE_TIMER_KQUEUE)
+	&pomp_timer_kqueue_ops;
 #elif defined(POMP_HAVE_TIMER_POSIX)
 	&pomp_timer_posix_ops;
 #elif defined(POMP_HAVE_TIMER_WIN32)

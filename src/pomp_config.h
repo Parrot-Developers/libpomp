@@ -78,6 +78,33 @@
 #  endif
 #endif
 
+#ifdef __FreeBSD__
+#  ifndef HAVE_ENDIAN_H
+#    define HAVE_ENDIAN_H
+#  endif
+#  ifndef HAVE_SYS_EVENT_H
+#    define HAVE_SYS_EVENT_H
+#  endif
+#  ifndef HAVE_NETDB_H
+#    define HAVE_NETDB_H
+#  endif
+#  ifndef HAVE_SYS_PARAM_H
+#    define HAVE_SYS_PARAM_H
+#  endif
+#  ifndef HAVE_SYS_POLL_H
+#    define HAVE_SYS_POLL_H
+#  endif
+#  ifndef HAVE_SYS_SOCKET_H
+#    define HAVE_SYS_SOCKET_H
+#  endif
+#  ifndef HAVE_SYS_UN_H
+#    define HAVE_SYS_UN_H
+#  endif
+#  ifndef HAVE_NETINET_TCP_H
+#    define HAVE_NETINET_TCP_H
+#  endif
+#endif
+
 #if defined(_POSIX_C_SOURCE) && (_POSIX_C_SOURCE >= 199309L)
 #  ifndef HAVE_TIMER_CREATE
 #    define HAVE_TIMER_CREATE

@@ -62,6 +62,10 @@
 #  include <sys/epoll.h>
 #  define POMP_HAVE_LOOP_EPOLL
 #endif
+#ifdef HAVE_SYS_EVENT_H
+#  include <sys/event.h>
+#  define POMP_HAVE_TIMER_KQUEUE
+#endif
 #ifdef HAVE_SYS_EVENTFD_H
 #  include <sys/eventfd.h>
 #elif defined(__linux__)

@@ -86,6 +86,7 @@ AC_CHECK_HEADERS([ \
 	netdb.h \
 	unistd.h \
 	sys/epoll.h \
+	sys/event.h \
 	sys/eventfd.h \
 	sys/param.h \
 	sys/poll.h \

@@ -105,14 +105,34 @@ static void test_timer(void)
 	data.counter = 0;
 	res = pomp_timer_set_periodic(timer, 500, 1000);
 	CU_ASSERT_EQUAL(res, 0);
+
+	/* First trigger */
 	res = pomp_loop_wait_and_process(loop, 750);
 	CU_ASSERT_EQUAL(res, 0);
 	CU_ASSERT_EQUAL(data.counter, 1);
-	res = pomp_loop_wait_and_process(loop, 1250);
+
+	/* Second trigger shall not fire before 1000ms */
+	res = pomp_loop_wait_and_process(loop, 750);
+	CU_ASSERT_EQUAL(res, -ETIMEDOUT);
+	CU_ASSERT_EQUAL(data.counter, 1);
+
+	/* Second trigger */
+	res = pomp_loop_wait_and_process(loop, 500);
 	CU_ASSERT_EQUAL(res, 0);
 	CU_ASSERT_EQUAL(data.counter, 2);
+
+	/* Third trigger */
 	res = pomp_loop_wait_and_process(loop, 1250);
 	CU_ASSERT_EQUAL(res, 0);
+	CU_ASSERT_EQUAL(data.counter, 3);
+
+	/* Cancel it */
+	res = pomp_timer_clear(timer);
+	CU_ASSERT_EQUAL(res, 0);
+
+	/* Shall not fire anymore */
+	res = pomp_loop_wait_and_process(loop, 1250);
+	CU_ASSERT_EQUAL(res, -ETIMEDOUT);
 	CU_ASSERT_EQUAL(data.counter, 3);
 
 	/* Invalid set (NULL param) */
@@ -148,6 +168,17 @@ static void test_timer_timerfd(void)
 #endif /* POMP_HAVE_TIMER_FD */
 
 /** */
+#ifdef POMP_HAVE_TIMER_KQUEUE
+static void test_timer_kqueue(void)
+{
+	const struct pomp_timer_ops *timer_ops = NULL;
+	timer_ops = pomp_timer_set_ops(&pomp_timer_kqueue_ops);
+	test_timer();
+	pomp_timer_set_ops(timer_ops);
+}
+#endif /* POMP_HAVE_TIMER_KQUEUE */
+
+/** */
 #ifdef POMP_HAVE_TIMER_POSIX
 static void test_timer_posix(void)
 {
@@ -180,6 +211,10 @@ static CU_TestInfo s_timer_tests[] = {
 #ifdef POMP_HAVE_TIMER_FD
 	{(char *)"timerfd", &test_timer_timerfd},
 #endif /* POMP_HAVE_TIMER_FD */
+
+#ifdef POMP_HAVE_TIMER_KQUEUE
+	{(char *)"kqueue", &test_timer_kqueue},
+#endif /* POMP_HAVE_TIMER_KQUEUE */
 
 #ifdef POMP_HAVE_TIMER_POSIX
 	{(char *)"posix", &test_timer_posix},

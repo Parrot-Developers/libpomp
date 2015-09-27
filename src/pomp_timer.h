@@ -50,6 +50,11 @@ struct pomp_timer {
 	int			tfd;		/**< Timer fd */
 #endif /* POMP_HAVE_TIMER_FD */
 
+#ifdef POMP_HAVE_TIMER_KQUEUE
+	int			kq;		/**< kqueue */
+	uint32_t		period;		/**< Pediod (in ms)*/
+#endif /* POMP_HAVE_TIMER_KQUEUE */
+
 #ifdef POMP_HAVE_TIMER_WIN32
 	HANDLE			htimer;		/**< Timer handle */
 #endif /* POMP_HAVE_TIMER_WIN32 */
@@ -81,6 +86,11 @@ extern const struct pomp_timer_ops pomp_timer_posix_ops;
 #ifdef POMP_HAVE_TIMER_FD
 extern const struct pomp_timer_ops pomp_timer_fd_ops;
 #endif /* POMP_HAVE_TIMER_FD */
+
+/** Timer operations for 'kqueue' implementation */
+#ifdef POMP_HAVE_TIMER_KQUEUE
+extern const struct pomp_timer_ops pomp_timer_kqueue_ops;
+#endif /* POMP_HAVE_TIMER_KQUEUE */
 
 /** Timer operations for 'win32' implementation */
 #ifdef POMP_HAVE_TIMER_WIN32
