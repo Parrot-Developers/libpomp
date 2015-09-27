@@ -70,12 +70,22 @@ struct sockaddr;
 struct pomp_ctx;
 struct pomp_conn;
 struct pomp_msg;
+struct pomp_loop;
+struct pomp_timer;
 
 /** Context event */
 enum pomp_event {
 	POMP_EVENT_CONNECTED = 0,	/**< Peer is connected */
 	POMP_EVENT_DISCONNECTED,	/**< Peer is disconnected */
 	POMP_EVENT_MSG,			/**< Message received from peer */
+};
+
+/** Fd events */
+enum pomp_fd_event {
+	POMP_FD_EVENT_IN = 0x001,
+	POMP_FD_EVENT_OUT = 0x004,
+	POMP_FD_EVENT_ERR = 0x008,
+	POMP_FD_EVENT_HUP = 0x010,
 };
 
 /** Peer credentials for local sockets */
@@ -107,6 +117,22 @@ typedef void (*pomp_event_cb_t)(
 		const struct pomp_msg *msg,
 		void *userdata);
 
+/**
+ * Fd event callback.
+ * @param fd : triggered fd.
+ * @param revents : event that occurred.
+ * @param userdata : callback user data.
+ */
+typedef void (*pomp_fd_event_cb_t)(int fd, uint32_t revents, void *userdata);
+
+/**
+ * Timer callback
+ * @param timer : timer.
+ * @param userdata : callback user data.
+ */
+typedef void (*pomp_timer_cb_t) (struct pomp_timer *timer, void *userdata);
+
+
 /*
  * Context API.
  */
@@ -119,6 +145,17 @@ typedef void (*pomp_event_cb_t)(
  * @return context structure or NULL in case of error.
  */
 POMP_API struct pomp_ctx *pomp_ctx_new(pomp_event_cb_t cb, void *userdata);
+
+/**
+ * Create a new context structure in an existing loop.
+ * @param cb : function to be called when connection/disconnection/message
+ * events occur.
+ * @param userdata : user data to give in cb.
+ * @param loop: loop to use.
+ * @return context structure or NULL in case of error.
+ */
+POMP_API struct pomp_ctx *pomp_ctx_new_with_loop(pomp_event_cb_t cb,
+		void *userdata, struct pomp_loop *loop);
 
 /**
  * Destroy a context.
@@ -168,6 +205,13 @@ POMP_API int pomp_ctx_bind(struct pomp_ctx *ctx,
  * @return 0 in case of success, negative errno value in case of error.
  */
 POMP_API int pomp_ctx_stop(struct pomp_ctx *ctx);
+
+/**
+ * Get the internal loop structure of the context.
+ * @param ctx : context.
+ * @return loop structure or NULL in case of error.
+ */
+POMP_API struct pomp_loop *pomp_ctx_get_loop(struct pomp_ctx *ctx);
 
 /**
  * Get the epoll fd of the context.
@@ -465,103 +509,8 @@ POMP_API int pomp_msg_dump(const struct pomp_msg *msg,
 POMP_API int pomp_msg_adump(const struct pomp_msg *msg, char **dst);
 
 /*
- * Address string parsing/formatting utilities.
+ * Loop API.
  */
-
-/**
- * Parse a socket address given as a string and convert it to sockaddr.
- * @param buf: input string.
- * @param addr: destination structure.
- * @param addrlen: maximum size of destination structure as input, real size
- * converted as output. Should be at least sizeof(struct sockaddr_storage)
- * @return 0 in case of success, negative errno value in case of error.
- *
- * Format of string is:
- * - inet:<host>:<port>: ipv4 address with host name and port.
- * - inet6:<host>:<port>: ipv6 address with host name and port
- * - unix:<pathname>: unix local address with file system name.
- * - unix:@<name>: unix local address with abstract name.
- */
-POMP_API int pomp_addr_parse(const char *buf, struct sockaddr *addr,
-		uint32_t *addrlen);
-
-/**
- * Format a socket address into a string.
- * @param buf: destination buffer
- * @param buflen: maximum size of destination buffer.
- * @param addr: address to format.
- * @param addrlen: size of address.
- * @return 0 in case of success, negative errno value in case of error.
- */
-POMP_API int pomp_addr_format(char *buf, uint32_t buflen,
-		const struct sockaddr *addr, uint32_t addrlen);
-
-/**
- * Determine if a socket address is a unix local one.
- * @param addr: address to check.
- * @param addrlen: size of address.
- * @return 1 if socket is unix local, 0 otherwise.
- */
-POMP_API int pomp_addr_is_unix(const struct sockaddr *addr, uint32_t addrlen);
-
-/*
- * Advanced API.
- * Always compiled in the library but user code shall explicitly define
- * POMP_ENABLE_ADVANCED_API to use it.
- *
- * Basic API is sufficient for normal usage. Advanced API offers better
- * tuning of encoding/decoding.
- */
-
-#ifdef POMP_ENABLE_ADVANCED_API
-
-/* Forward declarations */
-struct pomp_encoder;
-struct pomp_decoder;
-struct pomp_loop;
-struct pomp_timer;
-
-/*
- * context API (Advanced).
- */
-
-/**
- * Create a new context structure in an existing loop.
- * @param cb : function to be called when connection/disconnection/message
- * events occur.
- * @param userdata : user data to give in cb.
- * @param loop: loop to use.
- * @return context structure or NULL in case of error.
- */
-POMP_API struct pomp_ctx *pomp_ctx_new_with_loop(pomp_event_cb_t cb,
-		void *userdata, struct pomp_loop *loop);
-
-/**
- * Get the internal loop structure of the context.
- * @param ctx : context.
- * @return loop structure or NULL in case of error.
- */
-POMP_API struct pomp_loop *pomp_ctx_get_loop(struct pomp_ctx *ctx);
-
-/*
- * loop API (Advanced).
- */
-
-/** Fd events */
-enum pomp_fd_event {
-	POMP_FD_EVENT_IN = 0x001,
-	POMP_FD_EVENT_OUT = 0x004,
-	POMP_FD_EVENT_ERR = 0x008,
-	POMP_FD_EVENT_HUP = 0x010,
-};
-
-/**
- * Fd event callback.
- * @param fd : triggered fd.
- * @param revents : event that occurred.
- * @param userdata : callback user data.
- */
-typedef void (*pomp_fd_event_cb_t)(int fd, uint32_t revents, void *userdata);
 
 /**
  * Create a new loop structure.
@@ -641,17 +590,9 @@ POMP_API int pomp_loop_wait_and_process(struct pomp_loop *loop, int timeout);
  */
 POMP_API int pomp_loop_wakeup(struct pomp_loop *loop);
 
-
 /*
- * Timer API (Advanced).
+ * Timer API.
  */
-
-/**
- * Timer callback
- * @param timer : timer.
- * @param userdata : callback user data.
- */
-typedef void (*pomp_timer_cb_t) (struct pomp_timer *timer, void *userdata);
 
 /**
  * Create a new timer.
@@ -694,6 +635,61 @@ POMP_API int pomp_timer_set_periodic(struct pomp_timer *timer, uint32_t delay,
  * @return 0 in case of success, negative errno value in case of error.
  */
 POMP_API int pomp_timer_clear(struct pomp_timer *timer);
+
+/*
+ * Address string parsing/formatting utilities.
+ */
+
+/**
+ * Parse a socket address given as a string and convert it to sockaddr.
+ * @param buf: input string.
+ * @param addr: destination structure.
+ * @param addrlen: maximum size of destination structure as input, real size
+ * converted as output. Should be at least sizeof(struct sockaddr_storage)
+ * @return 0 in case of success, negative errno value in case of error.
+ *
+ * Format of string is:
+ * - inet:<host>:<port>: ipv4 address with host name and port.
+ * - inet6:<host>:<port>: ipv6 address with host name and port
+ * - unix:<pathname>: unix local address with file system name.
+ * - unix:@<name>: unix local address with abstract name.
+ */
+POMP_API int pomp_addr_parse(const char *buf, struct sockaddr *addr,
+		uint32_t *addrlen);
+
+/**
+ * Format a socket address into a string.
+ * @param buf: destination buffer
+ * @param buflen: maximum size of destination buffer.
+ * @param addr: address to format.
+ * @param addrlen: size of address.
+ * @return 0 in case of success, negative errno value in case of error.
+ */
+POMP_API int pomp_addr_format(char *buf, uint32_t buflen,
+		const struct sockaddr *addr, uint32_t addrlen);
+
+/**
+ * Determine if a socket address is a unix local one.
+ * @param addr: address to check.
+ * @param addrlen: size of address.
+ * @return 1 if socket is unix local, 0 otherwise.
+ */
+POMP_API int pomp_addr_is_unix(const struct sockaddr *addr, uint32_t addrlen);
+
+/*
+ * Advanced API.
+ * Always compiled in the library but user code shall explicitly define
+ * POMP_ENABLE_ADVANCED_API to use it.
+ *
+ * Basic API is sufficient for normal usage. Advanced API offers better
+ * tuning of encoding/decoding.
+ */
+
+#ifdef POMP_ENABLE_ADVANCED_API
+
+/* Forward declarations */
+struct pomp_encoder;
+struct pomp_decoder;
 
 /*
  * message API (Advanced).
