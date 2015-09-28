@@ -215,12 +215,12 @@ static void test_loop(int is_epoll)
 
 #endif /* __linux__ */
 
-#ifdef __FreeBSD__
+#if defined(__FreeBSD__) || defined(__APPLE__)
 static void test_loop(int is_epoll)
 {
 	/* TODO */
 }
-#endif /* __FreeBSD__*/
+#endif /* __FreeBSD__ || __APPLE__ */
 
 #ifndef _WIN32
 

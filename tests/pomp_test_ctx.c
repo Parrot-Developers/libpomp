@@ -168,7 +168,7 @@ static void run_ctx(struct pomp_ctx *ctx1, struct pomp_ctx *ctx2, int timeout)
 
 #endif /* __linux__ */
 
-#ifdef __FreeBSD__
+#if defined(__FreeBSD__) || defined(__APPLE__)
 
 struct run_ctx_data {
 	struct pomp_ctx	*ctx;
@@ -202,7 +202,7 @@ static void run_ctx(struct pomp_ctx *ctx1, struct pomp_ctx *ctx2, int timeout)
 	pthread_join(thread2, NULL);
 }
 
-#endif /* __FreeBSD__ */
+#endif /* __FreeBSD__ || __APPLE__ */
 
 #ifdef _WIN32
 

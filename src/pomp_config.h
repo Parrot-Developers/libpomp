@@ -78,7 +78,7 @@
 #  endif
 #endif
 
-#ifdef __FreeBSD__
+#if defined(__FreeBSD__) || defined(__APPLE__)
 #  ifndef HAVE_ENDIAN_H
 #    define HAVE_ENDIAN_H
 #  endif

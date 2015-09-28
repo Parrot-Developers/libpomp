@@ -104,9 +104,9 @@
 #  include "pomp_priv_win32.h"
 #endif /* _WIN32 */
 
-#ifdef __FreeBSD__
+#if defined(__FreeBSD__) || defined(__APPLE__)
 #  include "pomp_priv_bsd.h"
-#endif /* __FreeBSD__ */
+#endif /* __FreeBSD__ || __APPLE__ */
 
 /** Signal number to use for posix timer implementation */
 #ifndef POMP_TIMER_POSIX_SIGNO
