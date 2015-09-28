@@ -87,7 +87,7 @@ static const struct test_data s_data[] = {
 static void test_addr(void)
 {
 	int res = 0;
-	size_t i = 0, j = 0;
+	size_t i = 0;
 	struct sockaddr_storage addr;
 	uint32_t addrlen = 0;
 	char buf[156] = "";
