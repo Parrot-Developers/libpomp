@@ -120,6 +120,19 @@ typedef void (*pomp_event_cb_t)(
 		void *userdata);
 
 /**
+ * Context raw data reception callback prototype.
+ * @param ctx : context.
+ * @param conn : connection on which the event occurred.
+ * @param buf : received data.
+ * @param userdata : user data given in pomp_ctx_new.
+ */
+typedef void (*pomp_ctx_raw_cb_t)(
+		struct pomp_ctx *ctx,
+		struct pomp_conn *conn,
+		struct pomp_buffer *buf,
+		void *userdata);
+
+/**
  * Fd event callback.
  * @param fd : triggered fd.
  * @param revents : event that occurred.
@@ -133,7 +146,6 @@ typedef void (*pomp_fd_event_cb_t)(int fd, uint32_t revents, void *userdata);
  * @param userdata : callback user data.
  */
 typedef void (*pomp_timer_cb_t) (struct pomp_timer *timer, void *userdata);
-
 
 /*
  * Context API.
@@ -158,6 +170,17 @@ POMP_API struct pomp_ctx *pomp_ctx_new(pomp_event_cb_t cb, void *userdata);
  */
 POMP_API struct pomp_ctx *pomp_ctx_new_with_loop(pomp_event_cb_t cb,
 		void *userdata, struct pomp_loop *loop);
+
+/**
+ * Mark the context as raw. Internal message protocol serialization will not
+ * be used, only raw data can be sent/received.
+ * message API.
+ * @param ctx : context.
+ * @param cb : function to call when data has been received. The userdata
+ * argument will be the same as the one set when creating the context.
+ * @return 0 in case of success, negative errno value in case of error.
+ */
+POMP_API int pomp_ctx_set_raw(struct pomp_ctx *ctx, pomp_ctx_raw_cb_t cb);
 
 /**
  * Destroy a context.
@@ -299,7 +322,7 @@ POMP_API int pomp_ctx_send_msg_to(struct pomp_ctx *ctx,
 /**
  * Format and send a message to a context.
  * For server it will broadcast to all connected clients. If there is no
- * connection, the message is lost and no error is returned.
+ * connection, no message is sent and no error is returned.
  * For client, if there is no connection, -ENOTCONN is returned.
  * @param ctx : context.
  * @param msgid : message id.
@@ -323,6 +346,30 @@ POMP_API int pomp_ctx_send(struct pomp_ctx *ctx, uint32_t msgid,
  */
 POMP_API int pomp_ctx_sendv(struct pomp_ctx *ctx, uint32_t msgid,
 		const char *fmt, va_list args);
+
+/**
+ * Send a buffer to a raw context.
+ * For server it will broadcast to all connected clients. If there is no
+ * connection, no buffer is sent and no error is returned.
+ * For client, if there is no connection, -ENOTCONN is returned.
+ * @param ctx : context.
+ * @param buf : buffer to send.
+ * @return 0 in case of success, negative errno value in case of error.
+ */
+POMP_API int pomp_ctx_send_raw_buf(struct pomp_ctx *ctx,
+		struct pomp_buffer *buf);
+
+/**
+ * Send a buffer on dgram raw context to a remote address.
+ * @param ctx : context.
+ * @param buff : buffer to send.
+ * @param addr : destination address.
+ * @param addrlen : address size.
+ * @return 0 in case of success, negative errno value in case of error.
+ */
+POMP_API int pomp_ctx_send_raw_buf_to(struct pomp_ctx *ctx,
+		struct pomp_buffer *buf,
+		const struct sockaddr *addr, uint32_t addrlen);
 
 /*
  * Connection API.
@@ -391,6 +438,15 @@ POMP_API int pomp_conn_send(struct pomp_conn *conn, uint32_t msgid,
  */
 POMP_API int pomp_conn_sendv(struct pomp_conn *conn, uint32_t msgid,
 		const char *fmt, va_list args);
+
+/**
+ * Send a buffer to the peer of the raw connection.
+ * @param conn : connection.
+ * @param buf : buffer to send.
+ * @return 0 in case of success, negative errno value in case of error.
+ */
+POMP_API int pomp_conn_send_raw_buf(struct pomp_conn *conn,
+		struct pomp_buffer *buf);
 
 /*
  * Buffer API.

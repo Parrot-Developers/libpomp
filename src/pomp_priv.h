@@ -185,10 +185,13 @@ int pomp_ctx_notify_event(struct pomp_ctx *ctx, enum pomp_event event,
 int pomp_ctx_notify_msg(struct pomp_ctx *ctx, struct pomp_conn *conn,
 		const struct pomp_msg *msg);
 
+int pomp_ctx_notify_raw_buf(struct pomp_ctx *ctx, struct pomp_conn *conn,
+		struct pomp_buffer *buf);
+
 /* Connection functions not part of public API */
 
 struct pomp_conn *pomp_conn_new(struct pomp_ctx *ctx,
-		struct pomp_loop *loop, int fd, int isdgram);
+		struct pomp_loop *loop, int fd, int isdgram, int israw);
 
 int pomp_conn_destroy(struct pomp_conn *conn);
 
@@ -198,7 +201,12 @@ struct pomp_conn *pomp_conn_get_next(const struct pomp_conn *conn);
 
 int pomp_conn_set_next(struct pomp_conn *conn, struct pomp_conn *next);
 
-int pomp_conn_send_msg_to(struct pomp_conn *conn, const struct pomp_msg *msg,
+int pomp_conn_send_msg_to(struct pomp_conn *conn,
+		const struct pomp_msg *msg,
+		const struct sockaddr *addr, uint32_t addrlen);
+
+int pomp_conn_send_raw_buf_to(struct pomp_conn *conn,
+		struct pomp_buffer *buf,
 		const struct sockaddr *addr, uint32_t addrlen);
 
 /* Decoder functions not part of public API */

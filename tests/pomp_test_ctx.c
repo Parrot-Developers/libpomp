@@ -37,7 +37,9 @@ struct test_data {
 	uint32_t  connection;
 	uint32_t  disconnection;
 	uint32_t  msg;
+	uint32_t  buf;
 	int       isdgram;
+	int       israw;
 };
 
 /** */
@@ -98,9 +100,15 @@ static void test_event_cb_t(struct pomp_ctx *ctx, enum pomp_event event,
 			CU_ASSERT_EQUAL(res, -ENOTCONN);
 
 			/* Internal function invalid arguments checks */
-			res = pomp_conn_send_msg_to(NULL, msg, addr, addrlen);
+			res = pomp_conn_send_msg_to(NULL, msg, NULL, 0);
 			CU_ASSERT_EQUAL(res, -EINVAL);
-			res = pomp_conn_send_msg_to(conn, NULL, addr, addrlen);
+			res = pomp_conn_send_msg_to(conn, NULL, NULL, 0);
+			CU_ASSERT_EQUAL(res, -EINVAL);
+		} else {
+			/* Internal function invalid arguments checks */
+			res = pomp_conn_send_msg(NULL, msg);
+			CU_ASSERT_EQUAL(res, -EINVAL);
+			res = pomp_conn_send_msg(conn, NULL);
 			CU_ASSERT_EQUAL(res, -EINVAL);
 		}
 
@@ -123,6 +131,36 @@ static void test_event_cb_t(struct pomp_ctx *ctx, enum pomp_event event,
 		CU_ASSERT_TRUE_FATAL(0);
 		break;
 	}
+}
+
+/** */
+static void test_ctx_raw_cb_t(struct pomp_ctx *ctx,
+		struct pomp_conn *conn,
+		struct pomp_buffer *buf,
+		void *userdata)
+{
+	int res = 0;
+	struct test_data *data = userdata;
+	data->buf++;
+
+	if (data->isdgram) {
+		res = pomp_conn_disconnect(conn);
+		CU_ASSERT_EQUAL(res, -ENOTCONN);
+
+		/* Internal function invalid arguments checks */
+		res = pomp_conn_send_raw_buf_to(NULL, buf, NULL, 0);
+		CU_ASSERT_EQUAL(res, -EINVAL);
+		res = pomp_conn_send_raw_buf_to(conn, NULL, NULL, 0);
+		CU_ASSERT_EQUAL(res, -EINVAL);
+	}
+
+	/* Internal function invalid arguments checks */
+	res = pomp_ctx_notify_raw_buf(NULL, conn, buf);
+	CU_ASSERT_EQUAL(res, -EINVAL);
+	res = pomp_ctx_notify_raw_buf(ctx, NULL, buf);
+	CU_ASSERT_EQUAL(res, -EINVAL);
+	res = pomp_ctx_notify_raw_buf(ctx, conn, NULL);
+	CU_ASSERT_EQUAL(res, -EINVAL);
 }
 
 #ifdef __linux__
@@ -246,7 +284,7 @@ static void run_ctx(struct pomp_ctx *ctx1, struct pomp_ctx *ctx2, int timeout)
 /** */
 static void test_ctx(const struct sockaddr *addr1, uint32_t addrlen1,
 		const struct sockaddr *addr2, uint32_t addrlen2,
-		int isdgram)
+		int isdgram, int israw)
 {
 	int res = 0;
 	struct test_data data;
@@ -257,16 +295,21 @@ static void test_ctx(const struct sockaddr *addr1, uint32_t addrlen1,
 	struct pomp_msg *msg = NULL;
 	int fd = -1;
 	uint32_t i = 0;
-	void *buf = NULL;
+	struct pomp_buffer *buf = NULL;
 
 	memset(&data, 0, sizeof(data));
 	data.isdgram = isdgram;
+	data.israw = israw;
 	msg = pomp_msg_new();
 	CU_ASSERT_PTR_NOT_NULL_FATAL(msg);
 
 	/* Create context */
 	ctx1 = pomp_ctx_new(&test_event_cb_t, &data);
 	CU_ASSERT_PTR_NOT_NULL_FATAL(ctx1);
+	if (israw) {
+		res = pomp_ctx_set_raw(ctx1, &test_ctx_raw_cb_t);
+		CU_ASSERT_EQUAL(res, 0);
+	}
 
 	/* Invalid create (NULL param) */
 	ctx2 = pomp_ctx_new(NULL, &data);
@@ -279,6 +322,10 @@ static void test_ctx(const struct sockaddr *addr1, uint32_t addrlen1,
 	/* Create 2nd context */
 	ctx2 = pomp_ctx_new(&test_event_cb_t, &data);
 	CU_ASSERT_PTR_NOT_NULL_FATAL(ctx2);
+	if (israw) {
+		res = pomp_ctx_set_raw(ctx2, &test_ctx_raw_cb_t);
+		CU_ASSERT_EQUAL(res, 0);
+	}
 
 	if (!isdgram) {
 		/* Invalid start server (NULL param) */
@@ -387,57 +434,110 @@ static void test_ctx(const struct sockaddr *addr1, uint32_t addrlen1,
 
 	/* Exchange some message */
 	if (!isdgram) {
-		res = pomp_ctx_send(ctx1, 1, "%s", "hello1->2");
-		CU_ASSERT_EQUAL(res, 0);
-		res = pomp_ctx_send(ctx2, 1, "%s", "hello2->1");
-		CU_ASSERT_EQUAL(res, 0);
+		if (!israw) {
+			res = pomp_ctx_send(ctx1, 1, "%s", "hello1->2");
+			CU_ASSERT_EQUAL(res, 0);
+			res = pomp_ctx_send(ctx2, 1, "%s", "hello2->1");
+			CU_ASSERT_EQUAL(res, 0);
 
-		/* Invalid send (NULL param) */
-		res = pomp_ctx_send(NULL, 1, "%s", "hello1->2");
-		CU_ASSERT_EQUAL(res, -EINVAL);
-		res = pomp_ctx_send_msg(ctx1, NULL);
-		CU_ASSERT_EQUAL(res, -EINVAL);
+			/* Invalid send (NULL param) */
+			res = pomp_ctx_send(NULL, 1, "%s", "hello1->2");
+			CU_ASSERT_EQUAL(res, -EINVAL);
+			res = pomp_ctx_send_msg(ctx1, NULL);
+			CU_ASSERT_EQUAL(res, -EINVAL);
 
-		/* Invalid send (bad format) */
-		res = pomp_ctx_send(ctx1, 1, "%o", 1);
-		CU_ASSERT_EQUAL(res, -EINVAL);
-		res = pomp_conn_send(pomp_ctx_get_conn(ctx2), 1, "%o", 1);
-		CU_ASSERT_EQUAL(res, -EINVAL);
+			/* Invalid send (bad format) */
+			res = pomp_ctx_send(ctx1, 1, "%o", 1);
+			CU_ASSERT_EQUAL(res, -EINVAL);
+			res = pomp_conn_send(pomp_ctx_get_conn(ctx2), 1, "%o", 1);
+			CU_ASSERT_EQUAL(res, -EINVAL);
 
-		/* Invalid send to (bad type) */
-		res = pomp_ctx_send_msg_to(ctx2, msg, addr1, addrlen1);
-		CU_ASSERT_EQUAL(res, -EINVAL);
+			/* Invalid send to (bad type) */
+			res = pomp_ctx_send_msg_to(ctx2, msg, addr1, addrlen1);
+			CU_ASSERT_EQUAL(res, -EINVAL);
+		} else {
+			buf = pomp_buffer_new(32);
+			CU_ASSERT_PTR_NOT_NULL_FATAL(buf);
+			memcpy(buf->data, "Hello World !!!", 15);
+			buf->len = 15;
+
+			res = pomp_ctx_send_raw_buf(ctx1, buf);
+			CU_ASSERT_EQUAL(res, 0);
+			res = pomp_ctx_send_raw_buf(ctx2, buf);
+			CU_ASSERT_EQUAL(res, 0);
+
+			/* Invalid send (NULL param) */
+			res = pomp_ctx_send_raw_buf(NULL, buf);
+			CU_ASSERT_EQUAL(res, -EINVAL);
+			res = pomp_ctx_send_raw_buf(ctx1, NULL);
+			CU_ASSERT_EQUAL(res, -EINVAL);
+
+			pomp_buffer_unref(buf);
+			buf = NULL;
+		}
 	} else {
-		res = pomp_msg_clear(msg);
-		CU_ASSERT_EQUAL(res, 0);
-		res = pomp_msg_write(msg, 1, "%s", "hello1->2");
-		CU_ASSERT_EQUAL(res, 0);
-		res = pomp_ctx_send_msg_to(ctx1, msg, addr2, addrlen2);
-		CU_ASSERT_EQUAL(res, 0);
+		if (!israw) {
+			res = pomp_msg_clear(msg);
+			CU_ASSERT_EQUAL(res, 0);
+			res = pomp_msg_write(msg, 1, "%s", "hello1->2");
+			CU_ASSERT_EQUAL(res, 0);
+			res = pomp_ctx_send_msg_to(ctx1, msg, addr2, addrlen2);
+			CU_ASSERT_EQUAL(res, 0);
 
-		res = pomp_msg_clear(msg);
-		CU_ASSERT_EQUAL(res, 0);
-		res = pomp_msg_write(msg, 1, "%s", "hello2->1");
-		CU_ASSERT_EQUAL(res, 0);
-		res = pomp_ctx_send_msg_to(ctx2, msg, addr1, addrlen1);
-		CU_ASSERT_EQUAL(res, 0);
+			res = pomp_msg_clear(msg);
+			CU_ASSERT_EQUAL(res, 0);
+			res = pomp_msg_write(msg, 1, "%s", "hello2->1");
+			CU_ASSERT_EQUAL(res, 0);
+			res = pomp_ctx_send_msg_to(ctx2, msg, addr1, addrlen1);
+			CU_ASSERT_EQUAL(res, 0);
 
-		/* Invalid send (not connected) */
-		res = pomp_ctx_send_msg(ctx2, msg);
-		CU_ASSERT_EQUAL(res, -ENOTCONN);
+			/* Invalid send (not connected) */
+			res = pomp_ctx_send_msg(ctx2, msg);
+			CU_ASSERT_EQUAL(res, -ENOTCONN);
 
-		/* Invalid send to (NULL param) */
-		res = pomp_ctx_send_msg_to(NULL, msg, addr1, addrlen1);
-		CU_ASSERT_EQUAL(res, -EINVAL);
-		res = pomp_ctx_send_msg_to(ctx2, NULL, addr1, addrlen1);
-		CU_ASSERT_EQUAL(res, -EINVAL);
-		res = pomp_ctx_send_msg_to(ctx2, msg, NULL, addrlen1);
-		CU_ASSERT_EQUAL(res, -EINVAL);
+			/* Invalid send to (NULL param) */
+			res = pomp_ctx_send_msg_to(NULL, msg, addr1, addrlen1);
+			CU_ASSERT_EQUAL(res, -EINVAL);
+			res = pomp_ctx_send_msg_to(ctx2, NULL, addr1, addrlen1);
+			CU_ASSERT_EQUAL(res, -EINVAL);
+			res = pomp_ctx_send_msg_to(ctx2, msg, NULL, addrlen1);
+			CU_ASSERT_EQUAL(res, -EINVAL);
+		} else {
+			buf = pomp_buffer_new(32);
+			CU_ASSERT_PTR_NOT_NULL_FATAL(buf);
+			memcpy(buf->data, "Hello World !!!", 15);
+			buf->len = 15;
+
+			res = pomp_ctx_send_raw_buf_to(ctx1, buf, addr2, addrlen2);
+			CU_ASSERT_EQUAL(res, 0);
+
+			res = pomp_ctx_send_raw_buf_to(ctx2, buf, addr1, addrlen1);
+			CU_ASSERT_EQUAL(res, 0);
+
+			/* Invalid send (not connected) */
+			res = pomp_ctx_send_raw_buf(ctx2, buf);
+			CU_ASSERT_EQUAL(res, -ENOTCONN);
+
+			/* Invalid send to (NULL param) */
+			res = pomp_ctx_send_raw_buf_to(NULL, buf, addr1, addrlen1);
+			CU_ASSERT_EQUAL(res, -EINVAL);
+			res = pomp_ctx_send_raw_buf_to(ctx2, NULL, addr1, addrlen1);
+			CU_ASSERT_EQUAL(res, -EINVAL);
+			res = pomp_ctx_send_raw_buf_to(ctx2, buf, NULL, addrlen1);
+			CU_ASSERT_EQUAL(res, -EINVAL);
+
+			pomp_buffer_unref(buf);
+			buf = NULL;
+		}
 	}
 
 	/* Run contexts (they shall have answered each other) */
 	run_ctx(ctx1, ctx2, 1000);
-	CU_ASSERT_EQUAL(data.msg, 4);
+	if (!israw) {
+		CU_ASSERT_EQUAL(data.msg, 4);
+	} else {
+		CU_ASSERT_EQUAL(data.buf, 2);
+	}
 
 	/* Dummy run */
 	res = pomp_ctx_wait_and_process(ctx1, 100);
@@ -457,17 +557,33 @@ static void test_ctx(const struct sockaddr *addr1, uint32_t addrlen1,
 
 	/* Overflow server by writing on client side without running loop */
 	if (!isdgram) {
-		buf = calloc(1, 1024);
-		CU_ASSERT_PTR_NOT_NULL_FATAL(buf);
 		for (i = 0; i < 1024; i++) {
-			res = pomp_ctx_send(ctx2, 3, "%p%u", buf, 1024);
-			CU_ASSERT_EQUAL(res, 0);
+			if (buf == NULL)
+				buf = pomp_buffer_new(1024);
+			CU_ASSERT_PTR_NOT_NULL_FATAL(buf);
+
+			if (!israw) {
+				res = pomp_ctx_send(ctx2, 3, "%p%u", buf, 1024);
+				CU_ASSERT_EQUAL(res, 0);
+			} else {
+				res = pomp_ctx_send_raw_buf(ctx2, buf);
+				CU_ASSERT_EQUAL(res, 0);
+			}
+
+			if (buf->refcount > 1) {
+				pomp_buffer_unref(buf);
+				buf = NULL;
+			}
 		}
-		free(buf);
+		if (buf != NULL) {
+			pomp_buffer_unref(buf);
+			buf = NULL;
+		}
 
 		/* Run contexts (to unlock writes) */
 		run_ctx(ctx1, ctx2, 1000);
-		CU_ASSERT_EQUAL(data.msg, 4 + 1024);
+		if (!israw)
+			CU_ASSERT_EQUAL(data.msg, 4 + 1024);
 	}
 
 	/* Disconnect client from server */
@@ -481,9 +597,13 @@ static void test_ctx(const struct sockaddr *addr1, uint32_t addrlen1,
 	if (!isdgram) {
 		CU_ASSERT_EQUAL(data.disconnection, 2);
 
-		/* Invalid send (client not connected) */
-		res = pomp_ctx_send(ctx2, 1, "%s", "hello2->1");
-		CU_ASSERT_EQUAL(res, -ENOTCONN);
+		if (!israw) {
+			/* Invalid send (client not connected) */
+			res = pomp_ctx_send(ctx2, 1, "%s", "hello2->1");
+			CU_ASSERT_EQUAL(res, -ENOTCONN);
+		} else {
+			/* TODO */
+		}
 	}
 
 	/* Invalid destroy (NULL param) */
@@ -521,7 +641,7 @@ static void test_ctx(const struct sockaddr *addr1, uint32_t addrlen1,
 }
 
 /** */
-static void test_ctx_inet_tcp(void)
+static void test_ctx_inet_tcp(int israw)
 {
 	struct sockaddr_in addr_in;
 
@@ -531,11 +651,24 @@ static void test_ctx_inet_tcp(void)
 	addr_in.sin_port = htons(5656);
 
 	test_ctx((const struct sockaddr *)&addr_in, sizeof(addr_in),
-			(const struct sockaddr *)&addr_in, sizeof(addr_in), 0);
+			(const struct sockaddr *)&addr_in, sizeof(addr_in),
+			0, israw);
 }
 
 /** */
-static void test_ctx_inet_udp(void)
+static void test_ctx_normal_inet_tcp()
+{
+	test_ctx_inet_tcp(0);
+}
+
+/** */
+static void test_ctx_raw_inet_tcp()
+{
+	test_ctx_inet_tcp(1);
+}
+
+/** */
+static void test_ctx_inet_udp(int israw)
 {
 	struct sockaddr_in addr_in1;
 	struct sockaddr_in addr_in2;
@@ -551,11 +684,24 @@ static void test_ctx_inet_udp(void)
 	addr_in2.sin_port = htons(5657);
 
 	test_ctx((const struct sockaddr *)&addr_in1, sizeof(addr_in1),
-			(const struct sockaddr *)&addr_in2, sizeof(addr_in2), 1);
+			(const struct sockaddr *)&addr_in2, sizeof(addr_in2),
+			1, israw);
 }
 
 /** */
-static void test_ctx_unix(void)
+static void test_ctx_normal_inet_udp()
+{
+	test_ctx_inet_udp(0);
+}
+
+/** */
+static void test_ctx_raw_inet_udp()
+{
+	test_ctx_inet_udp(1);
+}
+
+/** */
+static void test_ctx_unix(int israw)
 {
 	struct sockaddr_un addr_un;
 
@@ -564,7 +710,20 @@ static void test_ctx_unix(void)
 	strcpy(addr_un.sun_path, "/tmp/tst-pomp");
 
 	test_ctx((const struct sockaddr *)&addr_un, sizeof(addr_un),
-			(const struct sockaddr *)&addr_un, sizeof(addr_un), 0);
+			(const struct sockaddr *)&addr_un, sizeof(addr_un),
+			0, israw);
+}
+
+/** */
+static void test_ctx_normal_unix()
+{
+	test_ctx_unix(0);
+}
+
+/** */
+static void test_ctx_raw_unix()
+{
+	test_ctx_unix(1);
 }
 
 /** */
@@ -620,10 +779,13 @@ static void test_invalid_addr(void)
 
 /** */
 static CU_TestInfo s_ctx_tests[] = {
-	{(char *)"ctx_inet_tcp", &test_ctx_inet_tcp},
-	{(char *)"ctx_inet_udp", &test_ctx_inet_udp},
+	{(char *)"ctx_normal_inet_tcp", &test_ctx_normal_inet_tcp},
+	{(char *)"ctx_raw_inet_tcp", &test_ctx_raw_inet_tcp},
+	{(char *)"ctx_normal_inet_udp", &test_ctx_normal_inet_udp},
+	{(char *)"ctx_raw_inet_udp", &test_ctx_raw_inet_udp},
 #ifndef _WIN32
-	{(char *)"ctx_unix", &test_ctx_unix},
+	{(char *)"ctx_normal_unix", &test_ctx_normal_unix},
+	{(char *)"ctx_raw_unix", &test_ctx_raw_unix},
 #endif /* !_WIN32 */
 	{(char *)"ctx_invalid_addr", &test_invalid_addr},
 	CU_TEST_INFO_NULL,

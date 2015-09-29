@@ -97,6 +97,12 @@ struct pomp_ctx {
 	/** 0 if loop is internal, 1 if external */
 	int			extloop;
 
+	/** 0 for normal context, 1, for raw context */
+	int			israw;
+
+	/** Function to call for raw data reception in raw mode */
+	pomp_ctx_raw_cb_t	rawcb;
+
 	/** Timer for connection retries */
 	struct pomp_timer	*timer;
 
@@ -257,7 +263,7 @@ static int server_accept_conn(struct pomp_ctx *ctx)
 		fd_socket_setup_keepalive(fd);
 
 	/* Allocate connection structure, transfer ownership of fd */
-	conn = pomp_conn_new(ctx, ctx->loop, fd, 0);
+	conn = pomp_conn_new(ctx, ctx->loop, fd, 0, ctx->israw);
 	if (conn == NULL) {
 		res = -ENOMEM;
 		goto error;
@@ -447,7 +453,7 @@ static int client_complete_conn(struct pomp_ctx *ctx)
 		fd_socket_setup_keepalive(ctx->u.client.fd);
 
 	/* Allocate connection structure */
-	conn = pomp_conn_new(ctx, ctx->loop, ctx->u.client.fd, 0);
+	conn = pomp_conn_new(ctx, ctx->loop, ctx->u.client.fd, 0, ctx->israw);
 	if (conn == NULL)
 		goto reconnect;
 
@@ -615,7 +621,7 @@ static int dgram_start(struct pomp_ctx *ctx)
 	}
 
 	/* Allocate connection structure */
-	conn = pomp_conn_new(ctx, ctx->loop, ctx->u.dgram.fd, 1);
+	conn = pomp_conn_new(ctx, ctx->loop, ctx->u.dgram.fd, 1, ctx->israw);
 	if (conn == NULL)
 		goto reconnect;
 
@@ -757,6 +763,7 @@ struct pomp_ctx *pomp_ctx_new_with_loop(pomp_event_cb_t cb,
 	ctx->userdata = userdata;
 	ctx->loop = loop;
 	ctx->extloop = 1;
+	ctx->israw = 0;
 
 	/* Allocate timer */
 	ctx->timer = pomp_timer_new(ctx->loop, &timer_cb, ctx);
@@ -770,6 +777,19 @@ error:
 	if (ctx != NULL)
 		pomp_ctx_destroy(ctx);
 	return NULL;
+}
+
+/*
+ * See documentation in public header.
+ */
+int pomp_ctx_set_raw(struct pomp_ctx *ctx, pomp_ctx_raw_cb_t cb)
+{
+	POMP_RETURN_ERR_IF_FAILED(ctx != NULL, -EINVAL);
+	POMP_RETURN_ERR_IF_FAILED(cb != NULL, -EINVAL);
+	POMP_RETURN_ERR_IF_FAILED(ctx->addr == NULL, -EBUSY);
+	ctx->israw = 1;
+	ctx->rawcb = cb;
+	return 0;
 }
 
 /*
@@ -1053,6 +1073,60 @@ int pomp_ctx_sendv(struct pomp_ctx *ctx, uint32_t msgid, const char *fmt,
 	return res;
 }
 
+/*
+ * See documentation in public header.
+ */
+int pomp_ctx_send_raw_buf(struct pomp_ctx *ctx, struct pomp_buffer *buf)
+{
+	int res = 0;
+	struct pomp_conn *conn = NULL;
+
+	POMP_RETURN_ERR_IF_FAILED(ctx != NULL, -EINVAL);
+	POMP_RETURN_ERR_IF_FAILED(buf != NULL, -EINVAL);
+	POMP_RETURN_ERR_IF_FAILED(ctx->israw, -EINVAL);
+
+	switch (ctx->type) {
+	case POMP_CTX_TYPE_SERVER:
+		/* Broadcast to all connections, ignore errors */
+		conn = ctx->u.server.conns;
+		while (conn != NULL) {
+			(void)pomp_conn_send_raw_buf(conn, buf);
+			conn = pomp_conn_get_next(conn);
+		}
+		break;
+
+	case POMP_CTX_TYPE_CLIENT:
+		/* Send if connected */
+		if (ctx->u.client.conn != NULL)
+			res = pomp_conn_send_raw_buf(ctx->u.client.conn, buf);
+		else
+			res = -ENOTCONN;
+		break;
+
+	case POMP_CTX_TYPE_DGRAM:
+		res = -ENOTCONN;
+		break;
+	}
+
+	return res;
+}
+
+/*
+ * See documentation in public header.
+ */
+int pomp_ctx_send_raw_buf_to(struct pomp_ctx *ctx, struct pomp_buffer *buf,
+		const struct sockaddr *addr, uint32_t addrlen)
+{
+	POMP_RETURN_ERR_IF_FAILED(ctx != NULL, -EINVAL);
+	POMP_RETURN_ERR_IF_FAILED(buf != NULL, -EINVAL);
+	POMP_RETURN_ERR_IF_FAILED(addr != NULL, -EINVAL);
+	POMP_RETURN_ERR_IF_FAILED(ctx->israw, -EINVAL);
+	POMP_RETURN_ERR_IF_FAILED(ctx->type == POMP_CTX_TYPE_DGRAM, -EINVAL);
+	POMP_RETURN_ERR_IF_FAILED(ctx->u.dgram.conn != NULL, -EINVAL);
+
+	return pomp_conn_send_raw_buf_to(ctx->u.dgram.conn, buf, addr, addrlen);
+}
+
 /**
  * Remove a connection from the context.
  * @param ctx : context.
@@ -1161,5 +1235,24 @@ int pomp_ctx_notify_msg(struct pomp_ctx *ctx, struct pomp_conn *conn,
 	POMP_RETURN_ERR_IF_FAILED(msg != NULL, -EINVAL);
 
 	(*ctx->eventcb)(ctx, POMP_EVENT_MSG, conn, msg, ctx->userdata);
+	return 0;
+}
+
+/**
+ * Notify a raw buffer read.
+ * @param ctx : context.
+ * @param conn : connection on which the buffer has been received.
+ * @param buf : buffer to notify.
+ * @return 0 in case of success, negative errno value in case of error.
+ */
+int pomp_ctx_notify_raw_buf(struct pomp_ctx *ctx, struct pomp_conn *conn,
+		struct pomp_buffer *buf)
+{
+	POMP_RETURN_ERR_IF_FAILED(ctx != NULL, -EINVAL);
+	POMP_RETURN_ERR_IF_FAILED(ctx->rawcb != NULL, -EINVAL);
+	POMP_RETURN_ERR_IF_FAILED(conn != NULL, -EINVAL);
+	POMP_RETURN_ERR_IF_FAILED(buf != NULL, -EINVAL);
+
+	(*ctx->rawcb)(ctx, conn, buf, ctx->userdata);
 	return 0;
 }
