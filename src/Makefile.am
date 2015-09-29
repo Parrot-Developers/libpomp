@@ -16,6 +16,7 @@ endif
 
 libpomp_la_SOURCES = \
 	pomp_addr.c \
+	pomp_buffer.c \
 	pomp_conn.c \
 	pomp_ctx.c \
 	pomp_decoder.c \

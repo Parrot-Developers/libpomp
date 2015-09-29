@@ -23,6 +23,7 @@ LOCAL_CFLAGS += -DPOMP_API_EXPORTS
 
 LOCAL_SRC_FILES := \
 	src/pomp_addr.c \
+	src/pomp_buffer.c \
 	src/pomp_conn.c \
 	src/pomp_ctx.c \
 	src/pomp_decoder.c \
