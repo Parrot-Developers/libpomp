@@ -125,6 +125,12 @@ struct pomp_ctx {
 			struct pomp_conn	*conns;
 			/** Number of connections */
 			uint32_t		conncount;
+
+			/** Bound local address */
+			struct sockaddr_storage	local_addr;
+
+			/** Bound local address size */
+			socklen_t		local_addrlen;
 		} server;
 
 		/** Client specific parameters */
@@ -360,6 +366,15 @@ static int server_start(struct pomp_ctx *ctx)
 		return 0;
 	}
 
+	/* Get local address information */
+	ctx->u.server.local_addrlen = sizeof(ctx->u.server.local_addr);
+	if (getsockname(ctx->u.server.fd,
+			(struct sockaddr *)&ctx->u.server.local_addr,
+			&ctx->u.server.local_addrlen) < 0) {
+		POMP_LOG_FD_ERRNO("getsockname", ctx->u.server.fd);
+		ctx->u.server.local_addrlen = 0;
+	}
+
 	/* Start listening */
 	if (listen(ctx->u.server.fd, 0) < 0) {
 		res = -errno;
@@ -381,6 +396,9 @@ error:
 		pomp_loop_remove(ctx->loop, ctx->u.server.fd);
 		close(ctx->u.server.fd);
 		ctx->u.server.fd = -1;
+		memset(&ctx->u.server.local_addr, 0,
+				sizeof(ctx->u.server.local_addr));
+		ctx->u.server.local_addrlen = 0;
 	}
 	return res;
 }
@@ -410,6 +428,11 @@ static int server_stop(struct pomp_ctx *ctx)
 			&& POMP_GET_UNIX_PATH(ctx->addr)[0] != '\0') {
 		unlink(POMP_GET_UNIX_PATH(ctx->addr));
 	}
+
+	/* Clear bound local address */
+	memset(&ctx->u.server.local_addr, 0,
+			sizeof(ctx->u.server.local_addr));
+	ctx->u.server.local_addrlen = 0;
 
 	return 0;
 }
@@ -839,6 +862,9 @@ static int pomp_ctx_start(struct pomp_ctx *ctx, enum pomp_ctx_type type,
 		ctx->u.server.fd = -1;
 		ctx->u.server.conns = NULL;
 		ctx->u.server.conncount = 0;
+		memset(&ctx->u.server.local_addr, 0,
+				sizeof(ctx->u.server.local_addr));
+		ctx->u.server.local_addrlen = 0;
 		res = server_start(ctx);
 		break;
 
@@ -986,6 +1012,21 @@ struct pomp_conn *pomp_ctx_get_conn(const struct pomp_ctx *ctx)
 	POMP_RETURN_VAL_IF_FAILED(ctx->type == POMP_CTX_TYPE_CLIENT,
 			-EINVAL, NULL);
 	return ctx->u.client.conn;
+}
+
+/*
+ * See documentation in public header.
+ */
+const struct sockaddr *pomp_ctx_get_local_addr(struct pomp_ctx *ctx,
+		uint32_t *addrlen)
+{
+	POMP_RETURN_VAL_IF_FAILED(ctx != NULL, -EINVAL, NULL);
+	POMP_RETURN_VAL_IF_FAILED(addrlen != NULL, -EINVAL, NULL);
+	POMP_RETURN_VAL_IF_FAILED(ctx->type == POMP_CTX_TYPE_SERVER,
+			-EINVAL, NULL);
+
+	*addrlen = ctx->u.server.local_addrlen;
+	return (const struct sockaddr *)&ctx->u.server.local_addr;
 }
 
 /*

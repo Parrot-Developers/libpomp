@@ -296,6 +296,15 @@ POMP_API struct pomp_conn *pomp_ctx_get_next_conn(const struct pomp_ctx *ctx,
 POMP_API struct pomp_conn *pomp_ctx_get_conn(const struct pomp_ctx *ctx);
 
 /**
+ * Get context local address (for server context started with listen).
+ * @param ctx : context (shall be a server one).
+ * @param addrlen : returned address size.
+ * @return local address or NULL in case of error.
+ */
+POMP_API const struct sockaddr *pomp_ctx_get_local_addr(struct pomp_ctx *ctx,
+		uint32_t *addrlen);
+
+/**
  * Send a message to a context.
  * For server it will broadcast to all connected clients. If there is no
  * connection, the message is lost and no error is returned.
