@@ -107,7 +107,7 @@ int pomp_msg_init(struct pomp_msg *msg, uint32_t msgid)
 	msg->finished = 0;
 
 	/* Allocate new buffer */
-	msg->buf = pomp_buffer_new();
+	msg->buf = pomp_buffer_new(0);
 	if (msg->buf == NULL)
 		return -ENOMEM;
 
@@ -128,7 +128,7 @@ int pomp_msg_finish(struct pomp_msg *msg)
 	POMP_RETURN_ERR_IF_FAILED(!msg->finished, -EINVAL);
 
 	/* Make sure we will be able to write header */
-	res = pomp_buffer_resize(msg->buf, POMP_PROT_HEADER_SIZE);
+	res = pomp_buffer_ensure_capacity(msg->buf, POMP_PROT_HEADER_SIZE);
 	if (res < 0)
 		return res;
 
@@ -180,8 +180,17 @@ int pomp_msg_clear(struct pomp_msg *msg)
  */
 uint32_t pomp_msg_get_id(const struct pomp_msg *msg)
 {
-	POMP_RETURN_ERR_IF_FAILED(msg != NULL, 0);
+	POMP_RETURN_VAL_IF_FAILED(msg != NULL, -EINVAL, 0);
 	return msg->msgid;
+}
+
+/*
+ * See documentation in public header.
+ */
+struct pomp_buffer *pomp_msg_get_buffer(const struct pomp_msg *msg)
+{
+	POMP_RETURN_VAL_IF_FAILED(msg != NULL, -EINVAL, NULL);
+	return msg->buf;
 }
 
 /*

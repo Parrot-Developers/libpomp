@@ -69,6 +69,7 @@ extern "C" {
 struct sockaddr;
 struct pomp_ctx;
 struct pomp_conn;
+struct pomp_buffer;
 struct pomp_msg;
 struct pomp_loop;
 struct pomp_timer;
@@ -392,6 +393,81 @@ POMP_API int pomp_conn_sendv(struct pomp_conn *conn, uint32_t msgid,
 		const char *fmt, va_list args);
 
 /*
+ * Buffer API.
+ */
+
+/**
+ * Allocate a new buffer.
+ * @param capacity : initial capacity of the buffer.
+ * @return new buffer with initial ref count at 1 or NULL in case of error.
+ */
+POMP_API struct pomp_buffer *pomp_buffer_new(size_t capacity);
+
+/**
+ * Create a new buffer with content copied from another buffer.
+ * @param buf : buffer to copy.
+ * @return new buffer with initial ref count at 1 and internal data copied from
+ * given buffer or NULL in case of error.
+ */
+POMP_API struct pomp_buffer *pomp_buffer_new_copy(
+		const struct pomp_buffer *buf);
+
+/**
+ * Increase ref count of buffer.
+ * @param buf : buffer.
+ */
+POMP_API void pomp_buffer_ref(struct pomp_buffer *buf);
+
+/**
+ * Decrease ref count of buffer. When it reaches 0, internal data as well as
+ * buffer structure itself is freed.
+ * @param buf : buffer.
+ */
+POMP_API void pomp_buffer_unref(struct pomp_buffer *buf);
+
+/**
+ * Set the capacity of the buffer.
+ * @param buf : buffer.
+ * @param capacity : new capacity of buffer (shall be greater than used length).
+ * @return 0 in case of success, negative errno value in case of error.
+ * -EPERM is returned if the buffer is shared (ref count is greater than 1).
+ */
+POMP_API int pomp_buffer_set_capacity(struct pomp_buffer *buf, size_t capacity);
+
+/**
+ * Set the used length of the buffer.
+ * @param buf : buffer.
+ * @param len : used length of data (shall be lesser than allocated size).
+ * @return 0 in case of success, negative errno value in case of error.
+ * -EPERM is returned if the buffer is shared (ref count is greater than 1) or
+ * readonly.
+ */
+POMP_API int pomp_buffer_set_len(struct pomp_buffer *buf, size_t len);
+
+/**
+ * Get internal buffer data.
+ * @param buf : buffer
+ * @param data : data of buffer.
+ * @param len : used length of buffer.
+ * @param capacity : capacity of buffer.
+ * @return 0 in case of success, negative errno value in case of error.
+ * -EPERM is returned if the buffer is read_only.
+ */
+POMP_API int pomp_buffer_get_data(struct pomp_buffer *buf,
+		void **data, size_t *len, size_t *capacity);
+
+/**
+ * Get internal buffer data.
+ * @param buf : buffer
+ * @param data : data of buffer.
+ * @param len : used length of buffer.
+ * @param capacity : capacity of buffer.
+ * @return 0 in case of success, negative errno value in case of error.
+ */
+POMP_API int pomp_buffer_get_cdata(struct pomp_buffer *buf,
+		const void **data, size_t *len, size_t *size);
+
+/*
  * Message API.
  */
 
@@ -427,6 +503,17 @@ POMP_API int pomp_msg_destroy(struct pomp_msg *msg);
  * @return id of the message or 0 in case of error.
  */
 POMP_API uint32_t pomp_msg_get_id(const struct pomp_msg *msg);
+
+/**
+ * Get the internal buffer of the message.
+ * @param msg : message.
+ * @return internal buffer of the message or NULL in case of error.
+ *
+ * @remarks this function is useful when only the serialization of the library
+ * is needed, not the transport part. This way one can write the data to another
+ * transport layer.
+ */
+POMP_API struct pomp_buffer *pomp_msg_get_buffer(const struct pomp_msg *msg);
 
 /**
  * Write and encode a message.

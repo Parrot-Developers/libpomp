@@ -57,7 +57,7 @@
 struct pomp_buffer {
 	uint32_t	refcount;	/**< Reference count */
 	uint8_t		*data;		/**< Allocated data */
-	size_t		size;		/**< Allocated size */
+	size_t		capacity;	/**< Allocated size */
 	size_t		len;		/**< Used length */
 	uint32_t	fdcount;	/**< Number of fds put in buffer */
 
@@ -71,15 +71,7 @@ int pomp_buffer_register_fd(struct pomp_buffer *buf, size_t off, int fd);
 
 int pomp_buffer_clear(struct pomp_buffer *buf);
 
-struct pomp_buffer *pomp_buffer_new(void);
-
-struct pomp_buffer *pomp_buffer_new_copy(const struct pomp_buffer *buf);
-
-void pomp_buffer_ref(struct pomp_buffer *buf);
-
-void pomp_buffer_unref(struct pomp_buffer *buf);
-
-int pomp_buffer_resize(struct pomp_buffer *buf, size_t size);
+int pomp_buffer_ensure_capacity(struct pomp_buffer *buf, size_t size);
 
 int pomp_buffer_write(struct pomp_buffer *buf, size_t *pos,
 		const void *p, size_t n);

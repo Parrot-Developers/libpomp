@@ -204,10 +204,15 @@ static void test_buffer_base(void)
 {
 	int res = 0;
 	struct pomp_buffer *buf = NULL, *buf2 = NULL, *buf3 = NULL;
+	void *data = NULL;
+	const void *cdata = NULL;
+	size_t len = 0, capacity = 0;
 
 	/* Allocation, ref, unref */
-	buf = pomp_buffer_new();
+	buf = pomp_buffer_new(0);
 	CU_ASSERT_PTR_NOT_NULL_FATAL(buf);
+	CU_ASSERT_EQUAL(buf->capacity, 0);
+	CU_ASSERT_EQUAL(buf->len, 0);
 	CU_ASSERT_EQUAL(buf->refcount, 1);
 	pomp_buffer_ref(buf);
 	CU_ASSERT_EQUAL(buf->refcount, 2);
@@ -224,13 +229,13 @@ static void test_buffer_base(void)
 	CU_ASSERT_PTR_NULL(buf3);
 
 	/* Resize */
-	res = pomp_buffer_resize(buf, 1000);
+	res = pomp_buffer_ensure_capacity(buf, 1000);
 	CU_ASSERT_EQUAL(res, 0);
 	CU_ASSERT_PTR_NOT_NULL(buf->data);
-	CU_ASSERT_TRUE(buf->size >= 1000);
+	CU_ASSERT_TRUE(buf->capacity >= 1000);
 
 	/* Invalid resize (NULL param) */
-	res = pomp_buffer_resize(NULL, 1000);
+	res = pomp_buffer_ensure_capacity(NULL, 1000);
 	CU_ASSERT_EQUAL(res, -EINVAL);
 
 	/* Invalid clear (NULL param) */
@@ -240,12 +245,70 @@ static void test_buffer_base(void)
 	/* Clear */
 	res = pomp_buffer_clear(buf);
 	CU_ASSERT_EQUAL(res, 0);
-	CU_ASSERT_EQUAL(buf->size, 0);
+	CU_ASSERT_EQUAL(buf->capacity, 0);
 	CU_ASSERT_EQUAL(buf->len, 0);
+
+	/* Allocation with initial capacity */
+	buf3 = pomp_buffer_new(100);
+	CU_ASSERT_PTR_NOT_NULL_FATAL(buf3);
+	CU_ASSERT_EQUAL(buf3->capacity, 100);
+	CU_ASSERT_EQUAL(buf3->len, 0);
+
+	/* Length tests */
+	res = pomp_buffer_set_len(buf3, 10);
+	CU_ASSERT_EQUAL(res, 0);
+	CU_ASSERT_EQUAL(buf3->len, 10);
+	res = pomp_buffer_set_len(NULL, 200);
+	CU_ASSERT_EQUAL(res, -EINVAL);
+	res = pomp_buffer_set_len(buf3, 200);
+	CU_ASSERT_EQUAL(res, -EINVAL);
+
+	/* Capacity tests */
+	res = pomp_buffer_set_capacity(buf3, 200);
+	CU_ASSERT_EQUAL(res, 0);
+	CU_ASSERT_EQUAL(buf3->capacity, 200);
+	res = pomp_buffer_set_capacity(buf3, 20);
+	CU_ASSERT_EQUAL(res, 0);
+	CU_ASSERT_EQUAL(buf3->capacity, 20);
+	res = pomp_buffer_set_capacity(NULL, 5);
+	CU_ASSERT_EQUAL(res, -EINVAL);
+	res = pomp_buffer_set_capacity(buf3, 5);
+	CU_ASSERT_EQUAL(res, -EINVAL);
+
+	/* Data retrieval */
+	res = pomp_buffer_get_data(buf3, &data, &len, &capacity);
+	CU_ASSERT_EQUAL(res, 0);
+	CU_ASSERT_EQUAL(data, buf3->data);
+	CU_ASSERT_EQUAL(len, buf3->len);
+	CU_ASSERT_EQUAL(capacity, buf3->capacity);
+	res = pomp_buffer_get_cdata(buf3, &cdata, &len, &capacity);
+	CU_ASSERT_EQUAL(res, 0);
+	CU_ASSERT_EQUAL(cdata, buf3->data);
+	CU_ASSERT_EQUAL(len, buf3->len);
+	CU_ASSERT_EQUAL(capacity, buf3->capacity);
+
+	/* Data retrieval invalid params */
+	res = pomp_buffer_get_data(NULL, &data, &len, &capacity);
+	CU_ASSERT_EQUAL(res, -EINVAL);
+	res = pomp_buffer_get_data(buf3, NULL, &len, &capacity);
+	CU_ASSERT_EQUAL(res, -EINVAL);
+	res = pomp_buffer_get_data(buf3, &data, NULL, &capacity);
+	CU_ASSERT_EQUAL(res, -EINVAL);
+	res = pomp_buffer_get_data(buf3, &data, &len, NULL);
+	CU_ASSERT_EQUAL(res, -EINVAL);
+	res = pomp_buffer_get_cdata(NULL, &cdata, &len, &capacity);
+	CU_ASSERT_EQUAL(res, -EINVAL);
+	res = pomp_buffer_get_cdata(buf3, NULL, &len, &capacity);
+	CU_ASSERT_EQUAL(res, -EINVAL);
+	res = pomp_buffer_get_cdata(buf3, &cdata, NULL, &capacity);
+	CU_ASSERT_EQUAL(res, -EINVAL);
+	res = pomp_buffer_get_cdata(buf3, &cdata, &len, NULL);
+	CU_ASSERT_EQUAL(res, -EINVAL);
 
 	/* Release */
 	pomp_buffer_unref(buf);
 	pomp_buffer_unref(buf2);
+	pomp_buffer_unref(buf3);
 }
 
 /** */
@@ -259,7 +322,7 @@ static void test_buffer_read_write(void)
 	const uint8_t *cdata = NULL;
 	struct pomp_buffer *buf = NULL, *buf2 = NULL;
 
-	buf = pomp_buffer_new();
+	buf = pomp_buffer_new(0);
 	CU_ASSERT_PTR_NOT_NULL_FATAL(buf);
 
 	/* Write at position 0 */
@@ -268,7 +331,7 @@ static void test_buffer_read_write(void)
 	CU_ASSERT_EQUAL(res, 0);
 	CU_ASSERT_EQUAL(pos, 4);
 	CU_ASSERT_EQUAL(buf->len, 4);
-	CU_ASSERT_TRUE(buf->size >= 4);
+	CU_ASSERT_TRUE(buf->capacity >= 4);
 	CU_ASSERT_PTR_NOT_NULL_FATAL(buf->data);
 	CU_ASSERT_EQUAL(buf->data[0], refdata[0]);
 	CU_ASSERT_EQUAL(buf->data[1], refdata[1]);
@@ -281,7 +344,7 @@ static void test_buffer_read_write(void)
 	CU_ASSERT_EQUAL(res, 0);
 	CU_ASSERT_EQUAL(pos, 1004);
 	CU_ASSERT_EQUAL(buf->len, 1004);
-	CU_ASSERT_TRUE(buf->size >= 1004);
+	CU_ASSERT_TRUE(buf->capacity >= 1004);
 	CU_ASSERT_PTR_NOT_NULL_FATAL(buf->data);
 	CU_ASSERT_EQUAL(buf->data[1000], refdata[0]);
 	CU_ASSERT_EQUAL(buf->data[1001], refdata[1]);
@@ -384,13 +447,15 @@ static void test_buffer_read_write(void)
 static void test_buffer_perm(void)
 {
 	static const uint8_t cdata[4] = {0x11, 0x22, 0x33, 0x44};
+	void *data = NULL;
+	size_t len = 0, capacity = 0;
 
 	int res = 0;
 	size_t pos = 0;
 	struct pomp_buffer *buf = NULL;
 
 	/* Create buffer with 2 ref */
-	buf = pomp_buffer_new();
+	buf = pomp_buffer_new(20);
 	CU_ASSERT_PTR_NOT_NULL_FATAL(buf);
 	pomp_buffer_ref(buf);
 
@@ -399,12 +464,22 @@ static void test_buffer_perm(void)
 	CU_ASSERT_EQUAL(res, -EPERM);
 
 	/* Not permitted resize */
-	res = pomp_buffer_resize(buf, 100);
+	res = pomp_buffer_ensure_capacity(buf, 100);
+	CU_ASSERT_EQUAL(res, -EPERM);
+	res = pomp_buffer_set_capacity(buf, 100);
+	CU_ASSERT_EQUAL(res, -EPERM);
+
+	/* Not permitted set length */
+	res = pomp_buffer_set_len(buf, 20);
 	CU_ASSERT_EQUAL(res, -EPERM);
 
 	/* Not permitted write */
 	pos = 0;
 	res = pomp_buffer_write(buf, &pos, cdata, 4);
+	CU_ASSERT_EQUAL(res, -EPERM);
+
+	/* Not permitted data retrieval (not constant) */
+	res = pomp_buffer_get_data(buf, &data, &len, &capacity);
 	CU_ASSERT_EQUAL(res, -EPERM);
 
 	pomp_buffer_unref(buf);
@@ -432,9 +507,9 @@ static void test_buffer_fd(void)
 	}
 
 	/* Create buffer */
-	buf = pomp_buffer_new();
+	buf = pomp_buffer_new(0);
 	CU_ASSERT_PTR_NOT_NULL_FATAL(buf);
-	res = pomp_buffer_resize(buf, 100);
+	res = pomp_buffer_ensure_capacity(buf, 100);
 	CU_ASSERT_EQUAL(res, 0);
 
 	/* Write 4 file descriptors */
@@ -605,6 +680,7 @@ static void test_msg_advanced(void)
 {
 	int res = 0;
 	struct pomp_msg *msg = NULL;
+	struct pomp_buffer *buf = NULL;
 
 	/* Allocation */
 	msg = pomp_msg_new();
@@ -621,6 +697,13 @@ static void test_msg_advanced(void)
 	CU_ASSERT_EQUAL(msg->finished, 1);
 	CU_ASSERT_PTR_NOT_NULL_FATAL(msg->buf);
 	CU_ASSERT_TRUE(msg->buf->len >= 12);
+
+	/* Buffer access */
+	buf = pomp_msg_get_buffer(msg);
+	CU_ASSERT_PTR_NOT_NULL(buf);
+	CU_ASSERT_EQUAL(buf, msg->buf);
+	buf = pomp_msg_get_buffer(NULL);
+	CU_ASSERT_PTR_NULL(buf);
 
 	/* Clear */
 	res = pomp_msg_clear(msg);
@@ -2150,7 +2233,7 @@ static void test_decoder_dump(void)
 	CU_ASSERT_EQUAL(res, 0);
 	res = pomp_decoder_dump(dec, buf, 0);
 	CU_ASSERT_EQUAL(res, 0);
-	CU_ASSERT_TRUE(strncmp(buf, s_msg_dump, 0) == 0);
+	CU_ASSERT_TRUE(buf[0] == '\0');
 
 	/* Dump very short buffer */
 	memset(buf, 0, sizeof(buf));
@@ -2442,7 +2525,7 @@ static void test_prot_base(void)
 	CU_ASSERT_PTR_NOT_NULL_FATAL(prot);
 
 	/* Setup buffer */
-	buf = pomp_buffer_new();
+	buf = pomp_buffer_new(0);
 	CU_ASSERT_PTR_NOT_NULL_FATAL(buf);
 	setup_test_buf(buf);
 
@@ -2511,7 +2594,7 @@ static void test_prot_decode(void)
 	CU_ASSERT_PTR_NOT_NULL_FATAL(prot);
 
 	/* Setup buffer */
-	buf = pomp_buffer_new();
+	buf = pomp_buffer_new(0);
 	CU_ASSERT_PTR_NOT_NULL_FATAL(buf);
 	setup_test_buf(buf);
 
@@ -2567,7 +2650,7 @@ static void test_prot_decode_no_payload(void)
 	CU_ASSERT_PTR_NOT_NULL_FATAL(prot);
 
 	/* Setup buffer */
-	buf = pomp_buffer_new();
+	buf = pomp_buffer_new(0);
 	CU_ASSERT_PTR_NOT_NULL_FATAL(buf);
 	setup_test_buf_no_payload(buf);
 
@@ -2623,7 +2706,7 @@ static void test_prot_decode_error(void)
 	CU_ASSERT_PTR_NOT_NULL_FATAL(prot);
 
 	/* Create buffer */
-	buf = pomp_buffer_new();
+	buf = pomp_buffer_new(0);
 	CU_ASSERT_PTR_NOT_NULL_FATAL(buf);
 
 	/* Corrupt each magic bytes */

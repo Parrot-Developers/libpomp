@@ -124,17 +124,15 @@ int pomp_buffer_clear(struct pomp_buffer *buf)
 	/* Free internal data */
 	free(buf->data);
 	buf->data = NULL;
-	buf->size = 0;
+	buf->capacity = 0;
 	buf->len = 0;
 	return 0;
 }
 
-/**
- * Allocate a new buffer.
- * @return new buffer with initial ref count at 1 and no internal data or NULL
- * in case of error.
+/*
+ * See documentation in public header.
  */
-struct pomp_buffer *pomp_buffer_new(void)
+struct pomp_buffer *pomp_buffer_new(size_t capacity)
 {
 	struct pomp_buffer *buf = NULL;
 
@@ -144,14 +142,17 @@ struct pomp_buffer *pomp_buffer_new(void)
 		return NULL;
 	buf->refcount = 1;
 
+	/* Set initial capacity */
+	if (capacity != 0 && pomp_buffer_set_capacity(buf, capacity) < 0) {
+		free(buf);
+		return NULL;
+	}
+
 	return buf;
 }
 
-/**
- * Create a new buffer with content copied from another buffer.
- * @param buf : buffer to copy.
- * @return new buffer with initial ref count at 1 and internal data copied from
- * given buffer or NULL in case of error.
+/*
+ * See documentation in public header.
  */
 struct pomp_buffer *pomp_buffer_new_copy(const struct pomp_buffer *buf)
 {
@@ -176,7 +177,7 @@ struct pomp_buffer *pomp_buffer_new_copy(const struct pomp_buffer *buf)
 
 		/* Copy data */
 		memcpy(newbuf->data, buf->data, buf->len);
-		newbuf->size = buf->len;
+		newbuf->capacity = buf->len;
 		newbuf->len = buf->len;
 	}
 
@@ -214,19 +215,16 @@ error:
 	return NULL;
 }
 
-/**
- * Increase ref count of buffer.
- * @param buf : buffer.
+/*
+ * See documentation in public header.
  */
 void pomp_buffer_ref(struct pomp_buffer *buf)
 {
 	buf->refcount++;
 }
 
-/**
- * Decrease ref count of buffer. When it reaches 0, internal data as well as
- * buffer structure itself is freed.
- * @param buf : buffer.
+/*
+ * See documentation in public header.
  */
 void pomp_buffer_unref(struct pomp_buffer *buf)
 {
@@ -237,30 +235,88 @@ void pomp_buffer_unref(struct pomp_buffer *buf)
 	}
 }
 
+/*
+ * See documentation in public header.
+ */
+int pomp_buffer_set_capacity(struct pomp_buffer *buf, size_t capacity)
+{
+	uint8_t *data = NULL;
+	POMP_RETURN_ERR_IF_FAILED(buf != NULL, -EINVAL);
+	POMP_RETURN_ERR_IF_FAILED(capacity >= buf->len, -EINVAL);
+	POMP_RETURN_ERR_IF_FAILED(buf->refcount <= 1, -EPERM);
+
+	/* Resize internal data */
+	data = realloc(buf->data, capacity);
+	if (data == NULL)
+		return -ENOMEM;
+	buf->data = data;
+	buf->capacity = capacity;
+	return 0;
+}
+
+/*
+ * See documentation in public header.
+ */
+int pomp_buffer_set_len(struct pomp_buffer *buf, size_t len)
+{
+	POMP_RETURN_ERR_IF_FAILED(buf != NULL, -EINVAL);
+	POMP_RETURN_ERR_IF_FAILED(len <= buf->capacity, -EINVAL);
+	POMP_RETURN_ERR_IF_FAILED(buf->refcount <= 1, -EPERM);
+	buf->len = len;
+	return 0;
+}
+
+/*
+ * See documentation in public header.
+ */
+int pomp_buffer_get_data(struct pomp_buffer *buf,
+		void **data, size_t *len, size_t *capacity)
+{
+	POMP_RETURN_ERR_IF_FAILED(buf != NULL, -EINVAL);
+	POMP_RETURN_ERR_IF_FAILED(buf->refcount <= 1, -EPERM);
+	POMP_RETURN_ERR_IF_FAILED(data != NULL, -EINVAL);
+	POMP_RETURN_ERR_IF_FAILED(len != NULL, -EINVAL);
+	POMP_RETURN_ERR_IF_FAILED(capacity != NULL, -EINVAL);
+	*data = buf->data;
+	*len = buf->len;
+	*capacity = buf->capacity;
+	return 0;
+}
+
+/*
+ * See documentation in public header.
+ */
+int pomp_buffer_get_cdata(struct pomp_buffer *buf,
+		const void **data, size_t *len, size_t *capacity)
+{
+	POMP_RETURN_ERR_IF_FAILED(buf != NULL, -EINVAL);
+	POMP_RETURN_ERR_IF_FAILED(data != NULL, -EINVAL);
+	POMP_RETURN_ERR_IF_FAILED(len != NULL, -EINVAL);
+	POMP_RETURN_ERR_IF_FAILED(capacity != NULL, -EINVAL);
+	*data = buf->data;
+	*len = buf->len;
+	*capacity = buf->capacity;
+	return 0;
+}
+
 /**
- * Resize internal data up to given size.
+ * Make sure internal data has enough room for the given size.
  * @param buf : buffer.
- * @param size : new size of buffer.
+ * @param capacity : new capacity of buffer.
  * @return 0 in case of success, negative errno value in case of error.
  * -EPERM is returned if the buffer is shared (ref count is greater than 1).
  *
  * @remarks : internally the size will be aligned to POMP_BUFFER_ALLOC_STEP.
  */
-int pomp_buffer_resize(struct pomp_buffer *buf, size_t size)
+int pomp_buffer_ensure_capacity(struct pomp_buffer *buf, size_t capacity)
 {
-	uint8_t *data = NULL;
-
 	POMP_RETURN_ERR_IF_FAILED(buf != NULL, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(buf->refcount <= 1, -EPERM);
 
 	/* Resize internal data if needed */
-	if (size > buf->size) {
-		size = POMP_BUFFER_ALIGN_ALLOC_SIZE(size);
-		data = realloc(buf->data, size);
-		if (data == NULL)
-			return -ENOMEM;
-		buf->data = data;
-		buf->size = size;
+	if (capacity > buf->capacity) {
+		capacity = POMP_BUFFER_ALIGN_ALLOC_SIZE(capacity);
+		return pomp_buffer_set_capacity(buf, capacity);
 	}
 	return 0;
 }
@@ -285,7 +341,7 @@ int pomp_buffer_write(struct pomp_buffer *buf, size_t *pos,
 	POMP_RETURN_ERR_IF_FAILED(buf->refcount <= 1, -EPERM);
 
 	/* Make sure there is enough room in data buffer */
-	res = pomp_buffer_resize(buf, *pos + n);
+	res = pomp_buffer_ensure_capacity(buf, *pos + n);
 	if (res < 0)
 		return res;
 

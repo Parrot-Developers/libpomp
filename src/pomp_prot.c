@@ -103,7 +103,7 @@ static int pomp_prot_alloc_msg(struct pomp_prot *prot, uint32_t msgid,
 	res = pomp_msg_init(prot->msg, msgid);
 	if (res < 0)
 		return res;
-	return pomp_buffer_resize(prot->msg->buf, size);
+	return pomp_buffer_ensure_capacity(prot->msg->buf, size);
 }
 
 /**
