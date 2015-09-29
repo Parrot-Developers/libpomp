@@ -110,8 +110,29 @@ static void check_fds(const int *fds1, const int *fds2) {}
 
 /**
  */
+static void print_usage(const char *progname)
+{
+	CU_pTestRegistry registry = NULL;
+	CU_pSuite suite = NULL;
+	unsigned int i = 0;
+
+	fprintf(stderr, "usage: %s [options] [<test-suite>...]\n", progname);
+	fprintf(stderr, "\n");
+	fprintf(stderr, "Available test suites (default is do run all suites)\n");
+
+	registry = CU_get_registry();
+	for (i = 1; i <= registry->uiNumberOfSuites; i++) {
+		suite = CU_get_suite_by_index(i, registry);
+		fprintf(stderr, "  %s\n", suite->pName);
+	}
+}
+
+/**
+ */
 int main(int argc, char *argv[])
 {
+	int i = 0;
+	CU_pSuite suite = NULL;
 	int *fds1 = NULL;
 	int *fds2 = NULL;
 
@@ -124,6 +145,7 @@ int main(int argc, char *argv[])
 	/* Get initial list of open file descriptors */
 	fds1 = lsof();
 
+	/* Register tests */
 	CU_initialize_registry();
 	CU_register_suites(g_suites_basic);
 	CU_register_suites(g_suites_addr);
@@ -133,8 +155,27 @@ int main(int argc, char *argv[])
 #ifndef _WIN32
 	CU_register_suites(g_suites_ipc);
 #endif /* !_WIN32 */
+
+	if (argc >= 2 && (strcmp(argv[1], "-h") == 0
+			|| strcmp(argv[1], "--help") == 0)) {
+		print_usage(argv[0]);
+		exit(0);
+	}
+
 	CU_basic_set_mode(CU_BRM_VERBOSE);
-	CU_basic_run_tests();
+	if (argc == 1) {
+		CU_basic_run_tests();
+	} else {
+		for (i = 1; i < argc; i++) {
+			suite = CU_get_suite(argv[i]);
+			if (suite == NULL) {
+				fprintf(stderr, "Unknown test suite:'%s'\n", argv[i]);
+			} else {
+				CU_basic_run_suite(suite);
+			}
+		}
+	}
+
 	CU_cleanup_registry();
 
 #ifdef _WIN32
