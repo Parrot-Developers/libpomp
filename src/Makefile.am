@@ -26,7 +26,7 @@ libpomp_la_SOURCES = \
 	pomp_prot.c \
 	pomp_timer.c
 
-include_HEADERS = \
+pkginclude_HEADERS = \
 	$(top_srcdir)/include/libpomp.h \
 	$(top_srcdir)/include/libpomp.hpp \
 	$(top_srcdir)/include/libpomp-cxx11.hpp
