@@ -62,8 +62,8 @@ static void pomp_timer_kqueue_cb(int fd, uint32_t revents, void *userdata)
 			event.ident = (uintptr_t)timer;
 			event.filter = EVFILT_TIMER;
 			event.flags = EV_ADD;
-			event.fflags = NOTE_MSECONDS;
-			event.data = timer->period;
+			event.fflags = NOTE_USECONDS;
+			event.data = timer->period * 1000;
 
 			/* Add timer */
 			if (kevent(timer->kq, &event, 1, NULL, 0, NULL) < 0)
@@ -153,8 +153,8 @@ static int pomp_timer_kqueue_set(struct pomp_timer *timer, uint32_t delay,
 	event.ident = (uintptr_t)timer;
 	event.filter = EVFILT_TIMER;
 	event.flags = EV_ADD | EV_ONESHOT;
-	event.fflags = NOTE_MSECONDS;
-	event.data = delay;
+	event.fflags = NOTE_USECONDS;
+	event.data = delay * 1000;
 
 	/* Add timer */
 	if (kevent(timer->kq, &event, 1, NULL, 0, NULL) < 0) {
