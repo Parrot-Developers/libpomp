@@ -35,6 +35,7 @@
 #ifndef _LIBPOMP_H_
 #define _LIBPOMP_H_
 
+#include <stdlib.h>
 #include <stdarg.h>
 #include <stdint.h>
 
