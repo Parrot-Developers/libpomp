@@ -286,23 +286,23 @@ static void test_buffer_base(void)
 	CU_ASSERT_EQUAL(cdata, buf3->data);
 	CU_ASSERT_EQUAL(len, buf3->len);
 	CU_ASSERT_EQUAL(capacity, buf3->capacity);
+	res = pomp_buffer_get_data(buf3, NULL, &len, &capacity);
+	CU_ASSERT_EQUAL(res, 0);
+	res = pomp_buffer_get_data(buf3, &data, NULL, &capacity);
+	CU_ASSERT_EQUAL(res, 0);
+	res = pomp_buffer_get_data(buf3, &data, &len, NULL);
+	CU_ASSERT_EQUAL(res, 0);
+	res = pomp_buffer_get_cdata(buf3, NULL, &len, &capacity);
+	CU_ASSERT_EQUAL(res, 0);
+	res = pomp_buffer_get_cdata(buf3, &cdata, NULL, &capacity);
+	CU_ASSERT_EQUAL(res, 0);
+	res = pomp_buffer_get_cdata(buf3, &cdata, &len, NULL);
+	CU_ASSERT_EQUAL(res, 0);
 
 	/* Data retrieval invalid params */
 	res = pomp_buffer_get_data(NULL, &data, &len, &capacity);
 	CU_ASSERT_EQUAL(res, -EINVAL);
-	res = pomp_buffer_get_data(buf3, NULL, &len, &capacity);
-	CU_ASSERT_EQUAL(res, -EINVAL);
-	res = pomp_buffer_get_data(buf3, &data, NULL, &capacity);
-	CU_ASSERT_EQUAL(res, -EINVAL);
-	res = pomp_buffer_get_data(buf3, &data, &len, NULL);
-	CU_ASSERT_EQUAL(res, -EINVAL);
 	res = pomp_buffer_get_cdata(NULL, &cdata, &len, &capacity);
-	CU_ASSERT_EQUAL(res, -EINVAL);
-	res = pomp_buffer_get_cdata(buf3, NULL, &len, &capacity);
-	CU_ASSERT_EQUAL(res, -EINVAL);
-	res = pomp_buffer_get_cdata(buf3, &cdata, NULL, &capacity);
-	CU_ASSERT_EQUAL(res, -EINVAL);
-	res = pomp_buffer_get_cdata(buf3, &cdata, &len, NULL);
 	CU_ASSERT_EQUAL(res, -EINVAL);
 
 	/* Release */

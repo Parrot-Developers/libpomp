@@ -274,12 +274,12 @@ int pomp_buffer_get_data(struct pomp_buffer *buf,
 {
 	POMP_RETURN_ERR_IF_FAILED(buf != NULL, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(buf->refcount <= 1, -EPERM);
-	POMP_RETURN_ERR_IF_FAILED(data != NULL, -EINVAL);
-	POMP_RETURN_ERR_IF_FAILED(len != NULL, -EINVAL);
-	POMP_RETURN_ERR_IF_FAILED(capacity != NULL, -EINVAL);
-	*data = buf->data;
-	*len = buf->len;
-	*capacity = buf->capacity;
+	if (data != NULL)
+		*data = buf->data;
+	if (len != NULL)
+		*len = buf->len;
+	if (capacity != NULL)
+		*capacity = buf->capacity;
 	return 0;
 }
 
@@ -287,15 +287,15 @@ int pomp_buffer_get_data(struct pomp_buffer *buf,
  * See documentation in public header.
  */
 int pomp_buffer_get_cdata(struct pomp_buffer *buf,
-		const void **data, size_t *len, size_t *capacity)
+		const void **cdata, size_t *len, size_t *capacity)
 {
 	POMP_RETURN_ERR_IF_FAILED(buf != NULL, -EINVAL);
-	POMP_RETURN_ERR_IF_FAILED(data != NULL, -EINVAL);
-	POMP_RETURN_ERR_IF_FAILED(len != NULL, -EINVAL);
-	POMP_RETURN_ERR_IF_FAILED(capacity != NULL, -EINVAL);
-	*data = buf->data;
-	*len = buf->len;
-	*capacity = buf->capacity;
+	if (cdata != NULL)
+		*cdata = buf->data;
+	if (len != NULL)
+		*len = buf->len;
+	if (capacity != NULL)
+		*capacity = buf->capacity;
 	return 0;
 }
 

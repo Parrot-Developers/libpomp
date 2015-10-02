@@ -511,27 +511,27 @@ POMP_API int pomp_buffer_set_capacity(struct pomp_buffer *buf, size_t capacity);
 POMP_API int pomp_buffer_set_len(struct pomp_buffer *buf, size_t len);
 
 /**
- * Get internal buffer data.
- * @param buf : buffer
- * @param data : data of buffer.
- * @param len : used length of buffer.
- * @param capacity : capacity of buffer.
+ * Get internal buffer data for read/write.
+ * @param buf : buffer.
+ * @param data : data of buffer (optional can be NULL).
+ * @param len : used length of buffer (optional can be NULL).
+ * @param capacity : capacity of buffer (optional can be NULL).
  * @return 0 in case of success, negative errno value in case of error.
- * -EPERM is returned if the buffer is read_only.
+ * -EPERM is returned if the buffer is shared.
  */
 POMP_API int pomp_buffer_get_data(struct pomp_buffer *buf,
 		void **data, size_t *len, size_t *capacity);
 
 /**
- * Get internal buffer data.
+ * Get internal buffer data for read-only.
  * @param buf : buffer
- * @param data : data of buffer.
- * @param len : used length of buffer.
- * @param capacity : capacity of buffer.
+ * @param cdata : data of buffer (optional can be NULL).
+ * @param len : used length of buffer (optional can be NULL).
+ * @param capacity : capacity of buffer (optional can be NULL).
  * @return 0 in case of success, negative errno value in case of error.
  */
 POMP_API int pomp_buffer_get_cdata(struct pomp_buffer *buf,
-		const void **data, size_t *len, size_t *size);
+		const void **cdata, size_t *len, size_t *size);
 
 /*
  * Message API.

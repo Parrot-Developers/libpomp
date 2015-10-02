@@ -415,11 +415,10 @@ static int pomp_conn_fixup_rx_fds(struct pomp_conn *conn,
  */
 static void pomp_conn_process_read_buf(struct pomp_conn *conn)
 {
-	size_t off = 0;
+	size_t len = 0, off = 0;
 	ssize_t usedlen = 0;
 	struct pomp_msg *msg = NULL;
 	const void *data = NULL;
-	size_t len = 0, capacity = 0;
 
 	/* No protocol decoding for raw context */
 	if (conn->israw) {
@@ -428,7 +427,8 @@ static void pomp_conn_process_read_buf(struct pomp_conn *conn)
 	}
 
 	/* Get data from buffer */
-	pomp_buffer_get_cdata(conn->readbuf, &data, &len, &capacity);
+	data =conn->readbuf->data;
+	len = conn->readbuf->len;
 
 	/* Decoding loop */
 	while (off < len) {
