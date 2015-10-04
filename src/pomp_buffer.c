@@ -220,7 +220,13 @@ error:
  */
 void pomp_buffer_ref(struct pomp_buffer *buf)
 {
-	buf->refcount++;
+#if defined(__GNUC__)
+	__sync_add_and_fetch(&buf->refcount, 1);
+#elif defined(_WIN32)
+	InterlockedIncrement((long volatile *)&buf->refcount);
+#else
+#error No atomic increment function found on this platform
+#endif
 }
 
 /*
@@ -228,8 +234,17 @@ void pomp_buffer_ref(struct pomp_buffer *buf)
  */
 void pomp_buffer_unref(struct pomp_buffer *buf)
 {
+	uint32_t res = 0;
+#if defined(__GNUC__)
+	res = __sync_sub_and_fetch(&buf->refcount, 1);
+#elif defined(_WIN32)
+	res = (uint32_t)InterlockedDecrement((long volatile *)&buf->refcount);
+#else
+#error No atomic decrement function found on this platform
+#endif
+
 	/* Free resource when ref count reaches 0 */
-	if (--buf->refcount == 0) {
+	if (res == 0) {
 		(void)pomp_buffer_clear(buf);
 		free(buf);
 	}
