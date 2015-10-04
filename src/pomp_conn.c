@@ -167,6 +167,7 @@ static int pomp_io_buffer_destroy(struct pomp_io_buffer *iobuf)
 static int pomp_io_buffer_write_normal(struct pomp_io_buffer *iobuf,
 		struct pomp_conn *conn)
 {
+	int res = 0;
 	ssize_t writelen = 0;
 
 	/* Write data ignoring interrupts */
@@ -176,16 +177,21 @@ static int pomp_io_buffer_write_normal(struct pomp_io_buffer *iobuf,
 	} while (writelen < 0 && errno == EINTR);
 
 	/* Log errors except EAGAIN */
-	if (writelen < 0 && !POMP_CONN_WOULD_BLOCK(errno))
-		POMP_LOG_FD_ERRNO("write", conn->fd);
+	if (writelen < 0) {
+		res = -errno;
+		if (!POMP_CONN_WOULD_BLOCK(errno))
+			POMP_LOG_FD_ERRNO("write", conn->fd);
+		return res;
+	}
 
-	/* Return number of bytes written or error */
-	return writelen < 0 ? -errno : (int)writelen;
+	/* Return number of bytes written */
+	return (int)writelen;
 }
 
 static int pomp_io_buffer_write_dgram(struct pomp_io_buffer *iobuf,
 		struct pomp_conn *conn)
 {
+	int res = 0;
 	ssize_t writelen = 0;
 
 	/* Write data ignoring interrupts */
@@ -197,11 +203,15 @@ static int pomp_io_buffer_write_dgram(struct pomp_io_buffer *iobuf,
 	} while (writelen < 0 && errno == EINTR);
 
 	/* Log errors except EAGAIN */
-	if (writelen < 0 && !POMP_CONN_WOULD_BLOCK(errno))
-		POMP_LOG_FD_ERRNO("sendto", conn->fd);
+	if (writelen < 0) {
+		res = -errno;
+		if (!POMP_CONN_WOULD_BLOCK(errno))
+			POMP_LOG_FD_ERRNO("sendto", conn->fd);
+		return res;
+	}
 
-	/* Return number of bytes written or error */
-	return writelen < 0 ? -errno : (int)writelen;
+	/* Return number of bytes written */
+	return (int)writelen;
 }
 
 /**
@@ -217,6 +227,7 @@ static int pomp_io_buffer_write_with_fds(struct pomp_io_buffer *iobuf,
 		struct pomp_conn *conn)
 {
 #ifdef SCM_RIGHTS
+	int res = 0;
 	ssize_t writelen = 0;
 	struct iovec iov;
 	struct msghdr msg;
@@ -256,11 +267,15 @@ static int pomp_io_buffer_write_with_fds(struct pomp_io_buffer *iobuf,
 	} while (writelen < 0 && errno == EINTR);
 
 	/* Log errors except EAGAIN */
-	if (writelen < 0 && !POMP_CONN_WOULD_BLOCK(errno))
-		POMP_LOG_FD_ERRNO("sendmsg", conn->fd);
+	if (writelen < 0) {
+		res = -errno;
+		if (!POMP_CONN_WOULD_BLOCK(errno))
+			POMP_LOG_FD_ERRNO("sendmsg", conn->fd);
+		return res;
+	}
 
-	/* Return number of bytes written or error */
-	return writelen < 0 ? -errno : (int)writelen;
+	/* Return number of bytes written */
+	return (int)writelen;
 #else /* !SCM_RIGHTS */
 	return pomp_io_buffer_write_normal(iobuf, conn);
 #endif /* !SCM_RIGHTS */
@@ -454,6 +469,7 @@ static void pomp_conn_process_read_buf(struct pomp_conn *conn)
 
 static int pomp_conn_process_read_normal(struct pomp_conn *conn)
 {
+	int res = 0;
 	ssize_t readlen = 0;
 
 	/* Read data ignoring interrupts */
@@ -463,15 +479,20 @@ static int pomp_conn_process_read_normal(struct pomp_conn *conn)
 	} while (readlen < 0 && errno == EINTR);
 
 	/* Log errors except EAGAIN */
-	if (readlen < 0 && !POMP_CONN_WOULD_BLOCK(errno))
-		POMP_LOG_FD_ERRNO("read", conn->fd);
+	if (readlen < 0) {
+		res = -errno;
+		if (!POMP_CONN_WOULD_BLOCK(errno))
+			POMP_LOG_FD_ERRNO("read", conn->fd);
+		return res;
+	}
 
-	/* Return number of bytes read or error */
-	return readlen < 0 ? -errno : (int)readlen;
+	/* Return number of bytes read*/
+	return (int)readlen;
 }
 
 static int pomp_conn_process_read_dgram(struct pomp_conn *conn)
 {
+	int res = 0;
 	ssize_t readlen = 0;
 
 	/* Read data ignoring interrupts */
@@ -484,11 +505,15 @@ static int pomp_conn_process_read_dgram(struct pomp_conn *conn)
 	} while (readlen < 0 && errno == EINTR);
 
 	/* Log errors except EAGAIN */
-	if (readlen < 0 && !POMP_CONN_WOULD_BLOCK(errno))
-		POMP_LOG_FD_ERRNO("recvfrom", conn->fd);
+	if (readlen < 0) {
+		res = -errno;
+		if (!POMP_CONN_WOULD_BLOCK(errno))
+			POMP_LOG_FD_ERRNO("recvfrom", conn->fd);
+		return res;
+	}
 
-	/* Return number of bytes read or error */
-	return readlen < 0 ? -errno : (int)readlen;
+	/* Return number of bytes read*/
+	return (int)readlen;
 }
 
 static int pomp_conn_process_read_with_fds(struct pomp_conn *conn)
@@ -520,13 +545,14 @@ static int pomp_conn_process_read_with_fds(struct pomp_conn *conn)
 		readlen = recvmsg(conn->fd, &msg, 0);
 	} while (readlen < 0 && errno == EINTR);
 
-	/* Log errors except EAGAIN */
-	if (readlen < 0 && !POMP_CONN_WOULD_BLOCK(errno))
-		POMP_LOG_FD_ERRNO("recvmsg", conn->fd);
-
 	/* Return immediately in case of error or EOF */
-	if (readlen < 0)
-		return -errno;
+	if (readlen < 0) {
+		/* Log errors except EAGAIN */
+		res = -errno;
+		if (!POMP_CONN_WOULD_BLOCK(errno))
+			POMP_LOG_FD_ERRNO("recvmsg", conn->fd);
+		return res;
+	}
 	if (readlen == 0)
 		return 0;
 
