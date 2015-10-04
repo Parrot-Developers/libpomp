@@ -832,8 +832,10 @@ int pomp_conn_close(struct pomp_conn *conn)
 	pomp_conn_clear_rx_fds(conn);
 
 	/* Properly shutdown the connection */
-	if (!conn->isdgram && shutdown(conn->fd, SHUT_RDWR) < 0)
-		POMP_LOG_FD_ERRNO("shutdown", conn->fd);
+	if (!conn->isdgram && shutdown(conn->fd, SHUT_RDWR) < 0) {
+		if (errno != ENOTCONN)
+			POMP_LOG_FD_ERRNO("shutdown", conn->fd);
+	}
 	pomp_loop_remove(conn->loop, conn->fd);
 
 	/* Release resources */
@@ -876,8 +878,10 @@ int pomp_conn_disconnect(struct pomp_conn *conn)
 	POMP_RETURN_ERR_IF_FAILED(!conn->isdgram, -ENOTCONN);
 
 	/* Shutting down connection will ultimately cause an EOF */
-	if (shutdown(conn->fd, SHUT_RDWR) < 0)
-		POMP_LOG_FD_ERRNO("shutdown", conn->fd);
+	if (shutdown(conn->fd, SHUT_RDWR) < 0) {
+		if (errno != ENOTCONN)
+			POMP_LOG_FD_ERRNO("shutdown", conn->fd);
+	}
 	return 0;
 }
 
