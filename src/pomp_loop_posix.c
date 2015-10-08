@@ -46,6 +46,8 @@ static uint32_t fd_events_from_poll(int16_t events)
 	uint32_t res = 0;
 	if (events & POLLIN)
 		res |= POMP_FD_EVENT_IN;
+	if (events & POLLPRI)
+		res |= POMP_FD_EVENT_PRI;
 	if (events & POLLOUT)
 		res |= POMP_FD_EVENT_OUT;
 	if (events & POLLERR)
@@ -65,6 +67,8 @@ static int16_t fd_events_to_poll(uint32_t events)
 	int16_t res = 0;
 	if (events & POMP_FD_EVENT_IN)
 		res |= POLLIN;
+	if (events & POMP_FD_EVENT_PRI)
+		res |= POLLPRI;
 	if (events & POMP_FD_EVENT_OUT)
 		res |= POLLOUT;
 	if (events & POMP_FD_EVENT_ERR)

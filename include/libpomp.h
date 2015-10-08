@@ -83,6 +83,7 @@ enum pomp_event {
 /** Fd events */
 enum pomp_fd_event {
 	POMP_FD_EVENT_IN = 0x001,
+	POMP_FD_EVENT_PRI = 0x002,
 	POMP_FD_EVENT_OUT = 0x004,
 	POMP_FD_EVENT_ERR = 0x008,
 	POMP_FD_EVENT_HUP = 0x010,

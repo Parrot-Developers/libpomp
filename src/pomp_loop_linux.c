@@ -51,6 +51,8 @@ static uint32_t fd_events_from_epoll(uint32_t events)
 	uint32_t res = 0;
 	if (events & EPOLLIN)
 		res |= POMP_FD_EVENT_IN;
+	if (events & EPOLLPRI)
+		res |= POMP_FD_EVENT_PRI;
 	if (events & EPOLLOUT)
 		res |= POMP_FD_EVENT_OUT;
 	if (events & EPOLLERR)
@@ -70,6 +72,8 @@ static uint32_t fd_events_to_epoll(uint32_t events)
 	uint32_t res = 0;
 	if (events & POMP_FD_EVENT_IN)
 		res |= EPOLLIN;
+	if (events & POMP_FD_EVENT_PRI)
+		res |= EPOLLPRI;
 	if (events & POMP_FD_EVENT_OUT)
 		res |= EPOLLOUT;
 	if (events & POMP_FD_EVENT_ERR)
