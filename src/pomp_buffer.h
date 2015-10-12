@@ -71,7 +71,7 @@ int pomp_buffer_register_fd(struct pomp_buffer *buf, size_t off, int fd);
 
 int pomp_buffer_clear(struct pomp_buffer *buf);
 
-int pomp_buffer_ensure_capacity(struct pomp_buffer *buf, size_t size);
+int pomp_buffer_ensure_capacity(struct pomp_buffer *buf, size_t capacity);
 
 int pomp_buffer_write(struct pomp_buffer *buf, size_t *pos,
 		const void *p, size_t n);

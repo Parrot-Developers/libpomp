@@ -218,6 +218,30 @@ error:
 /*
  * See documentation in public header.
  */
+struct pomp_buffer *pomp_buffer_new_with_data(const void *data, size_t len)
+{
+	struct pomp_buffer *buf = pomp_buffer_new(len);
+	if (buf != NULL) {
+		memcpy(buf->data, data, len);
+		buf->len = len;
+	}
+	return buf;
+}
+
+/*
+ * See documentation in public header.
+ */
+struct pomp_buffer *pomp_buffer_new_get_data(size_t capacity, void **data)
+{
+	struct pomp_buffer *buf = pomp_buffer_new(capacity);
+	if (buf != NULL && data != NULL)
+		*data = buf->data;
+	return buf;
+}
+
+/*
+ * See documentation in public header.
+ */
 void pomp_buffer_ref(struct pomp_buffer *buf)
 {
 #if defined(__GNUC__)
