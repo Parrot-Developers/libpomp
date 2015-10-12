@@ -1185,10 +1185,6 @@ int pomp_ctx_remove_conn(struct pomp_ctx *ctx, struct pomp_conn *conn)
 	POMP_RETURN_ERR_IF_FAILED(ctx != NULL, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(conn != NULL, -EINVAL);
 
-	/* Notify user */
-	if (ctx->type != POMP_CTX_TYPE_DGRAM)
-		pomp_ctx_notify_event(ctx, POMP_EVENT_DISCONNECTED, conn);
-
 	/* Remove from server / client */
 	switch (ctx->type) {
 	case POMP_CTX_TYPE_SERVER:
@@ -1232,13 +1228,19 @@ int pomp_ctx_remove_conn(struct pomp_ctx *ctx, struct pomp_conn *conn)
 	if (!found)
 		POMP_LOGE("conn %p not found in ctx %p", conn, ctx);
 
+	/* Notify user */
+	if (ctx->type != POMP_CTX_TYPE_DGRAM)
+		pomp_ctx_notify_event(ctx, POMP_EVENT_DISCONNECTED, conn);
+
 	/* Free connection itself */
 	pomp_conn_close(conn);
 	pomp_conn_destroy(conn);
 
 	/* Reconnect client if needed */
-	if (ctx->type == POMP_CTX_TYPE_CLIENT && !ctx->stopping)
+	if (ctx->type == POMP_CTX_TYPE_CLIENT
+			&& !ctx->stopping && ctx->addr != NULL) {
 		pomp_timer_set(ctx->timer, POMP_CLIENT_RECONNECT_DELAY);
+	}
 
 	return 0;
 }
