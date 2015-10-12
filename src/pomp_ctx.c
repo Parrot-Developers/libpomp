@@ -920,7 +920,9 @@ int pomp_ctx_bind(struct pomp_ctx *ctx,
 int pomp_ctx_stop(struct pomp_ctx *ctx)
 {
 	POMP_RETURN_ERR_IF_FAILED(ctx != NULL, -EINVAL);
-	POMP_RETURN_ERR_IF_FAILED(ctx->addr != NULL, -EINVAL);
+
+	if (ctx->addr == NULL)
+		return 0;
 
 	/* Stop server/client/dgram */
 	ctx->stopping = 1;

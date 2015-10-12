@@ -626,9 +626,9 @@ static void test_ctx(const struct sockaddr *addr1, uint32_t addrlen1,
 	res = pomp_ctx_stop(NULL);
 	CU_ASSERT_EQUAL(res, -EINVAL);
 
-	/* Invalid stop (already done) */
+	/* Stop when already done */
 	res = pomp_ctx_stop(ctx1);
-	CU_ASSERT_EQUAL(res, -EINVAL);
+	CU_ASSERT_EQUAL(res, 0);
 
 	/* Destroy contexts */
 	res = pomp_ctx_destroy(ctx1);
