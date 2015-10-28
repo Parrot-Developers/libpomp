@@ -331,6 +331,11 @@ public:
 		return pomp_loop_wakeup(mLoop);
 	}
 
+	/** Get internal pomp_loop */
+	inline operator struct pomp_loop *() {
+		return mLoop;
+	}
+
 #ifdef POMP_CXX11
 	/** Handler wrapper that can take a std::function */
 	class HandlerFunc : public Handler {
