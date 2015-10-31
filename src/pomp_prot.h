@@ -84,6 +84,13 @@ extern "C" {
 #define POMP_PROT_HEADER_MAGIC_2	'M'	/**< Magic byte 2 */
 #define POMP_PROT_HEADER_MAGIC_3	'P'	/**< Magic byte 3 */
 
+/** 32-bit magic */
+#define POMP_PROT_HEADER_MAGIC \
+	(POMP_PROT_HEADER_MAGIC_0 | \
+	(POMP_PROT_HEADER_MAGIC_1 << 8) | \
+	(POMP_PROT_HEADER_MAGIC_2 << 16) | \
+	(POMP_PROT_HEADER_MAGIC_3 << 24))
+
 /* Data types */
 #define POMP_PROT_DATA_TYPE_I8		0x01	/**< 8-bit signed integer */
 #define POMP_PROT_DATA_TYPE_U8		0x02	/**< 8-bit unsigned integer */

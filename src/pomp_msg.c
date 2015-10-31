@@ -87,6 +87,65 @@ error:
 /*
  * See documentation in public header.
  */
+struct pomp_msg *pomp_msg_new_with_buffer(struct pomp_buffer *buf)
+{
+	struct pomp_msg *msg = NULL;
+	size_t pos = 0;
+	uint32_t d = 0;
+
+	POMP_RETURN_VAL_IF_FAILED(buf != NULL, -EINVAL, NULL);
+
+	/* Allocate message structure */
+	msg = calloc(1, sizeof(*msg));
+	if (msg == NULL)
+		goto error;
+
+	/* Get a new ref on buffer */
+	msg->finished = 1;
+	msg->buf = buf;
+	pomp_buffer_ref(buf);
+
+	/* Make sure header is valid */
+	if (msg->buf->len < POMP_PROT_HEADER_SIZE) {
+		POMP_LOGW("Bad header size: %u", (uint32_t)msg->buf->len);
+		goto error;
+	}
+
+	/* Check magic */
+	(void)pomp_buffer_read(msg->buf, &pos, &d, sizeof(d));
+	if (POMP_LE32TOH(d) != POMP_PROT_HEADER_MAGIC) {
+		POMP_LOGW("Bad header magic: %08x(%08x)",
+				POMP_LE32TOH(d), POMP_PROT_HEADER_MAGIC);
+		goto error;
+	}
+
+	/* Message id */
+	(void)pomp_buffer_read(msg->buf, &pos, &d, sizeof(d));
+	msg->msgid = POMP_LE32TOH(d);
+
+	/* Check message size */
+	(void)pomp_buffer_read(msg->buf, &pos, &d, sizeof(d));
+	if (POMP_LE32TOH(d) != buf->len) {
+		POMP_LOGW("Bad message size: %08x(%08x)",
+				(uint32_t)buf->len, POMP_LE32TOH(d));
+		goto error;
+	}
+
+	return msg;
+
+	/* Cleanup in case of error */
+error:
+	if (msg != NULL) {
+		if (msg->buf != NULL)
+			pomp_buffer_unref(msg->buf);
+		free(msg);
+	}
+	return NULL;
+}
+
+/*
+ * See documentation in public header.
+ */
 int pomp_msg_destroy(struct pomp_msg *msg)
 {
 	POMP_RETURN_ERR_IF_FAILED(msg != NULL, -EINVAL);
