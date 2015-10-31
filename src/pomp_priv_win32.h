@@ -35,6 +35,8 @@
 #ifndef _POMP_PRIV_WIN32_H_
 #define _POMP_PRIV_WIN32_H_
 
+#ifdef _WIN32
+
 #ifndef _WIN32_WINNT
 #  define _WIN32_WINNT 0x0501
 #endif /* !_WIN32_WINNT */
@@ -153,5 +155,7 @@ static inline int win32_setsockopt(int sockfd, int level, int optname,
 #ifdef __cplusplus
 }
 #endif /* __cplusplus */
+
+#endif /* _WIN32 */
 
 #endif /* !_POMP_PRIV_WIN32_H_ */
