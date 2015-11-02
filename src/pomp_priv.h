@@ -52,9 +52,6 @@
 #include "pomp_config.h"
 
 /* Include system specific headers */
-#ifdef HAVE_ENDIAN_H
-#  include <endian.h>
-#endif
 #ifdef HAVE_NETDB_H
 #  include <netdb.h>
 #endif

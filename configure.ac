@@ -81,7 +81,6 @@ AM_CONDITIONAL(HAVE_CXX11, test "$HAVE_CXX11" = "1")
 AC_HEADER_STDC
 
 AC_CHECK_HEADERS([ \
-	endian.h \
 	inttypes.h \
 	netdb.h \
 	unistd.h \

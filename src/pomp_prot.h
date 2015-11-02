@@ -41,14 +41,25 @@ extern "C" {
 
 /** Endianess detection */
 #if !defined(POMP_LITTLE_ENDIAN) && !defined(POMP_BIG_ENDIAN)
-#  if defined(BYTE_ORDER) && (BYTE_ORDER == LITTLE_ENDIAN)
+#  if defined(__BYTE_ORDER__) && (__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__)
 #    define POMP_LITTLE_ENDIAN
-#  elif defined(BYTE_ORDER) && (BYTE_ORDER == BIG_ENDIAN)
+#  elif defined(__BYTE_ORDER__) && (__BYTE_ORDER__ == __ORDER_BIG_ENDIAN__)
 #    define POMP_BIG_ENDIAN
 #  elif defined(_WIN32)
 #    define POMP_LITTLE_ENDIAN
 #  else
-#    error Unable to determine endianess of machine
+#    ifdef __APPLE__
+#      include <machine/endian.h>
+#    else
+#      include <endian.h>
+#    endif
+#    if defined(BYTE_ORDER) && (BYTE_ORDER == LITTLE_ENDIAN)
+#      define POMP_LITTLE_ENDIAN
+#    elif defined(BYTE_ORDER) && (BYTE_ORDER == BIG_ENDIAN)
+#      define POMP_BIG_ENDIAN
+#    else
+#      error Unable to determine endianess of machine
+#    endif
 #  endif
 #endif
 

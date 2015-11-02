@@ -42,9 +42,6 @@
 #else /* !HAVE_CONFIG_H */
 
 #ifdef __linux__
-#  ifndef HAVE_ENDIAN_H
-#    define HAVE_ENDIAN_H
-#  endif
 #  ifndef HAVE_NETDB_H
 #    define HAVE_NETDB_H
 #  endif
@@ -79,9 +76,6 @@
 #endif
 
 #if defined(__FreeBSD__) || defined(__APPLE__)
-#  ifndef HAVE_ENDIAN_H
-#    define HAVE_ENDIAN_H
-#  endif
 #  ifndef HAVE_SYS_EVENT_H
 #    define HAVE_SYS_EVENT_H
 #  endif
