@@ -78,6 +78,14 @@ extern "C" {
 #else
 
 #include "cutils/log.h"
+
+#ifndef ALOGD
+#define ALOGD LOGD
+#define ALOGI LOGI
+#define ALOGW LOGW
+#define ALOGE LOGE
+#endif
+
 /** Log as debug */
 #define POMP_LOGD(_fmt, ...)	ALOGD(_fmt, ##__VA_ARGS__)
 /** Log as info */
