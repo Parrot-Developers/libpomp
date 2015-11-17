@@ -148,6 +148,12 @@ typedef void (*pomp_fd_event_cb_t)(int fd, uint32_t revents, void *userdata);
  */
 typedef void (*pomp_timer_cb_t) (struct pomp_timer *timer, void *userdata);
 
+/**
+ * Idle callback.
+ * @param userdata : callback user data.
+ */
+typedef void (*pomp_idle_cb_t)(void *userdata);
+
 /*
  * Context API.
  */
@@ -770,6 +776,35 @@ POMP_API int pomp_loop_wait_and_process(struct pomp_loop *loop, int timeout);
  * valid for the complete duration of the call.
  */
 POMP_API int pomp_loop_wakeup(struct pomp_loop *loop);
+
+/**
+ * Register a function to be called when loop is idle, i.e. there is no event
+ * to be processed. The registered function will be called only once and in
+ * the order they are registered.
+ * @param loop : loop.
+ * @param cb : callback to call.
+ * @param userdata : user data for callback.
+ * @return 0 in case of success, negative errno value in case of error. In
+ * particular it is an error to register an idle function while currently
+ * registered function are being called (-EPERM will be returned).
+ *
+ * @remarks: this function is useful to register cleanup functions when called
+ * by an fd event callback for example.
+ */
+POMP_API int pomp_loop_idle_add(struct pomp_loop *loop, pomp_idle_cb_t cb,
+		void *userdata);
+
+/**
+ * Unregister a function registered with pomp_loop_idle_add.
+ * @param loop : loop.
+ * @param cb : callback given in pomp_loop_idle_add.
+ * @param userdata : user data given in pomp_loop_idle_add.
+ * @return 0 in case of success, negative errno value in case of error.
+ *
+ * @remarks: if nothing match the given criteria, no error is returned.
+ */
+POMP_API int pomp_loop_idle_remove(struct pomp_loop *loop, pomp_idle_cb_t cb,
+		void *userdata);
 
 /*
  * Timer API.

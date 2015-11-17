@@ -148,6 +148,38 @@ static int pomp_loop_do_wakeup(struct pomp_loop *loop)
 }
 
 /**
+ * Check if there is some idle entries to call.
+ * @param loop : loop.
+ * @return 0 in case of success, negative errno value in case of error.
+ */
+static int pomp_loop_idle_check(struct pomp_loop *loop)
+{
+	uint32_t i = 0;
+	struct pomp_idle_entry *entry = NULL;
+	POMP_RETURN_ERR_IF_FAILED(loop != NULL, -EINVAL);
+	POMP_RETURN_ERR_IF_FAILED(!loop->idle_pending, -EPERM);
+
+	if (loop->idle_count == 0)
+		return 0;
+
+	/* Call registered entries, preventing modification during the loop */
+	loop->idle_pending = 1;
+	for (i = 0; i < loop->idle_count; i++) {
+		entry = &loop->idle_entries[i];
+		if (!entry->removed)
+			(*entry->cb)(entry->userdata);
+	}
+	loop->idle_pending = 0;
+
+	/* Free entries */
+	free(loop->idle_entries);
+	loop->idle_entries = NULL;
+	loop->idle_count = 0;
+
+	return 0;
+}
+
+/**
  * Find a registered fd in loop.
  * @param loop : loop.
  * @param fd : fd to search.
@@ -266,6 +298,7 @@ int pomp_loop_destroy(struct pomp_loop *loop)
 		return res;
 
 	/* Free resources */
+	free(loop->idle_entries);
 	free(loop);
 	return 0;
 }
@@ -386,9 +419,16 @@ int pomp_loop_get_fd(struct pomp_loop *loop)
  */
 int pomp_loop_wait_and_process(struct pomp_loop *loop, int timeout)
 {
-	/* Implementation specific */
+	int res = 0;
 	POMP_RETURN_ERR_IF_FAILED(loop != NULL, -EINVAL);
-	return pomp_loop_do_wait_and_process(loop, timeout);
+
+	/* Implementation specific */
+	res = pomp_loop_do_wait_and_process(loop, timeout);
+
+	/* Check for idle function to call */
+	pomp_loop_idle_check(loop);
+
+	return res;
 }
 
 /*
@@ -399,4 +439,51 @@ int pomp_loop_wakeup(struct pomp_loop *loop)
 	/* Implementation specific */
 	POMP_RETURN_ERR_IF_FAILED(loop != NULL, -EINVAL);
 	return pomp_loop_do_wakeup(loop);
+}
+
+/*
+ * See documentation in public header.
+ */
+POMP_API int pomp_loop_idle_add(struct pomp_loop *loop, pomp_idle_cb_t cb,
+		void *userdata)
+{
+	struct pomp_idle_entry *newentries = NULL;
+	POMP_RETURN_ERR_IF_FAILED(loop != NULL, -EINVAL);
+	POMP_RETURN_ERR_IF_FAILED(cb != NULL, -EINVAL);
+	POMP_RETURN_ERR_IF_FAILED(!loop->idle_pending, -EPERM);
+
+	/* Allocate entry */
+	newentries = realloc(loop->idle_entries, (loop->idle_count + 1)
+			 * sizeof(struct pomp_idle_entry));
+	if (newentries == NULL)
+		return -ENOMEM;
+	loop->idle_entries = newentries;
+
+	/* Save entry */
+	loop->idle_entries[loop->idle_count].cb = cb;
+	loop->idle_entries[loop->idle_count].userdata = userdata;
+	loop->idle_entries[loop->idle_count].removed = 0;
+	loop->idle_count++;
+	return 0;
+}
+
+/*
+ * See documentation in public header.
+ */
+POMP_API int pomp_loop_idle_remove(struct pomp_loop *loop, pomp_idle_cb_t cb,
+		void *userdata)
+{
+	uint32_t i = 0;
+	struct pomp_idle_entry *entry = NULL;
+	POMP_RETURN_ERR_IF_FAILED(loop != NULL, -EINVAL);
+
+	/* Walk entries, just mark matching entries as removed, next call to
+	 * pomp_loop_idle_check will do the cleaning */
+	for (i = 0; i < loop->idle_count; i++) {
+		entry = &loop->idle_entries[i];
+		if (entry->cb == cb && entry->userdata == userdata)
+			entry->removed = 1;
+	}
+
+	return 0;
 }

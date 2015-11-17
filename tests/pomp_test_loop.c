@@ -435,6 +435,76 @@ static void test_loop_wakeup(void)
 #endif /* _WIN32 */
 
 /** */
+struct idle_data {
+	struct pomp_loop  *loop;
+	int               n;
+};
+
+/** */
+static void idle_cb(void *userdata)
+{
+	int res = 0;
+	struct idle_data *data = userdata;
+	data->n++;
+
+	res = pomp_loop_idle_add(data->loop, &idle_cb, data);
+	CU_ASSERT_EQUAL(res, -EPERM);
+}
+
+/** */
+static void test_loop_idle(void)
+{
+	int res = 0;
+	struct idle_data data = {NULL, 0};
+
+	/* Create loop */
+	data.loop = pomp_loop_new();
+	CU_ASSERT_PTR_NOT_NULL_FATAL(data.loop);
+
+	/* Check register function is called once */
+	data.n = 0;
+	res = pomp_loop_idle_add(data.loop, &idle_cb, &data);
+	CU_ASSERT_EQUAL(res, 0);
+	res = pomp_loop_wait_and_process(data.loop, 0);
+	CU_ASSERT_EQUAL(res, -ETIMEDOUT);
+	CU_ASSERT_EQUAL(data.n, 1);
+	res = pomp_loop_wait_and_process(data.loop, 0);
+	CU_ASSERT_EQUAL(res, -ETIMEDOUT);
+	CU_ASSERT_EQUAL(data.n, 1);
+
+	/* Check register function is called twice */
+	data.n = 0;
+	res = pomp_loop_idle_add(data.loop, &idle_cb, &data);
+	CU_ASSERT_EQUAL(res, 0);
+	res = pomp_loop_idle_add(data.loop, &idle_cb, &data);
+	CU_ASSERT_EQUAL(res, 0);
+	res = pomp_loop_wait_and_process(data.loop, 0);
+	CU_ASSERT_EQUAL(res, -ETIMEDOUT);
+	CU_ASSERT_EQUAL(data.n, 2);
+
+	/* Check register function is not called */
+	data.n = 0;
+	res = pomp_loop_idle_add(data.loop, &idle_cb, &data);
+	CU_ASSERT_EQUAL(res, 0);
+	res = pomp_loop_idle_remove(data.loop, &idle_cb, &data);
+	CU_ASSERT_EQUAL(res, 0);
+	res = pomp_loop_wait_and_process(data.loop, 0);
+	CU_ASSERT_EQUAL(res, -ETIMEDOUT);
+	CU_ASSERT_EQUAL(data.n, 0);
+
+	res = pomp_loop_idle_add(NULL, &idle_cb, &data);
+	CU_ASSERT_EQUAL(res, -EINVAL);
+	res = pomp_loop_idle_add(data.loop, NULL, &data);
+	CU_ASSERT_EQUAL(res, -EINVAL);
+	res = pomp_loop_idle_remove(NULL, &idle_cb, &data);
+	CU_ASSERT_EQUAL(res, -EINVAL);
+
+	/* Destroy loop */
+	res = pomp_loop_destroy(data.loop);
+	CU_ASSERT_EQUAL(res, 0);
+}
+
+/** */
 #ifdef POMP_HAVE_LOOP_EPOLL
 static void test_loop_epoll(void)
 {
@@ -442,6 +512,7 @@ static void test_loop_epoll(void)
 	loop_ops = pomp_loop_set_ops(&pomp_loop_epoll_ops);
 	test_loop(1);
 	test_loop_wakeup();
+	test_loop_idle();
 	pomp_loop_set_ops(loop_ops);
 }
 #endif /* POMP_HAVE_LOOP_EPOLL */
@@ -454,6 +525,7 @@ static void test_loop_poll(void)
 	loop_ops = pomp_loop_set_ops(&pomp_loop_poll_ops);
 	test_loop(0);
 	test_loop_wakeup();
+	test_loop_idle();
 	pomp_loop_set_ops(loop_ops);
 }
 #endif /* POMP_HAVE_LOOP_POLL */
@@ -466,6 +538,7 @@ static void test_loop_win32(void)
 	loop_ops = pomp_loop_set_ops(&pomp_loop_win32_ops);
 	test_loop();
 	test_loop_wakeup();
+	test_loop_idle();
 	pomp_loop_set_ops(loop_ops);
 }
 #endif /* POMP_HAVE_LOOP_WIN32 */

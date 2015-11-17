@@ -35,6 +35,13 @@
 #ifndef _POMP_LOOP_H_
 #define _POMP_LOOP_H_
 
+/** Idle entry */
+struct pomp_idle_entry {
+	pomp_idle_cb_t		cb;		/**< Registered callback */
+	void			*userdata;	/**< Callback user data */
+	int			removed;	/**< Entry has been removed */
+};
+
 /** Fd structure */
 struct pomp_fd {
 	int			fd;		/**< Associated fd */
@@ -52,6 +59,10 @@ struct pomp_fd {
 struct pomp_loop {
 	struct pomp_fd		*pfds;		/**< List of registered fds */
 	uint32_t		pfdcount;	/**< Number of registered fds */
+
+	struct pomp_idle_entry	*idle_entries;	/**< Idle entries */
+	uint32_t		idle_count;	/**< Number of idle entries */
+	int			idle_pending;	/**< Idle calls in progress */
 
 #ifdef POMP_HAVE_LOOP_POLL
 	struct pollfd		*pollfds;	/**< Array of pollfd */
