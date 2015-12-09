@@ -62,6 +62,17 @@ struct tcp_keepalive {
 };
 #endif /* !SIO_KEEPALIVE_VALS */
 
+#undef EWOULDBLOCK
+#undef EADDRNOTAVAIL
+#undef ENETDOWN
+#undef ENETUNREACH
+#undef ENOTCONN
+#undef ETIMEDOUT
+#undef ECONNREFUSED
+#undef EHOSTDOWN
+#undef EHOSTUNREACH
+#undef EINPROGRESS
+
 #define EWOULDBLOCK	WSAEWOULDBLOCK
 #define EADDRNOTAVAIL	WSAEADDRNOTAVAIL
 #define ENETDOWN	WSAENETDOWN
@@ -85,6 +96,22 @@ struct tcp_keepalive {
 #define F_SETFD		2		/**< Set file descriptor flags */
 #define F_GETFL		3		/**< Get file status flags */
 #define F_SETFL		4		/**< Set file status flags */
+
+#ifndef PRIi64
+#  define PRIi64 "lli"
+#endif /* !PRIi64 */
+#ifndef PRIu64
+#  define PRIu64 "llu"
+#endif /* !PRIu64 */
+
+/* Signed size_t type */
+#ifdef _MSC_VER
+#  ifdef _WIN64
+typedef signed __int64  ssize_t;
+#  else /* !_WIN64 */
+typedef _W64 signed int ssize_t;
+#  endif /* !_WIN64 */
+#endif /* _MSC_VER */
 
 typedef int		socklen_t;
 

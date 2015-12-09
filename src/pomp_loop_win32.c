@@ -112,12 +112,12 @@ static DWORD CALLBACK pomp_loop_win32_waiter_thread(void *userdata)
 static int pomp_loop_win32_do_new(struct pomp_loop *loop)
 {
 	int res = 0;
+	WSADATA wsadata;
 
 	/* Initialize implementation specific fields */
 	loop->wakeup.hevt = NULL;
 
 	/* Initialize winsock API */
-	WSADATA wsadata;
 	if (WSAStartup(MAKEWORD(2, 0), &wsadata) != 0) {
 		POMP_LOGE("WSAStartup error");
 		return -ENOMEM;
@@ -312,7 +312,7 @@ static int pomp_loop_win32_do_wait_and_process(struct pomp_loop *loop,
 
 	/* Make sure wait result is expected */
 	if ((int)waitres < WAIT_OBJECT_0 || waitres >= WAIT_OBJECT_0 + count) {
-		POMP_LOGW("Unexpected wait result : %u", waitres);
+		POMP_LOGW("Unexpected wait result : %u", (uint32_t)waitres);
 		goto out;
 	}
 	hevt = hevts[waitres - WAIT_OBJECT_0];

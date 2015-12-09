@@ -45,14 +45,22 @@ extern "C" {
 
 /** Wrapper for gcc printf attribute */
 #ifndef POMP_ATTRIBUTE_FORMAT_PRINTF
-#define POMP_ATTRIBUTE_FORMAT_PRINTF(_x, _y) \
-	__attribute__((__format__(__printf__, _x, _y)))
+#  ifndef _MSC_VER
+#    define POMP_ATTRIBUTE_FORMAT_PRINTF(_x, _y) \
+			__attribute__((__format__(__printf__, _x, _y)))
+#  else /* _MSC_VER */
+#    define POMP_ATTRIBUTE_FORMAT_PRINTF(_x, _y)
+#  endif /* _MSC_VER */
 #endif /* !POMP_ATTRIBUTE_FORMAT_PRINTF */
 
 /** Wrapper for gcc scanf attribute */
 #ifndef POMP_ATTRIBUTE_FORMAT_SCANF
-#define POMP_ATTRIBUTE_FORMAT_SCANF(_x, _y) \
-	__attribute__((__format__(__scanf__, _x, _y)))
+#  ifndef _MSC_VER
+#    define POMP_ATTRIBUTE_FORMAT_SCANF(_x, _y) \
+			__attribute__((__format__(__scanf__, _x, _y)))
+#  else /* _MSC_VER */
+#    define POMP_ATTRIBUTE_FORMAT_SCANF(_x, _y)
+#  endif /* _MSC_VER */
 #endif /* !POMP_ATTRIBUTE_FORMAT_SCANF */
 
 /** To be used for all public API */

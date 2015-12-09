@@ -42,11 +42,16 @@
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
-#include <unistd.h>
 #include <fcntl.h>
 #include <time.h>
 #include <signal.h>
 #include <inttypes.h>
+
+#ifndef _MSC_VER
+#  include <unistd.h>
+#else /* !_MSC_VER */
+#  include <io.h>
+#endif /* !_MSC_VER */
 
 /* Detect available system headers */
 #include "pomp_config.h"
