@@ -119,9 +119,9 @@ static int pomp_loop_do_remove(struct pomp_loop *loop, struct pomp_fd *pfd)
 /**
  * Implementation specific 'get_fd' operation.
  * @param loop : loop.
- * @return 0 in case of success, negative errno value in case of error.
+ * @return fd/event in case of success, negative errno value in case of error.
  */
-static int pomp_loop_do_get_fd(struct pomp_loop *loop)
+static intptr_t pomp_loop_do_get_fd(struct pomp_loop *loop)
 {
 	return (*s_pomp_loop_ops->do_get_fd)(loop);
 }
@@ -407,11 +407,19 @@ int pomp_loop_has_fd(struct pomp_loop *loop, int fd)
 /*
  * See documentation in public header.
  */
-int pomp_loop_get_fd(struct pomp_loop *loop)
+intptr_t pomp_loop_get_fd(struct pomp_loop *loop)
 {
 	/* Implementation specific */
 	POMP_RETURN_ERR_IF_FAILED(loop != NULL, -EINVAL);
 	return pomp_loop_do_get_fd(loop);
+}
+
+/*
+ * See documentation in public header.
+ */
+int pomp_loop_process_fd(struct pomp_loop *loop)
+{
+	return pomp_loop_wait_and_process(loop, 0);
 }
 
 /*

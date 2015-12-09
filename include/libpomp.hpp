@@ -316,9 +316,14 @@ public:
 		return pomp_loop_has_fd(mLoop, fd) != 0;
 	}
 
-	/** Get the epoll fd of the loop. */
-	inline int getFd() {
+	/** Get the fd/event of the loop. */
+	inline intptr_t getFd() {
 		return pomp_loop_get_fd(mLoop);
+	}
+
+	/** Function to be called when the loop is marked as ready. */
+	inline int processFd() {
+		return pomp_loop_process_fd(mLoop);
 	}
 
 	/** Wait for events to occur in loop and process them. */
@@ -532,12 +537,12 @@ public:
 		return pomp_ctx_stop(mCtx);
 	}
 
-	/** Get the epoll fd of the context. */
-	inline int getFd() {
+	/** Get the fd/event of the loop associated with the context. */
+	inline intptr_t getFd() {
 		return pomp_ctx_get_fd(mCtx);
 	}
 
-	/** Function to be called when the fd of the context is marked as readable. */
+	/** Function to be called when the loop of the context is marked as ready. */
 	inline int processFd() {
 		return pomp_ctx_process_fd(mCtx);
 	}

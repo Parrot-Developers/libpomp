@@ -37,6 +37,18 @@
 #ifdef POMP_HAVE_TIMER_WIN32
 
 /**
+ * Native timer callback.
+ * @param userdata : timer object.
+ * @param fired : always TRUE for timer callbacks.
+ */
+static void CALLBACK pomp_timer_win32_native_cb(void *userdata, BOOLEAN fired)
+{
+	struct pomp_timer *timer = userdata;
+	/* Set event handle to wake up loop */
+	SetEvent(timer->hevt);
+}
+
+/**
  * Function called when the notification event is ready for events.
  * @param fd : triggered fd.
  * @param revents : event that occurred.
@@ -45,7 +57,8 @@
 static void pomp_timer_win32_cb(int fd, uint32_t revents, void *userdata)
 {
 	struct pomp_timer *timer = userdata;
-	/* Notify callback */
+	/* Reset event and notify callback */
+	ResetEvent(timer->hevt);
 	(*timer->cb)(timer, timer->userdata);
 }
 
@@ -59,16 +72,21 @@ static int pomp_timer_win32_destroy(struct pomp_timer *timer)
 
 	/* Free resources */
 	if (timer->htimer != NULL) {
+		/* Wait for cancellation */
+		DeleteTimerQueueTimer(NULL, timer->htimer,
+				INVALID_HANDLE_VALUE);
+	}
+	if (timer->hevt != NULL) {
 		pfd = pomp_loop_win32_find_pfd_by_hevt(
-				timer->loop, timer->htimer);
+				timer->loop, timer->hevt);
 		if (pfd == NULL) {
-			POMP_LOGW("htimer %p not found in loop %p",
-					timer->htimer, timer->loop);
+			POMP_LOGW("hevt %p not found in loop %p",
+					timer->hevt, timer->loop);
 		} else {
 			pomp_loop_remove_pfd(timer->loop, pfd);
 			free(pfd);
 		}
-		CloseHandle(timer->htimer);
+		CloseHandle(timer->hevt);
 	}
 	free(timer);
 	return 0;
@@ -93,15 +111,13 @@ static struct pomp_timer *pomp_timer_win32_new(struct pomp_loop *loop,
 	timer->cb = cb;
 	timer->userdata = userdata;
 
-	/* Create waitable timer */
-	timer->htimer = CreateWaitableTimer(NULL, 0, NULL);
-	if (timer->htimer == NULL) {
-		POMP_LOG_ERRNO("CreateWaitableTimer");
+	/* Create event for notification */
+	timer->hevt = CreateEvent(NULL, TRUE, FALSE, NULL);
+	if (timer->hevt == NULL)
 		goto error;
-	}
 
 	/* Add it in loop */
-	pfd = pomp_loop_win32_add_pfd_with_hevt(timer->loop, timer->htimer,
+	pfd = pomp_loop_win32_add_pfd_with_hevt(timer->loop, timer->hevt,
 			&pomp_timer_win32_cb, timer);
 	if (pfd == NULL)
 		goto error;
@@ -123,20 +139,24 @@ static int pomp_timer_win32_set(struct pomp_timer *timer, uint32_t delay,
 		uint32_t period)
 {
 	int res = 0;
-	LARGE_INTEGER tval;
 	POMP_RETURN_ERR_IF_FAILED(timer != NULL, -EINVAL);
-	POMP_RETURN_ERR_IF_FAILED(timer->htimer != NULL, -EINVAL);
 
-	/* Convert ms to 100th of ns */
-	tval.QuadPart = - (LONGLONG)delay * 1000 * 10;
-	if (!SetWaitableTimer(timer->htimer, &tval, (LONG)period,
-			NULL, NULL, 0)) {
-		res = -errno;
-		POMP_LOG_ERRNO("SetWaitableTimer");
-		return res;
+	/* Delete current one if needed */
+	if (timer->htimer != NULL) {
+		/* Wait for cancellation */
+		DeleteTimerQueueTimer(NULL, timer->htimer,
+				INVALID_HANDLE_VALUE);
+		timer->htimer = NULL;
 	}
 
-	return 0;
+	/* Create timer if needed */
+	if (delay != 0 && !CreateTimerQueueTimer(&timer->htimer, NULL,
+			&pomp_timer_win32_native_cb, timer, delay, period, 0)) {
+		res = -ENOMEM;
+		POMP_LOG_ERRNO("CreateTimerQueueTimer");
+	}
+
+	return res;
 }
 
 /**
@@ -144,18 +164,7 @@ static int pomp_timer_win32_set(struct pomp_timer *timer, uint32_t delay,
  */
 static int pomp_timer_win32_clear(struct pomp_timer *timer)
 {
-	int res = 0;
-	POMP_RETURN_ERR_IF_FAILED(timer != NULL, -EINVAL);
-	POMP_RETURN_ERR_IF_FAILED(timer->htimer != NULL, -EINVAL);
-
-	/* Cancel timer */
-	if (!CancelWaitableTimer(timer->htimer)) {
-		res = -errno;
-		POMP_LOG_ERRNO("CancelWaitableTimer");
-		return res;
-	}
-
-	return 0;
+	return pomp_timer_win32_set(timer, 0, 0);
 }
 
 /** Timer operations for 'win32' implementation */

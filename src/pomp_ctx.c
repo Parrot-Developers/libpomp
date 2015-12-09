@@ -951,7 +951,7 @@ int pomp_ctx_stop(struct pomp_ctx *ctx)
 /*
  * See documentation in public header.
  */
-int pomp_ctx_get_fd(const struct pomp_ctx *ctx)
+intptr_t pomp_ctx_get_fd(const struct pomp_ctx *ctx)
 {
 	POMP_RETURN_ERR_IF_FAILED(ctx != NULL, -EINVAL);
 	return pomp_loop_get_fd(ctx->loop);

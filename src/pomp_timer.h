@@ -57,6 +57,7 @@ struct pomp_timer {
 
 #ifdef POMP_HAVE_TIMER_WIN32
 	HANDLE			htimer;		/**< Timer handle */
+	HANDLE			hevt;		/**< Notification event */
 #endif /* POMP_HAVE_TIMER_WIN32 */
 };
 

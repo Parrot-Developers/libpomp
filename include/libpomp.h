@@ -246,18 +246,22 @@ POMP_API int pomp_ctx_stop(struct pomp_ctx *ctx);
 POMP_API struct pomp_loop *pomp_ctx_get_loop(struct pomp_ctx *ctx);
 
 /**
- * Get the epoll fd of the context.
- * This fd shall be put in the user main loop (select, poll, epoll, glib...)
- * and monitored for input events. When it becomes readable, the function
- * pomp_ctx_process_fd shall be called to dispatch internal events.
+ * Get the fd/event of the loop associated with the context.
+ *
+ * This fd/event shall be put in the user main loop (select, poll, epoll, glib,
+ * win32...) and monitored for input events. When it becomes readable, the
+ * function pomp_ctx_process_fd shall be called to dispatch internal events.
+ *
  * @param ctx : context.
- * @return epoll fd of the context, -ENOSYS if epoll is not supported,
- * negative errno value in case of error.
+ * @return file descriptor (or event handle for win32), negative errno value
+ * in case of error.
+ *
+ * @remarks see pomp_loop_getfd for more information.
  */
-POMP_API int pomp_ctx_get_fd(const struct pomp_ctx *ctx);
+POMP_API intptr_t pomp_ctx_get_fd(const struct pomp_ctx *ctx);
 
 /**
- * Function to be called when the epoll fd of the context is marked as readable.
+ * Function to be called when the loop of the context is signaled.
  * @param ctx : context.
  * @return 0 in case of success, negative errno value in case of error.
  * @remarks this is equivalent to calling pomp_ctx_wait_and_process with a
@@ -750,11 +754,32 @@ POMP_API int pomp_loop_remove(struct pomp_loop *loop, int fd);
 POMP_API int pomp_loop_has_fd(struct pomp_loop *loop, int fd);
 
 /**
- * Get the fd associated with the loop (only for epoll implementation).
+ * Get a file descriptor (or event handle for win32) that can be monitored for
+ * reading (or waited for) when there is some activity in the loop.
+ *
+ * This fd/event shall be put in the user main loop (select, poll, epoll, glib,
+ * win32...) and monitored for input events. When it becomes readable, the
+ * function pomp_loop_wait_and_process shall be called to dispatch internal
+ * events.
+ *
  * @param loop : loop.
- * @return main fd of the loop, negative errno value in case of error.
+ * @return file descriptor (or event handle for win32), negative errno value
+ * in case of error.
+ *
+ * @remarks for poll/win32 implementation this will create an internal worker
+ * thread that will monitor all registered fd/handles and signal the single
+ * fd/event returned by this function.
  */
-POMP_API int pomp_loop_get_fd(struct pomp_loop *loop);
+POMP_API intptr_t pomp_loop_get_fd(struct pomp_loop *loop);
+
+/**
+ * Function to be called when the loop is signaled for readiness.
+ * @param loop : loop.
+ * @return 0 in case of success, negative errno value in case of error.
+ * @remarks this is equivalent to calling pomp_loop_wait_and_process with a
+ * timeout of 0 (no wait).
+ */
+POMP_API int pomp_loop_process_fd(struct pomp_loop *loop);
 
 /**
  * Wait for events to occur in loop and process them.

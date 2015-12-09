@@ -73,6 +73,40 @@ static long fd_events_to_wsa(uint32_t events)
 }
 
 /**
+ */
+static DWORD CALLBACK pomp_loop_win32_waiter_thread(void *userdata)
+{
+	struct pomp_loop *loop = userdata;
+	struct pomp_fd *pfd = NULL;
+	DWORD count = 0;
+	HANDLE hevts[MAXIMUM_WAIT_OBJECTS];
+
+	/* Wakeup event is always monitored*/
+	hevts[0] = loop->wakeup.hevt;
+
+	while (!loop->waiter.stopped) {
+		/* Registered events */
+		count = 1;
+		EnterCriticalSection(&loop->waiter.lock);
+		for (pfd = loop->pfds; pfd != NULL; pfd = pfd->next) {
+			if (count < MAXIMUM_WAIT_OBJECTS)
+				hevts[count++] = pfd->hevt;
+		}
+		ResetEvent(loop->waiter.hevtready);
+		ResetEvent(loop->waiter.hevtdone);
+		LeaveCriticalSection(&loop->waiter.lock);
+
+		/* Do the wait and signal ready and wait until process done */
+		WaitForMultipleObjects(count, hevts, 0, INFINITE);
+		ResetEvent(loop->wakeup.hevt);
+		SignalObjectAndWait(loop->waiter.hevtready,
+				loop->waiter.hevtdone, INFINITE, FALSE);
+	}
+
+	return 0;
+}
+
+/**
  * @see pomp_loop_do_new.
  */
 static int pomp_loop_win32_do_new(struct pomp_loop *loop)
@@ -110,6 +144,21 @@ error:
  */
 static int pomp_loop_win32_do_destroy(struct pomp_loop *loop)
 {
+	/* Free witer thread */
+	if (loop->waiter.thread != NULL) {
+		EnterCriticalSection(&loop->waiter.lock);
+		loop->waiter.stopped = TRUE;
+		SetEvent(loop->waiter.hevtdone);
+		if (loop->wakeup.hevt != NULL)
+			SetEvent(loop->wakeup.hevt);
+		LeaveCriticalSection(&loop->waiter.lock);
+
+		WaitForSingleObject(loop->waiter.thread, INFINITE);
+		CloseHandle(loop->waiter.thread);
+		CloseHandle(loop->waiter.hevtdone);
+		CloseHandle(loop->waiter.hevtready);
+	}
+
 	/* Free event for wakup */
 	if (loop->wakeup.hevt != NULL) {
 		CloseHandle(loop->wakeup.hevt);
@@ -129,7 +178,7 @@ static int pomp_loop_win32_do_add(struct pomp_loop *loop, struct pomp_fd *pfd)
 	int res = 0;
 
 	/* Create event handle for notification */
-	pfd->hevt = CreateEvent(NULL, 0, 0, NULL);
+	pfd->hevt = CreateEvent(NULL, TRUE, 0, NULL);
 	if (pfd->hevt == NULL) {
 		res = -errno;
 		POMP_LOG_ERRNO("CreateEvent");
@@ -143,6 +192,9 @@ static int pomp_loop_win32_do_add(struct pomp_loop *loop, struct pomp_fd *pfd)
 		POMP_LOG_ERRNO("WSAEventSelect");
 		goto error;
 	}
+
+	if (loop->waiter.thread != NULL)
+		SetEvent(loop->wakeup.hevt);
 
 	return 0;
 
@@ -170,6 +222,9 @@ static int pomp_loop_win32_do_update(struct pomp_loop *loop,
 		POMP_LOG_ERRNO("WSAEventSelect");
 	}
 
+	if (loop->waiter.thread != NULL)
+		SetEvent(loop->wakeup.hevt);
+
 	return res;
 }
 
@@ -183,6 +238,9 @@ static int pomp_loop_win32_do_remove(struct pomp_loop *loop,
 	if (WSAEventSelect(pfd->fd, pfd->hevt, 0) != 0)
 		POMP_LOG_ERRNO("WSAEventSelect");
 
+	if (loop->waiter.thread != NULL)
+		SetEvent(loop->wakeup.hevt);
+
 	/* Free handle for notification */
 	CloseHandle(pfd->hevt);
 	pfd->hevt = NULL;
@@ -192,9 +250,19 @@ static int pomp_loop_win32_do_remove(struct pomp_loop *loop,
 /**
  * @see pomp_loop_do_get_fd.
  */
-static int pomp_loop_win32_do_get_fd(struct pomp_loop *loop)
+static intptr_t pomp_loop_win32_do_get_fd(struct pomp_loop *loop)
 {
-	return -ENOSYS;
+	DWORD threadid = 0;
+	if (loop->waiter.hevtready != NULL)
+		return (intptr_t)loop->waiter.hevtready;
+
+	InitializeCriticalSection(&loop->waiter.lock);
+	loop->waiter.hevtready = CreateEvent(NULL, TRUE, FALSE, NULL);
+	loop->waiter.hevtdone = CreateEvent(NULL, TRUE, FALSE, NULL);
+	loop->waiter.thread =  CreateThread(NULL, 0,
+			&pomp_loop_win32_waiter_thread, loop, 0, &threadid);
+
+	return (intptr_t)loop->waiter.hevtready;
 }
 
 /**
@@ -203,6 +271,7 @@ static int pomp_loop_win32_do_get_fd(struct pomp_loop *loop)
 static int pomp_loop_win32_do_wait_and_process(struct pomp_loop *loop,
 		int timeout)
 {
+	int res = 0;
 	struct pomp_fd *pfd = NULL;
 	uint32_t revents = 0;
 	DWORD count = 0, waitres = 0;
@@ -210,34 +279,48 @@ static int pomp_loop_win32_do_wait_and_process(struct pomp_loop *loop,
 	HANDLE hevts[MAXIMUM_WAIT_OBJECTS];
 	WSANETWORKEVENTS events;
 
-	/* Wakeup event */
-	hevts[count++] = loop->wakeup.hevt;
+	/* When a dedicated waiter thread is running, this function shall
+	 * always be called with a null timeout (non-blocking) call */
+	if (loop->waiter.thread != NULL && timeout != 0)
+		return -EINVAL;
+
+	if (loop->waiter.thread != NULL)
+		EnterCriticalSection(&loop->waiter.lock);
+
+	/* Wakeup event (only if no dedicated waiter thread) */
+	if (loop->waiter.thread == NULL)
+		hevts[count++] = loop->wakeup.hevt;
 
 	/* Registered events */
 	for (pfd = loop->pfds; pfd != NULL; pfd = pfd->next) {
-		if (count < MAXIMUM_WAIT_OBJECTS) {
+		if (count < MAXIMUM_WAIT_OBJECTS)
 			hevts[count++] = pfd->hevt;
-		}
+	}
+
+	if (count == 0) {
+		res = -ETIMEDOUT;
+		goto out;
 	}
 
 	/* Do the wait */
 	waitres = WaitForMultipleObjects(count, hevts, 0,
 			timeout == -1 ? INFINITE : (DWORD)timeout);
-
-	if (waitres == WAIT_TIMEOUT)
-		return -ETIMEDOUT;
+	if (waitres == WAIT_TIMEOUT) {
+		res = -ETIMEDOUT;
+		goto out;
+	}
 
 	/* Make sure wait result is expected */
 	if ((int)waitres < WAIT_OBJECT_0 || waitres >= WAIT_OBJECT_0 + count) {
 		POMP_LOGW("Unexpected wait result : %u", waitres);
-		return 0;
+		goto out;
 	}
 	hevt = hevts[waitres - WAIT_OBJECT_0];
 
 	/* Check for the wakeup event */
 	if (hevt == loop->wakeup.hevt) {
 		ResetEvent(loop->wakeup.hevt);
-		return 0;
+		goto out;
 	}
 
 	/* Search fd structure whose notification event is ready */
@@ -255,7 +338,14 @@ static int pomp_loop_win32_do_wait_and_process(struct pomp_loop *loop,
 		(*pfd->cb)(pfd->fd, POMP_FD_EVENT_IN, pfd->userdata);
 	}
 
-	return 0;
+out:
+	/* Notify waiter thread */
+	if (loop->waiter.thread != NULL) {
+		ResetEvent(loop->waiter.hevtready);
+		SetEvent(loop->waiter.hevtdone);
+		LeaveCriticalSection(&loop->waiter.lock);
+	}
+	return res;
 }
 
 /**
@@ -268,7 +358,7 @@ static int pomp_loop_win32_do_wakeup(struct pomp_loop *loop)
 	/* Set notification event */
 	if (!SetEvent(loop->wakeup.hevt)) {
 		res = -errno;
-		POMP_LOG_ERRNO("CreateEvent");
+		POMP_LOG_ERRNO("SetEvent");
 	}
 
 	return res;
@@ -311,6 +401,10 @@ struct pomp_fd *pomp_loop_win32_add_pfd_with_hevt(struct pomp_loop *loop,
 
 	/* Save event for notification */
 	pfd->hevt = hevt;
+
+	if (loop->waiter.thread != NULL)
+		SetEvent(loop->wakeup.hevt);
+
 	return pfd;
 }
 

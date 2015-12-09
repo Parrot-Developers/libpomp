@@ -170,7 +170,7 @@ static int pomp_loop_poll_do_remove(struct pomp_loop *loop, struct pomp_fd *pfd)
 /**
  * @see pomp_loop_do_get_fd.
  */
-static int pomp_loop_poll_do_get_fd(struct pomp_loop *loop)
+static intptr_t pomp_loop_poll_do_get_fd(struct pomp_loop *loop)
 {
 	return -ENOSYS;
 }

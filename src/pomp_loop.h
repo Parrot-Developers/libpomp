@@ -87,6 +87,17 @@ struct pomp_loop {
 		HANDLE		hevt;		/**< Event handle */
 #endif /* POMP_HAVE_LOOP_WIN32 */
 	} wakeup;
+
+	/** Waiter thread */
+	struct {
+#ifdef POMP_HAVE_LOOP_WIN32
+		BOOL		stopped;	/**< Stopped flag */
+		HANDLE		thread;		/**< Thread handle */
+		HANDLE		hevtready;	/**< Global ready event */
+		HANDLE		hevtdone;	/**< Process done event */
+		CRITICAL_SECTION	lock;	/**< Lock */
+#endif /* POMP_HAVE_LOOP_WIN32 */
+	} waiter;
 };
 
 /** Loop operations */
@@ -107,7 +118,7 @@ struct pomp_loop_ops {
 	int (*do_remove)(struct pomp_loop *loop, struct pomp_fd *pfd);
 
 	/** Implementation specific 'get_fd' operation. */
-	int (*do_get_fd)(struct pomp_loop *loop);
+	intptr_t (*do_get_fd)(struct pomp_loop *loop);
 
 	/** Implementation specific 'wait_and_process' operation. */
 	int (*do_wait_and_process)(struct pomp_loop *loop, int timeout);
