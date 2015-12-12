@@ -64,15 +64,15 @@ extern "C" {
 #endif /* !POMP_ATTRIBUTE_FORMAT_SCANF */
 
 /** To be used for all public API */
-#ifdef _WIN32
-#  ifdef POMP_API_EXPORTS
+#ifdef POMP_API_EXPORTS
+#  ifdef _WIN32
 #    define POMP_API	__declspec(dllexport)
-#  else /* !POMP_API_EXPORTS */
-#    define POMP_API	__declspec(dllimport)
-#  endif /* !POMP_API_EXPORTS */
-#else /* !_WIN32 */
-#  define POMP_API	__attribute__((visibility("default")))
-#endif /* !_WIN32 */
+#  else /* !_WIN32 */
+#    define POMP_API	__attribute__((visibility("default")))
+#  endif /* !_WIN32 */
+#else /* !POMP_API_EXPORTS */
+#  define POMP_API
+#endif /* !POMP_API_EXPORTS */
 
 /* Forward declarations */
 struct sockaddr;
