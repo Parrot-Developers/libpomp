@@ -247,6 +247,7 @@ void pomp_buffer_ref(struct pomp_buffer *buf)
 #if defined(__GNUC__)
 	__sync_add_and_fetch(&buf->refcount, 1);
 #elif defined(_WIN32)
+	/* codecheck_ignore[SPACING,VOLATILE] */
 	InterlockedIncrement((long volatile *)&buf->refcount);
 #else
 #error No atomic increment function found on this platform
@@ -262,6 +263,7 @@ void pomp_buffer_unref(struct pomp_buffer *buf)
 #if defined(__GNUC__)
 	res = __sync_sub_and_fetch(&buf->refcount, 1);
 #elif defined(_WIN32)
+	/* codecheck_ignore[SPACING,VOLATILE] */
 	res = (uint32_t)InterlockedDecrement((long volatile *)&buf->refcount);
 #else
 #error No atomic decrement function found on this platform

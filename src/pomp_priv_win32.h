@@ -107,12 +107,15 @@ struct tcp_keepalive {
 /* Signed size_t type */
 #ifdef _MSC_VER
 #  ifdef _WIN64
+/* codecheck_ignore[NEW_TYPEDEFS] */
 typedef signed __int64  ssize_t;
 #  else /* !_WIN64 */
+/* codecheck_ignore[NEW_TYPEDEFS] */
 typedef _W64 signed int ssize_t;
 #  endif /* !_WIN64 */
 #endif /* _MSC_VER */
 
+/* codecheck_ignore[NEW_TYPEDEFS] */
 typedef int		socklen_t;
 
 struct sockaddr_un {

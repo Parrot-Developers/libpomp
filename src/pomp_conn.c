@@ -442,7 +442,7 @@ static void pomp_conn_process_read_buf(struct pomp_conn *conn)
 	}
 
 	/* Get data from buffer */
-	data =conn->readbuf->data;
+	data = conn->readbuf->data;
 	len = conn->readbuf->len;
 
 	/* Decoding loop */

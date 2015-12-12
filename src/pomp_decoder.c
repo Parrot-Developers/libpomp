@@ -387,6 +387,7 @@ again:
 				res = -EINVAL;
 				goto error;
 			} else {
+				/* codecheck_ignore[LONG_LINE] */
 				res = pomp_decoder_read_cbuf(dec, &v.cbuf, &len);
 				if (res < 0)
 					goto error;

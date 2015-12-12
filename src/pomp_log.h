@@ -138,6 +138,7 @@ extern "C" {
 		if (!(_cond)) { \
 			POMP_LOGE("%s:%d err=%d(%s)", __func__, __LINE__, \
 					(_err), strerror(-(_err))); \
+			/* codecheck_ignore[RETURN_PARENTHESES] */ \
 			return (_err); \
 		} \
 	} while (0)
@@ -148,6 +149,7 @@ extern "C" {
 		if (!(_cond)) { \
 			POMP_LOGE("%s:%d err=%d(%s)", __func__, __LINE__, \
 					(_err), strerror(-(_err))); \
+			/* codecheck_ignore[RETURN_PARENTHESES] */ \
 			return (_val); \
 		} \
 	} while (0)
@@ -166,6 +168,7 @@ extern "C" {
 #define POMP_RETURN_ERR_IF_FAILED(_cond, _err) \
 	do { \
 		if (!(_cond)) { \
+			/* codecheck_ignore[RETURN_PARENTHESES] */ \
 			return (_err); \
 		} \
 	} while (0)
@@ -174,6 +177,7 @@ extern "C" {
 #define POMP_RETURN_VAL_IF_FAILED(_cond, _err, _val) \
 	do { \
 		if (!(_cond)) { \
+			/* codecheck_ignore[RETURN_PARENTHESES] */ \
 			return (_val); \
 		} \
 	} while (0)

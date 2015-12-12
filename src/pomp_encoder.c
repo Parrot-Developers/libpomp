@@ -177,6 +177,7 @@ static int encoder_write_size_u32(struct pomp_encoder *enc, uint32_t n)
  * In case of error it will 'goto out'.
  * It uses several caller context variables
  */
+/* codecheck_ignore[COMPLEX_MACRO] */
 #define EXTRACT_ARG(_type, _casttype, _vatype, _convfct) \
 	if (argv == NULL) { \
 		v._type = (_casttype)(va_arg(args, _vatype)); \
@@ -274,13 +275,16 @@ again:
 		case 'i': /* NO BREAK */
 		case 'd':
 			if (flags & FLAG_LL) {
+				/* codecheck_ignore[LONG_LINE] */
 				EXTRACT_ARG(i64, int64_t, signed long long int, strtoll);
 				res = pomp_encoder_write_i64(enc, v.i64);
 			} else if (flags & FLAG_L) {
 #if defined(__WORDSIZE) && (__WORDSIZE == 64)
+				/* codecheck_ignore[LONG_LINE] */
 				EXTRACT_ARG(i64, int64_t, signed long int, strtol);
 				res = pomp_encoder_write_i64(enc, v.i64);
 #else
+				/* codecheck_ignore[LONG_LINE] */
 				EXTRACT_ARG(i32, int32_t, signed long int, strtol);
 				res = pomp_encoder_write_i32(enc, v.i32);
 #endif
@@ -299,13 +303,16 @@ again:
 		/* Unsigned integer */
 		case 'u':
 			if (flags & FLAG_LL) {
+				/* codecheck_ignore[LONG_LINE] */
 				EXTRACT_ARG(u64, uint64_t, unsigned long long int, strtoull);
 				res = pomp_encoder_write_u64(enc, v.u64);
 			} else if (flags & FLAG_L) {
 #if defined(__WORDSIZE) && (__WORDSIZE == 64)
+				/* codecheck_ignore[LONG_LINE] */
 				EXTRACT_ARG(u64, uint64_t, unsigned long int, strtoul);
 				res = pomp_encoder_write_u64(enc, v.u64);
 #else
+				/* codecheck_ignore[LONG_LINE] */
 				EXTRACT_ARG(u32, uint32_t, unsigned long int, strtoul);
 				res = pomp_encoder_write_u32(enc, v.u32);
 #endif
@@ -313,9 +320,11 @@ again:
 				EXTRACT_ARG(u8, uint8_t, unsigned int, strtoul);
 				res = pomp_encoder_write_u8(enc, v.u8);
 			} else if (flags & FLAG_H) {
+				/* codecheck_ignore[LONG_LINE] */
 				EXTRACT_ARG(u16, uint16_t, unsigned int, strtoul);
 				res = pomp_encoder_write_u16(enc, v.u16);
 			} else {
+				/* codecheck_ignore[LONG_LINE] */
 				EXTRACT_ARG(u32, uint32_t, unsigned int, strtoul);
 				res = pomp_encoder_write_u32(enc, v.u32);
 			}
