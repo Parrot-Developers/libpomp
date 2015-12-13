@@ -77,7 +77,7 @@ static int pomp_addr_parse_inet(const char *buf, struct sockaddr *addr,
 		res = -EINVAL;
 		goto out;
 	}
-	if (*addrlen < ai->ai_addrlen) {
+	if (*addrlen < (uint32_t)ai->ai_addrlen) {
 		res = -EINVAL;
 		goto out;
 	}
