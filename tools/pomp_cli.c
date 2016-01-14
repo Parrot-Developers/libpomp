@@ -71,7 +71,7 @@
 
 /* Win32 stubs */
 #ifdef _WIN32
-static inline const char *strsignal(int signum) {return "??";}
+static inline const char *strsignal(int signum) { return "??"; }
 #endif /* _WIN32 */
 
 /** */
@@ -280,7 +280,8 @@ static void sig_handler(int signum)
  */
 static void usage(const char *progname)
 {
-	fprintf(stderr, "usage: %s [<options>] <addr> [[<addrto>] <msgid> [<fmt> [<args>...]]]\n",
+	fprintf(stderr, "usage: %s [<options>] <addr> [[<addrto>] <msgid>"
+			" [<fmt> [<args>...]]]\n",
 			progname);
 	fprintf(stderr, "Send a pomp message on a socket or dump messages\n");
 	fprintf(stderr, "received on a socket\n");
@@ -400,8 +401,9 @@ int main(int argc, char *argv[])
 			memset(&addrto_storage, 0, sizeof(addrto_storage));
 			s_app.addrto = (struct sockaddr *)&addrto_storage;
 			s_app.addrtolen = sizeof(addrto_storage);
-			if (pomp_addr_parse(arg_addrto, s_app.addrto, &s_app.addrtolen) < 0) {
-				diag("Failed to parse address : %s", arg_addrto);
+			if (pomp_addr_parse(arg_addrto, s_app.addrto,
+					&s_app.addrtolen) < 0) {
+				diag("Failed to parse address: %s", arg_addrto);
 				goto error;
 			}
 		} else if (!s_app.dump) {

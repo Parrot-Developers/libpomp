@@ -68,11 +68,13 @@ extern "C" {
 
 /* Win32 stubs */
 #ifdef _WIN32
+/* codecheck_ignore[NEW_TYPEDEFS] */
 typedef unsigned int	uid_t;		/**< User identification */
+/* codecheck_ignore[NEW_TYPEDEFS] */
 typedef unsigned int	gid_t;		/**< Group identification */
-static inline uid_t getuid() {return 0;}
-static inline gid_t getgid() {return 0;}
-static inline const char *strsignal(int signum) {return "??";}
+static inline uid_t getuid() { return 0; }
+static inline gid_t getgid() { return 0; }
+static inline const char *strsignal(int signum) { return "??"; }
 #endif /* _WIN32 */
 
 #ifdef __cplusplus

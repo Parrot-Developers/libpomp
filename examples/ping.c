@@ -223,7 +223,7 @@ static void client_event_cb(struct pomp_ctx *ctx, enum pomp_event event,
  */
 static void client_timer(struct pomp_timer *timer, void *userdata)
 {
-	static int count = 0;
+	static int count;
 	/* Send a message, re-launch timer */
 	pomp_ctx_send(s_app.ctx, MSG_PING, "%u%s", ++count, "PING");
 	pomp_timer_set(s_app.timer, 2000);
