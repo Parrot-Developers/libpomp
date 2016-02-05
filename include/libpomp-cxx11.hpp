@@ -186,7 +186,7 @@ template<> struct traits<ArgBuf> {
 	typedef std::vector<uint8_t> type;
 	inline static int encode(struct pomp_encoder *enc, const type &v) {
 		const uint8_t *p = v.data();
-		uint32_t n = v.size();
+		uint32_t n = static_cast<uint32_t>(v.size());
 		return pomp_encoder_write_buf(enc, p, n);
 	}
 	inline static int decode(struct pomp_decoder *dec, type &v) {
