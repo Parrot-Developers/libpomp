@@ -16,6 +16,16 @@
 *.o
 *.d
 *.so
+src/*.lo
+src/libpomp.la
+tools/pomp-cli
+libpomp.pc
+src/.libs/
+src/.deps/
+tools/.libs/
+tools/.deps/
+examples/.deps/
+tests/.deps/
 
 # autotools generated struff
 build-aux/
@@ -23,6 +33,12 @@ m4/
 configure
 config.h.in
 aclocal.m4
+config.log
+config.h
+config.status
+Makefile
 Makefile.in
+libtool
+stamp-h1
 INSTALL
 
