@@ -12,7 +12,8 @@ if [ "$1" = "--clean" ]; then
 	exit 0
 fi
 
-autoreconf --force --install --verbose
+if [ ! -d m4 ] ; then mkdir m4 ; fi
+autoreconf --force --install --verbose || exit 1
 rm -rf autom4te.cache
 rm -f config.h.in~
 echo ""
