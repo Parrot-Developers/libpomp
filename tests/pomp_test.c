@@ -135,6 +135,8 @@ int main(int argc, char *argv[])
 	CU_pSuite suite = NULL;
 	int *fds1 = NULL;
 	int *fds2 = NULL;
+	const char *outname = NULL;
+	int automated = 0;
 
 #ifdef _WIN32
 	/* Initialize winsock API */
@@ -162,8 +164,16 @@ int main(int argc, char *argv[])
 		exit(0);
 	}
 
+	outname = getenv("CUNIT_OUT_NAME");
+	automated = getenv("CUNIT_AUTOMATED") != NULL;
+	if (outname != NULL)
+		CU_set_output_filename(outname);
+
 	CU_basic_set_mode(CU_BRM_VERBOSE);
-	if (argc == 1) {
+	if (automated) {
+		CU_automated_run_tests();
+		CU_list_tests_to_file();
+	} else if (argc == 1) {
 		CU_basic_run_tests();
 	} else {
 		for (i = 1; i < argc; i++) {
