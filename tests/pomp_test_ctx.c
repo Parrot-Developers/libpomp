@@ -762,7 +762,7 @@ static void test_invalid_addr(void)
 	res = pomp_ctx_connect(ctx, addr, addrlen);
 	CU_ASSERT_EQUAL(res, 0);
 	res = pomp_ctx_wait_and_process(ctx, 2500);
-	CU_ASSERT_EQUAL(res, 0);
+	CU_ASSERT(res == 0 || res == -ETIMEDOUT);
 	res = pomp_ctx_stop(ctx);
 	CU_ASSERT_EQUAL(res, 0);
 
