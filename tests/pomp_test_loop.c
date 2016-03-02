@@ -465,10 +465,10 @@ static void test_loop_idle(void)
 	data.n = 0;
 	res = pomp_loop_idle_add(data.loop, &idle_cb, &data);
 	CU_ASSERT_EQUAL(res, 0);
-	res = pomp_loop_wait_and_process(data.loop, 0);
+	res = pomp_loop_process_fd(data.loop);
 	CU_ASSERT_EQUAL(res, -ETIMEDOUT);
 	CU_ASSERT_EQUAL(data.n, 1);
-	res = pomp_loop_wait_and_process(data.loop, 0);
+	res = pomp_loop_process_fd(data.loop);
 	CU_ASSERT_EQUAL(res, -ETIMEDOUT);
 	CU_ASSERT_EQUAL(data.n, 1);
 
@@ -478,7 +478,7 @@ static void test_loop_idle(void)
 	CU_ASSERT_EQUAL(res, 0);
 	res = pomp_loop_idle_add(data.loop, &idle_cb, &data);
 	CU_ASSERT_EQUAL(res, 0);
-	res = pomp_loop_wait_and_process(data.loop, 0);
+	res = pomp_loop_process_fd(data.loop);
 	CU_ASSERT_EQUAL(res, -ETIMEDOUT);
 	CU_ASSERT_EQUAL(data.n, 2);
 

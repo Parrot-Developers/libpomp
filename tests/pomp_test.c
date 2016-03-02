@@ -79,7 +79,7 @@ static void check_fds(const int *fds1, const int *fds2)
 	const int *fds = NULL;
 	int found = 0;
 	char path[32] = "";
-	char *rpath = NULL;
+	char target[128] = "";
 
 	/* For each fd in fds2, make sure it was in fds1 */
 	while (*fds2 != -1) {
@@ -91,9 +91,9 @@ static void check_fds(const int *fds1, const int *fds2)
 
 		if (!found) {
 			snprintf(path, sizeof(path), "/proc/self/fd/%d", *fds2);
-			rpath = realpath(path, NULL);
-			fprintf(stderr, "Leaked fd %d (%s)\n", *fds2, rpath);
-			free(rpath);
+			target[0] = '\0';
+			readlink(path, target, sizeof(target));
+			fprintf(stderr, "Leaked fd %d (%s)\n", *fds2, target);
 		}
 
 		/* Check next fd */

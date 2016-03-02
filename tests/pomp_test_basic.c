@@ -203,7 +203,11 @@ static const char **get_refdata_argv(int *argc)
 static void test_buffer_base(void)
 {
 	int res = 0;
-	struct pomp_buffer *buf = NULL, *buf2 = NULL, *buf3 = NULL;
+	struct pomp_buffer *buf = NULL;
+	struct pomp_buffer *buf2 = NULL;
+	struct pomp_buffer *buf3 = NULL;
+	struct pomp_buffer *buf4 = NULL;
+	struct pomp_buffer *buf5 = NULL;
 	void *data = NULL;
 	const void *cdata = NULL;
 	size_t len = 0, capacity = 0;
@@ -253,6 +257,19 @@ static void test_buffer_base(void)
 	CU_ASSERT_PTR_NOT_NULL_FATAL(buf3);
 	CU_ASSERT_EQUAL(buf3->capacity, 100);
 	CU_ASSERT_EQUAL(buf3->len, 0);
+
+	/* Allocation with initial capacity, and data access */
+	buf4 = pomp_buffer_new_get_data(100, &data);
+	CU_ASSERT_PTR_NOT_NULL_FATAL(buf4);
+	CU_ASSERT_EQUAL(buf4->capacity, 100);
+	CU_ASSERT_EQUAL(buf4->len, 0);
+	CU_ASSERT_EQUAL(buf4->data, data);
+
+	/* Allocation with initial data */
+	buf5 = pomp_buffer_new_with_data("Hello", 5);
+	CU_ASSERT_PTR_NOT_NULL_FATAL(buf5);
+	CU_ASSERT_EQUAL(buf5->len, 5);
+	CU_ASSERT_EQUAL(memcmp(buf5->data, "Hello", 5), 0);
 
 	/* Length tests */
 	res = pomp_buffer_set_len(buf3, 10);
@@ -309,6 +326,8 @@ static void test_buffer_base(void)
 	pomp_buffer_unref(buf);
 	pomp_buffer_unref(buf2);
 	pomp_buffer_unref(buf3);
+	pomp_buffer_unref(buf4);
+	pomp_buffer_unref(buf5);
 }
 
 /** */

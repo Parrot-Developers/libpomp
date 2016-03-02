@@ -75,12 +75,15 @@ static void test_event_cb_t(struct pomp_ctx *ctx, enum pomp_event event,
 		addr = pomp_conn_get_peer_addr(conn, NULL);
 		CU_ASSERT_TRUE(addr == NULL);
 
-		/* Invalid get credentials (bad type or NULL param) */
 		if (!isunix) {
+			/* Invalid get credentials (bad type or NULL param) */
 			cred = pomp_conn_get_peer_cred(conn);
 			CU_ASSERT_TRUE(cred == NULL);
 			cred = pomp_conn_get_peer_cred(NULL);
 			CU_ASSERT_TRUE(cred == NULL);
+		} else {
+			cred = pomp_conn_get_peer_cred(conn);
+			CU_ASSERT_TRUE(cred != NULL);
 		}
 		break;
 
@@ -134,7 +137,7 @@ static void test_event_cb_t(struct pomp_ctx *ctx, enum pomp_event event,
 }
 
 /** */
-static void test_ctx_raw_cb_t(struct pomp_ctx *ctx,
+static void test_ctx_raw_cb(struct pomp_ctx *ctx,
 		struct pomp_conn *conn,
 		struct pomp_buffer *buf,
 		void *userdata)
@@ -161,6 +164,18 @@ static void test_ctx_raw_cb_t(struct pomp_ctx *ctx,
 	CU_ASSERT_EQUAL(res, -EINVAL);
 	res = pomp_ctx_notify_raw_buf(ctx, conn, NULL);
 	CU_ASSERT_EQUAL(res, -EINVAL);
+}
+
+/** */
+static void test_ctx_socket_cb(struct pomp_ctx *ctx,
+		int fd,
+		enum pomp_socket_kind kind,
+		void *userdata)
+{
+	const char *str = NULL;
+
+	str = pomp_socket_kind_str(kind);
+	CU_ASSERT_PTR_NOT_NULL(str);
 }
 
 #ifdef __linux__
@@ -284,7 +299,7 @@ static void run_ctx(struct pomp_ctx *ctx1, struct pomp_ctx *ctx2, int timeout)
 /** */
 static void test_ctx(const struct sockaddr *addr1, uint32_t addrlen1,
 		const struct sockaddr *addr2, uint32_t addrlen2,
-		int isdgram, int israw)
+		int isdgram, int israw, int withsockcb)
 {
 	int res = 0;
 	struct test_data data;
@@ -307,7 +322,11 @@ static void test_ctx(const struct sockaddr *addr1, uint32_t addrlen1,
 	ctx1 = pomp_ctx_new(&test_event_cb_t, &data);
 	CU_ASSERT_PTR_NOT_NULL_FATAL(ctx1);
 	if (israw) {
-		res = pomp_ctx_set_raw(ctx1, &test_ctx_raw_cb_t);
+		res = pomp_ctx_set_raw(ctx1, &test_ctx_raw_cb);
+		CU_ASSERT_EQUAL(res, 0);
+	}
+	if (withsockcb) {
+		res = pomp_ctx_set_socket_cb(ctx1, &test_ctx_socket_cb);
 		CU_ASSERT_EQUAL(res, 0);
 	}
 
@@ -323,7 +342,11 @@ static void test_ctx(const struct sockaddr *addr1, uint32_t addrlen1,
 	ctx2 = pomp_ctx_new(&test_event_cb_t, &data);
 	CU_ASSERT_PTR_NOT_NULL_FATAL(ctx2);
 	if (israw) {
-		res = pomp_ctx_set_raw(ctx2, &test_ctx_raw_cb_t);
+		res = pomp_ctx_set_raw(ctx2, &test_ctx_raw_cb);
+		CU_ASSERT_EQUAL(res, 0);
+	}
+	if (withsockcb) {
+		res = pomp_ctx_set_socket_cb(ctx2, &test_ctx_socket_cb);
 		CU_ASSERT_EQUAL(res, 0);
 	}
 
@@ -386,6 +409,22 @@ static void test_ctx(const struct sockaddr *addr1, uint32_t addrlen1,
 		res = pomp_ctx_bind(ctx2, addr2, addrlen2);
 		CU_ASSERT_EQUAL(res, -EBUSY);
 	}
+
+	/* Invalid set raw */
+	res = pomp_ctx_set_raw(NULL, &test_ctx_raw_cb);
+	CU_ASSERT_EQUAL(res, -EINVAL);
+	res = pomp_ctx_set_raw(ctx1, NULL);
+	CU_ASSERT_EQUAL(res, -EINVAL);
+	res = pomp_ctx_set_raw(ctx1, &test_ctx_raw_cb);
+	CU_ASSERT_EQUAL(res, -EBUSY);
+
+	/* Invalid set socket cb */
+	res = pomp_ctx_set_socket_cb(NULL, &test_ctx_socket_cb);
+	CU_ASSERT_EQUAL(res, -EINVAL);
+	res = pomp_ctx_set_socket_cb(ctx1, NULL);
+	CU_ASSERT_EQUAL(res, -EINVAL);
+	res = pomp_ctx_set_socket_cb(ctx1, &test_ctx_socket_cb);
+	CU_ASSERT_EQUAL(res, -EBUSY);
 
 	/* Invalid get loop (NULL param) */
 	loop = pomp_ctx_get_loop(NULL);
@@ -644,7 +683,7 @@ static void test_ctx(const struct sockaddr *addr1, uint32_t addrlen1,
 }
 
 /** */
-static void test_ctx_inet_tcp(int israw)
+static void test_ctx_inet_tcp(int israw, int withsockcb)
 {
 	struct sockaddr_in addr_in;
 
@@ -655,23 +694,25 @@ static void test_ctx_inet_tcp(int israw)
 
 	test_ctx((const struct sockaddr *)&addr_in, sizeof(addr_in),
 			(const struct sockaddr *)&addr_in, sizeof(addr_in),
-			0, israw);
+			0, israw, withsockcb);
 }
 
 /** */
 static void test_ctx_normal_inet_tcp()
 {
-	test_ctx_inet_tcp(0);
+	test_ctx_inet_tcp(0, 0);
+	test_ctx_inet_tcp(0, 1);
 }
 
 /** */
 static void test_ctx_raw_inet_tcp()
 {
-	test_ctx_inet_tcp(1);
+	test_ctx_inet_tcp(1, 0);
+	test_ctx_inet_tcp(1, 1);
 }
 
 /** */
-static void test_ctx_inet_udp(int israw)
+static void test_ctx_inet_udp(int israw, int withsockcb)
 {
 	struct sockaddr_in addr_in1;
 	struct sockaddr_in addr_in2;
@@ -688,23 +729,27 @@ static void test_ctx_inet_udp(int israw)
 
 	test_ctx((const struct sockaddr *)&addr_in1, sizeof(addr_in1),
 			(const struct sockaddr *)&addr_in2, sizeof(addr_in2),
-			1, israw);
+			1, israw, withsockcb);
 }
 
 /** */
 static void test_ctx_normal_inet_udp()
 {
-	test_ctx_inet_udp(0);
+	test_ctx_inet_udp(0, 0);
+	test_ctx_inet_udp(0, 1);
 }
 
 /** */
 static void test_ctx_raw_inet_udp()
 {
-	test_ctx_inet_udp(1);
+	test_ctx_inet_udp(1, 0);
+	test_ctx_inet_udp(1, 1);
 }
 
+#ifndef _WIN32
+
 /** */
-static void test_ctx_unix(int israw)
+static void test_ctx_unix(int israw, int withsockcb)
 {
 	struct sockaddr_un addr_un;
 
@@ -714,19 +759,130 @@ static void test_ctx_unix(int israw)
 
 	test_ctx((const struct sockaddr *)&addr_un, sizeof(addr_un),
 			(const struct sockaddr *)&addr_un, sizeof(addr_un),
-			0, israw);
+			0, israw, withsockcb);
 }
 
 /** */
 static void test_ctx_normal_unix()
 {
-	test_ctx_unix(0);
+	test_ctx_unix(0, 0);
+	test_ctx_unix(0, 1);
 }
 
 /** */
 static void test_ctx_raw_unix()
 {
-	test_ctx_unix(1);
+	test_ctx_unix(1, 0);
+	test_ctx_unix(1, 1);
+}
+
+#endif /* !WIN32 */
+
+/** */
+static void test_local_addr(void)
+{
+	int res = 0;
+	struct sockaddr_in addr_in;
+	struct pomp_ctx *ctx = NULL;
+	const struct sockaddr *addr = NULL;
+	uint32_t addrlen = 0;
+
+	/* Create context */
+	ctx = pomp_ctx_new(&test_event_cb_t, NULL);
+	CU_ASSERT_PTR_NOT_NULL_FATAL(ctx);
+
+	/* Start as server with known port */
+	memset(&addr_in, 0, sizeof(addr_in));
+	addr_in.sin_family = AF_INET;
+	addr_in.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+	addr_in.sin_port = htons(5656);
+	res = pomp_ctx_listen(ctx, (const struct sockaddr *)&addr_in,
+			sizeof(addr_in));
+	CU_ASSERT_EQUAL(res, 0);
+
+	/* Get local address */
+	addr = pomp_ctx_get_local_addr(ctx, &addrlen);
+	CU_ASSERT_PTR_NOT_NULL(addr);
+	CU_ASSERT_EQUAL(addrlen, sizeof(addr_in));
+	CU_ASSERT_EQUAL(memcmp(addr, &addr_in, sizeof(addr_in)), 0);
+
+	/* Stop context */
+	res = pomp_ctx_stop(ctx);
+	CU_ASSERT_EQUAL(res, 0);
+
+	/* Start as server with dynamic port */
+	memset(&addr_in, 0, sizeof(addr_in));
+	addr_in.sin_family = AF_INET;
+	addr_in.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+	addr_in.sin_port = 0;
+	res = pomp_ctx_listen(ctx, (const struct sockaddr *)&addr_in,
+			sizeof(addr_in));
+	CU_ASSERT_EQUAL(res, 0);
+
+	/* Get local address */
+	addr = pomp_ctx_get_local_addr(ctx, &addrlen);
+	CU_ASSERT_PTR_NOT_NULL(addr);
+	CU_ASSERT_EQUAL(addrlen, sizeof(addr_in));
+	CU_ASSERT_NOT_EQUAL(((const struct sockaddr_in *)addr)->sin_port, 0);
+
+	/* Stop context */
+	res = pomp_ctx_stop(ctx);
+	CU_ASSERT_EQUAL(res, 0);
+
+	/* Start as dgram with known port */
+	memset(&addr_in, 0, sizeof(addr_in));
+	addr_in.sin_family = AF_INET;
+	addr_in.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+	addr_in.sin_port = htons(5656);
+	res = pomp_ctx_bind(ctx, (const struct sockaddr *)&addr_in,
+			sizeof(addr_in));
+	CU_ASSERT_EQUAL(res, 0);
+
+	/* Get local address */
+	addr = pomp_ctx_get_local_addr(ctx, &addrlen);
+	CU_ASSERT_PTR_NOT_NULL(addr);
+	CU_ASSERT_EQUAL(addrlen, sizeof(addr_in));
+	CU_ASSERT_EQUAL(memcmp(addr, &addr_in, sizeof(addr_in)), 0);
+
+	/* Stop context */
+	res = pomp_ctx_stop(ctx);
+	CU_ASSERT_EQUAL(res, 0);
+
+	/* Start as dgram with dynamic port */
+	memset(&addr_in, 0, sizeof(addr_in));
+	addr_in.sin_family = AF_INET;
+	addr_in.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+	addr_in.sin_port = 0;
+	res = pomp_ctx_bind(ctx, (const struct sockaddr *)&addr_in,
+			sizeof(addr_in));
+	CU_ASSERT_EQUAL(res, 0);
+
+	/* Get local address */
+	addr = pomp_ctx_get_local_addr(ctx, &addrlen);
+	CU_ASSERT_PTR_NOT_NULL(addr);
+	CU_ASSERT_EQUAL(addrlen, sizeof(addr_in));
+	CU_ASSERT_NOT_EQUAL(((const struct sockaddr_in *)addr)->sin_port, 0);
+
+	/* Stop context */
+	res = pomp_ctx_stop(ctx);
+	CU_ASSERT_EQUAL(res, 0);
+
+	/* Invalid get local addr */
+	addr = pomp_ctx_get_local_addr(NULL, &addrlen);
+	CU_ASSERT_PTR_NULL(addr);
+	addr = pomp_ctx_get_local_addr(ctx, NULL);
+	CU_ASSERT_PTR_NULL(addr);
+	res = pomp_ctx_connect(ctx, (const struct sockaddr *)&addr_in,
+			sizeof(addr_in));
+	CU_ASSERT_EQUAL(res, 0);
+	addr = pomp_ctx_get_local_addr(ctx, &addrlen);
+	CU_ASSERT_PTR_NULL(addr);
+	res = pomp_ctx_stop(ctx);
+	CU_ASSERT_EQUAL(res, 0);
+
+	/* Free context */
+	res = pomp_ctx_destroy(ctx);
+	CU_ASSERT_EQUAL(res, 0);
 }
 
 /** */
@@ -790,6 +946,7 @@ static CU_TestInfo s_ctx_tests[] = {
 	{(char *)"ctx_normal_unix", &test_ctx_normal_unix},
 	{(char *)"ctx_raw_unix", &test_ctx_raw_unix},
 #endif /* !_WIN32 */
+	{(char *)"ctx_local_addr", &test_local_addr},
 	{(char *)"ctx_invalid_addr", &test_invalid_addr},
 	CU_TEST_INFO_NULL,
 };
