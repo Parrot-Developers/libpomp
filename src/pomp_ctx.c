@@ -147,6 +147,12 @@ struct pomp_ctx {
 			int			fd;
 			/** Fake connection object that will handle I/O */
 			struct pomp_conn	*conn;
+
+			/** Bound local address */
+			struct sockaddr_storage	local_addr;
+
+			/** Bound local address size */
+			socklen_t		local_addrlen;
 		} dgram;
 	} u;
 };
@@ -430,8 +436,7 @@ static int server_stop(struct pomp_ctx *ctx)
 	}
 
 	/* Clear bound local address */
-	memset(&ctx->u.server.local_addr, 0,
-			sizeof(ctx->u.server.local_addr));
+	memset(&ctx->u.server.local_addr, 0, sizeof(ctx->u.server.local_addr));
 	ctx->u.server.local_addrlen = 0;
 
 	return 0;
@@ -643,6 +648,15 @@ static int dgram_start(struct pomp_ctx *ctx)
 		goto reconnect;
 	}
 
+	/* Get local address information */
+	ctx->u.dgram.local_addrlen = sizeof(ctx->u.dgram.local_addr);
+	if (getsockname(ctx->u.dgram.fd,
+			(struct sockaddr *)&ctx->u.dgram.local_addr,
+			&ctx->u.dgram.local_addrlen) < 0) {
+		POMP_LOG_FD_ERRNO("getsockname", ctx->u.dgram.fd);
+		ctx->u.dgram.local_addrlen = 0;
+	}
+
 	/* Allocate connection structure */
 	conn = pomp_conn_new(ctx, ctx->loop, ctx->u.dgram.fd, 1, ctx->israw);
 	if (conn == NULL)
@@ -659,6 +673,9 @@ reconnect:
 	if (ctx->u.dgram.fd >= 0) {
 		close(ctx->u.dgram.fd);
 		ctx->u.dgram.fd = -1;
+		memset(&ctx->u.dgram.local_addr, 0,
+				sizeof(ctx->u.dgram.local_addr));
+		ctx->u.dgram.local_addrlen = 0;
 	}
 
 	/* Try a reconnection */
@@ -669,6 +686,9 @@ error:
 	if (ctx->u.dgram.fd >= 0) {
 		close(ctx->u.dgram.fd);
 		ctx->u.dgram.fd = -1;
+		memset(&ctx->u.dgram.local_addr, 0,
+				sizeof(ctx->u.dgram.local_addr));
+		ctx->u.dgram.local_addrlen = 0;
 	}
 	return res;
 }
@@ -689,6 +709,10 @@ static int dgram_stop(struct pomp_ctx *ctx)
 		close(ctx->u.dgram.fd);
 		ctx->u.dgram.fd = -1;
 	}
+
+	/* Clear bound local address */
+	memset(&ctx->u.dgram.local_addr, 0, sizeof(ctx->u.dgram.local_addr));
+	ctx->u.dgram.local_addrlen = 0;
 
 	return 0;
 }
@@ -876,6 +900,9 @@ static int pomp_ctx_start(struct pomp_ctx *ctx, enum pomp_ctx_type type,
 
 	case POMP_CTX_TYPE_DGRAM:
 		ctx->u.dgram.fd = -1;
+		memset(&ctx->u.dgram.local_addr, 0,
+				sizeof(ctx->u.dgram.local_addr));
+		ctx->u.dgram.local_addrlen = 0;
 		res = dgram_start(ctx);
 		break;
 
@@ -1024,11 +1051,16 @@ const struct sockaddr *pomp_ctx_get_local_addr(struct pomp_ctx *ctx,
 {
 	POMP_RETURN_VAL_IF_FAILED(ctx != NULL, -EINVAL, NULL);
 	POMP_RETURN_VAL_IF_FAILED(addrlen != NULL, -EINVAL, NULL);
-	POMP_RETURN_VAL_IF_FAILED(ctx->type == POMP_CTX_TYPE_SERVER,
-			-EINVAL, NULL);
 
-	*addrlen = ctx->u.server.local_addrlen;
-	return (const struct sockaddr *)&ctx->u.server.local_addr;
+	if (ctx->type == POMP_CTX_TYPE_SERVER) {
+		*addrlen = ctx->u.server.local_addrlen;
+		return (const struct sockaddr *)&ctx->u.server.local_addr;
+	} else if (ctx->type == POMP_CTX_TYPE_DGRAM) {
+		*addrlen = ctx->u.dgram.local_addrlen;
+		return (const struct sockaddr *)&ctx->u.dgram.local_addr;
+	} else {
+		return NULL;
+	}
 }
 
 /*
