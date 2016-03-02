@@ -294,7 +294,7 @@ static void test_ctx(const struct sockaddr *addr1, uint32_t addrlen1,
 	struct pomp_conn *conn = NULL;
 	struct pomp_msg *msg = NULL;
 	int fd = -1;
-	uint32_t i = 0;
+	uint32_t i = 0, j = 0;
 	struct pomp_buffer *buf = NULL;
 
 	memset(&data, 0, sizeof(data));
@@ -561,9 +561,12 @@ static void test_ctx(const struct sockaddr *addr1, uint32_t addrlen1,
 			if (buf == NULL)
 				buf = pomp_buffer_new(1024);
 			CU_ASSERT_PTR_NOT_NULL_FATAL(buf);
+			for (j = 0; j < 1024; j++)
+				buf->data[j] = rand() % 255;
+			buf->len = 1024;
 
 			if (!israw) {
-				res = pomp_ctx_send(ctx2, 3, "%p%u", buf, 1024);
+				res = pomp_ctx_send(ctx2, 3, "%p%u", buf->data, 1024);
 				CU_ASSERT_EQUAL(res, 0);
 			} else {
 				res = pomp_ctx_send_raw_buf(ctx2, buf);
