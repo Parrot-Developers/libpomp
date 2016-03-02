@@ -103,6 +103,9 @@ struct pomp_ctx {
 	/** Function to call for raw data reception in raw mode */
 	pomp_ctx_raw_cb_t	rawcb;
 
+	/** Function to call when sockets are created */
+	pomp_socket_cb_t	sockcb;
+
 	/** Timer for connection retries */
 	struct pomp_timer	*timer;
 
@@ -265,6 +268,10 @@ static int server_accept_conn(struct pomp_ctx *ctx)
 		return 0;
 	}
 
+	/* Notify application */
+	if (ctx->sockcb != NULL)
+		(*ctx->sockcb)(ctx, fd, POMP_SOCKET_KIND_PEER, ctx->userdata);
+
 	/* Setup socket flags */
 	res = fd_setup_flags(fd);
 	if (res < 0)
@@ -334,6 +341,12 @@ static int server_start(struct pomp_ctx *ctx)
 		goto error;
 	}
 
+	/* Notify application */
+	if (ctx->sockcb != NULL) {
+		(*ctx->sockcb)(ctx, ctx->u.server.fd,
+				POMP_SOCKET_KIND_SERVER, ctx->userdata);
+	}
+
 	/* Setup socket flags */
 	res = fd_setup_flags(ctx->u.server.fd);
 	if (res < 0)
@@ -356,7 +369,7 @@ static int server_start(struct pomp_ctx *ctx)
 
 	/* Bind to address  */
 	if (bind(ctx->u.server.fd, ctx->addr, ctx->addrlen) < 0) {
-		/* Handle case where address do not match a existent
+		/* Handle case where address do not match an existent
 		 * interface to try again later */
 		if (errno != EADDRNOTAVAIL) {
 			res = -errno;
@@ -536,6 +549,12 @@ static int client_start(struct pomp_ctx *ctx)
 		goto error;
 	}
 
+	/* Notify application */
+	if (ctx->sockcb != NULL) {
+		(*ctx->sockcb)(ctx, ctx->u.client.fd,
+				POMP_SOCKET_KIND_CLIENT, ctx->userdata);
+	}
+
 	/* Setup socket flags */
 	res = fd_setup_flags(ctx->u.client.fd);
 	if (res < 0)
@@ -622,6 +641,12 @@ static int dgram_start(struct pomp_ctx *ctx)
 		goto error;
 	}
 
+	/* Notify application */
+	if (ctx->sockcb != NULL) {
+		(*ctx->sockcb)(ctx, ctx->u.dgram.fd,
+				POMP_SOCKET_KIND_DGRAM, ctx->userdata);
+	}
+
 	/* Setup socket flags */
 	res = fd_setup_flags(ctx->u.dgram.fd);
 	if (res < 0)
@@ -638,7 +663,7 @@ static int dgram_start(struct pomp_ctx *ctx)
 
 	/* Bind to address  */
 	if (bind(ctx->u.dgram.fd, ctx->addr, ctx->addrlen) < 0) {
-		/* Handle case where address do not match a existent
+		/* Handle case where address do not match an existent
 		 * interface to try again later */
 		if (errno != EADDRNOTAVAIL) {
 			res = -errno;
@@ -761,6 +786,20 @@ const char *pomp_event_str(enum pomp_event event)
 /*
  * See documentation in public header.
  */
+const char *pomp_socket_kind_str(enum pomp_socket_kind kind)
+{
+	switch (kind) {
+	case POMP_SOCKET_KIND_SERVER: return "SERVER";
+	case POMP_SOCKET_KIND_PEER: return "PEER";
+	case POMP_SOCKET_KIND_CLIENT: return "CLIENT";
+	case POMP_SOCKET_KIND_DGRAM: return "DGRAM";
+	default: return "UNKNOWN";
+	}
+}
+
+/*
+ * See documentation in public header.
+ */
 struct pomp_ctx *pomp_ctx_new(pomp_event_cb_t cb, void *userdata)
 {
 	struct pomp_ctx *ctx = NULL;
@@ -836,6 +875,18 @@ int pomp_ctx_set_raw(struct pomp_ctx *ctx, pomp_ctx_raw_cb_t cb)
 	POMP_RETURN_ERR_IF_FAILED(ctx->addr == NULL, -EBUSY);
 	ctx->israw = 1;
 	ctx->rawcb = cb;
+	return 0;
+}
+
+/*
+ * See documentation in public header.
+ */
+int pomp_ctx_set_socket_cb(struct pomp_ctx *ctx, pomp_socket_cb_t cb)
+{
+	POMP_RETURN_ERR_IF_FAILED(ctx != NULL, -EINVAL);
+	POMP_RETURN_ERR_IF_FAILED(cb != NULL, -EINVAL);
+	POMP_RETURN_ERR_IF_FAILED(ctx->addr == NULL, -EBUSY);
+	ctx->sockcb = cb;
 	return 0;
 }
 

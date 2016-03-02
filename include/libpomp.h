@@ -99,19 +99,34 @@ enum pomp_fd_event {
 	POMP_FD_EVENT_HUP = 0x010,
 };
 
-/** Peer credentials for local sockets */
-struct pomp_cred {
-	uint32_t	pid;	/**< PID of sending process */
-	uint32_t	uid;	/**< UID of sending process */
-	uint32_t	gid;	/**< GID of sending process */
-};
-
 /**
  * Get the string description of a context event.
  * @param event : event to convert.
  * @return string description of the context event.
  */
 POMP_API const char *pomp_event_str(enum pomp_event event);
+
+/** Socket kind */
+enum pomp_socket_kind {
+	POMP_SOCKET_KIND_SERVER,	/**< Server socket */
+	POMP_SOCKET_KIND_PEER,		/**< Peer (accepted) socket */
+	POMP_SOCKET_KIND_CLIENT,	/**< Client socket */
+	POMP_SOCKET_KIND_DGRAM,		/**< Dgram socket */
+};
+
+/**
+ * Get the string description of a socket kind.
+ * @param kind : socket kind to convert.
+ * @return string description of the socket kind.
+ */
+POMP_API const char *pomp_socket_kind_str(enum pomp_socket_kind kind);
+
+/** Peer credentials for local sockets */
+struct pomp_cred {
+	uint32_t	pid;	/**< PID of sending process */
+	uint32_t	uid;	/**< UID of sending process */
+	uint32_t	gid;	/**< GID of sending process */
+};
 
 /**
  * Context event callback prototype.
@@ -139,6 +154,19 @@ typedef void (*pomp_ctx_raw_cb_t)(
 		struct pomp_ctx *ctx,
 		struct pomp_conn *conn,
 		struct pomp_buffer *buf,
+		void *userdata);
+
+/**
+ * Context socket callback. If set, will be called after socket is created.
+ * @param ctx : context.
+ * @param fd : socket fd.
+ * @param kind : socket kind.
+ * @param userdata : user data given in pomp_ctx_new.
+ */
+typedef void (*pomp_socket_cb_t)(
+		struct pomp_ctx *ctx,
+		int fd,
+		enum pomp_socket_kind kind,
 		void *userdata);
 
 /**
@@ -188,7 +216,8 @@ POMP_API struct pomp_ctx *pomp_ctx_new_with_loop(pomp_event_cb_t cb,
 
 /**
  * Mark the context as raw. Internal message protocol serialization will not
- * be used, only raw data can be sent/received.
+ * be used, only raw data can be sent/received. Connection/Disconnection
+ * events will be notified with the generic context event callback.
  * message API.
  * @param ctx : context.
  * @param cb : function to call when data has been received. The userdata
@@ -196,6 +225,16 @@ POMP_API struct pomp_ctx *pomp_ctx_new_with_loop(pomp_event_cb_t cb,
  * @return 0 in case of success, negative errno value in case of error.
  */
 POMP_API int pomp_ctx_set_raw(struct pomp_ctx *ctx, pomp_ctx_raw_cb_t cb);
+
+/**
+ * Set the function to call when socket fd are created. This allows application
+ * to configure socket before it is used.
+ * @param ctx : context.
+ * @param cb : function to call when socket are created. The userdata
+ * argument will be the same as the one set when creating the context.
+ * @return 0 in case of success, negative errno value in case of error.
+ */
+POMP_API int pomp_ctx_set_socket_cb(struct pomp_ctx *ctx, pomp_socket_cb_t cb);
 
 /**
  * Destroy a context.
@@ -315,8 +354,9 @@ POMP_API struct pomp_conn *pomp_ctx_get_next_conn(const struct pomp_ctx *ctx,
 POMP_API struct pomp_conn *pomp_ctx_get_conn(const struct pomp_ctx *ctx);
 
 /**
- * Get context local address (for server context started with listen).
- * @param ctx : context (shall be a server one).
+ * Get context local address (for server or udp context started with listen or
+ * bind ).
+ * @param ctx : context (shall be a server or udp one).
  * @param addrlen : returned address size.
  * @return local address or NULL in case of error.
  */
