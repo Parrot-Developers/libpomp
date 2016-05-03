@@ -60,8 +60,6 @@ def parseAddr(buf):
         path = buf[5:]
         if path.startswith("@"):
             path = "\x00" + path[1:] + (108 - len(path)) * "\x00"
-        else:
-            path += (108 - len(path)) * "\x00"
         return (socket.AF_UNIX, path)
     else:
         raise ValueError("Unable to parse address: '%s" % buf)
