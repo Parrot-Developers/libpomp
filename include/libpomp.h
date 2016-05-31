@@ -477,6 +477,20 @@ POMP_API const struct pomp_cred *pomp_conn_get_peer_cred(
 		struct pomp_conn *conn);
 
 /**
+ * Suspend read operation on connection.
+ * @param conn : connection.
+ * @return 0 in case of success, negative errno value in case of error.
+ */
+POMP_API int pomp_conn_suspend_read(struct pomp_conn *conn);
+
+/**
+ * Resume read operation on connection.
+ * @param conn : connection.
+ * @return 0 in case of success, negative errno value in case of error.
+ */
+POMP_API int pomp_conn_resume_read(struct pomp_conn *conn);
+
+/**
  * Send a message to the peer of the connection.
  * @param conn : connection.
  * @param msg : message to send.

@@ -921,6 +921,24 @@ const struct pomp_cred *pomp_conn_get_peer_cred(struct pomp_conn *conn)
 		return NULL;
 }
 
+/*
+ * See documentation in public header.
+ */
+int pomp_conn_suspend_read(struct pomp_conn *conn)
+{
+	POMP_RETURN_ERR_IF_FAILED(conn != NULL, -EINVAL);
+	return pomp_loop_update2(conn->loop, conn->fd, 0, POMP_FD_EVENT_IN);
+}
+
+/*
+ * See documentation in public header.
+ */
+int pomp_conn_resume_read(struct pomp_conn *conn)
+{
+	POMP_RETURN_ERR_IF_FAILED(conn != NULL, -EINVAL);
+	return pomp_loop_update2(conn->loop, conn->fd, POMP_FD_EVENT_IN, 0);
+}
+
 /**
  * Internal send buffer function.
  */
