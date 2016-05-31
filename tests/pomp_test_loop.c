@@ -125,15 +125,19 @@ static void test_loop(int is_epoll)
 	CU_ASSERT_EQUAL(res, -EINVAL);
 
 	/* Update events */
+	res = pomp_loop_update(loop, tfd1, 0);
+	CU_ASSERT_EQUAL(res, 0);
 	res = pomp_loop_update(loop, tfd1, POMP_FD_EVENT_IN | POMP_FD_EVENT_OUT);
+	CU_ASSERT_EQUAL(res, 0);
+
+	/* Update events */
+	res = pomp_loop_update2(loop, tfd1, 0, POMP_FD_EVENT_OUT);
+	CU_ASSERT_EQUAL(res, 0);
+	res = pomp_loop_update2(loop, tfd1, POMP_FD_EVENT_IN, 0);
 	CU_ASSERT_EQUAL(res, 0);
 
 	/* Invalid update (NULL param) */
 	res = pomp_loop_update(NULL, tfd1, POMP_FD_EVENT_IN | POMP_FD_EVENT_OUT);
-	CU_ASSERT_EQUAL(res, -EINVAL);
-
-	/* Invalid update (invalid events) */
-	res = pomp_loop_update(loop, tfd1, 0);
 	CU_ASSERT_EQUAL(res, -EINVAL);
 
 	/* Invalid update (invalid fd) */

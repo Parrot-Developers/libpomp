@@ -347,7 +347,6 @@ int pomp_loop_update(struct pomp_loop *loop, int fd, uint32_t events)
 	uint32_t oldevents = 0;
 	POMP_RETURN_ERR_IF_FAILED(loop != NULL, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(fd >= 0, -EINVAL);
-	POMP_RETURN_ERR_IF_FAILED(events != 0, -EINVAL);
 
 	/* Make sure fd is registered */
 	pfd = pomp_loop_find_pfd(loop, fd);
@@ -359,6 +358,35 @@ int pomp_loop_update(struct pomp_loop *loop, int fd, uint32_t events)
 	/* Implementation specific */
 	oldevents = pfd->events;
 	pfd->events = events;
+	res = pomp_loop_do_update(loop, pfd);
+	if (res < 0)
+		pfd->events = oldevents;
+	return res;
+}
+
+/*
+ * See documentation in public header.
+ */
+int pomp_loop_update2(struct pomp_loop *loop, int fd,
+		uint32_t events_to_add, uint32_t events_to_remove)
+{
+	int res = 0;
+	struct pomp_fd *pfd = NULL;
+	uint32_t oldevents = 0;
+	POMP_RETURN_ERR_IF_FAILED(loop != NULL, -EINVAL);
+	POMP_RETURN_ERR_IF_FAILED(fd >= 0, -EINVAL);
+
+	/* Make sure fd is registered */
+	pfd = pomp_loop_find_pfd(loop, fd);
+	if (pfd == NULL) {
+		POMP_LOGW("fd %d not found in loop %p", fd, loop);
+		return -ENOENT;
+	}
+
+	/* Implementation specific */
+	oldevents = pfd->events;
+	pfd->events |= events_to_add;
+	pfd->events &= ~events_to_remove;
 	res = pomp_loop_do_update(loop, pfd);
 	if (res < 0)
 		pfd->events = oldevents;

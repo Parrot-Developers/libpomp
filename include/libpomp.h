@@ -786,6 +786,17 @@ POMP_API int pomp_loop_add(struct pomp_loop *loop, int fd, uint32_t events,
 POMP_API int pomp_loop_update(struct pomp_loop *loop, int fd, uint32_t events);
 
 /**
+ * Modify the set of events to monitor for a registered fd.
+ * @param loop : loop.
+ * @param fd : fd to modify.
+ * @param events_to_add : events to add. @see pomp_fd_event.
+ * @param events_to_remove : events to remove. @see pomp_fd_event.
+ * @return 0 in case of success, negative errno value in case of error.
+ */
+POMP_API int pomp_loop_update2(struct pomp_loop *loop, int fd,
+		uint32_t events_to_add, uint32_t events_to_remove);
+
+/**
  * Unregister a fd from the loop
  * @param loop : loop.
  * @param fd : fd to unregister.
