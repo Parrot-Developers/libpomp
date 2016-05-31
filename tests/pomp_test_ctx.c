@@ -448,7 +448,7 @@ static void test_ctx(const struct sockaddr *addr1, uint32_t addrlen1,
 	CU_ASSERT_EQUAL(res, -EINVAL);
 
 	/* Run contexts (they shall connect each other) */
-	run_ctx(ctx1, ctx2, 1000);
+	run_ctx(ctx1, ctx2, 100);
 	if (!isdgram) {
 		CU_ASSERT_EQUAL(data.connection, 2);
 
@@ -571,7 +571,7 @@ static void test_ctx(const struct sockaddr *addr1, uint32_t addrlen1,
 	}
 
 	/* Run contexts (they shall have answered each other) */
-	run_ctx(ctx1, ctx2, 1000);
+	run_ctx(ctx1, ctx2, 100);
 	if (!israw) {
 		CU_ASSERT_EQUAL(data.msg, 4);
 	} else {
@@ -623,7 +623,7 @@ static void test_ctx(const struct sockaddr *addr1, uint32_t addrlen1,
 		}
 
 		/* Run contexts (to unlock writes) */
-		run_ctx(ctx1, ctx2, 1000);
+		run_ctx(ctx1, ctx2, 100);
 		if (!israw)
 			CU_ASSERT_EQUAL(data.msg, 4 + 1024);
 	}
@@ -635,7 +635,7 @@ static void test_ctx(const struct sockaddr *addr1, uint32_t addrlen1,
 	}
 
 	/* Run contexts (they shall disconnect each other) */
-	run_ctx(ctx1, ctx2, 1000);
+	run_ctx(ctx1, ctx2, 100);
 	if (!isdgram) {
 		CU_ASSERT_EQUAL(data.disconnection, 2);
 
