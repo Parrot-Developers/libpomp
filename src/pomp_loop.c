@@ -480,7 +480,7 @@ int pomp_loop_wakeup(struct pomp_loop *loop)
 /*
  * See documentation in public header.
  */
-POMP_API int pomp_loop_idle_add(struct pomp_loop *loop, pomp_idle_cb_t cb,
+int pomp_loop_idle_add(struct pomp_loop *loop, pomp_idle_cb_t cb,
 		void *userdata)
 {
 	struct pomp_idle_entry *newentries = NULL;
@@ -506,7 +506,7 @@ POMP_API int pomp_loop_idle_add(struct pomp_loop *loop, pomp_idle_cb_t cb,
 /*
  * See documentation in public header.
  */
-POMP_API int pomp_loop_idle_remove(struct pomp_loop *loop, pomp_idle_cb_t cb,
+int pomp_loop_idle_remove(struct pomp_loop *loop, pomp_idle_cb_t cb,
 		void *userdata)
 {
 	uint32_t i = 0;

@@ -90,6 +90,13 @@ enum pomp_event {
 	POMP_EVENT_MSG,			/**< Message received from peer */
 };
 
+/**
+ * Get the string description of a context event.
+ * @param event : event to convert.
+ * @return string description of the context event.
+ */
+POMP_API const char *pomp_event_str(enum pomp_event event);
+
 /** Fd events */
 enum pomp_fd_event {
 	POMP_FD_EVENT_IN = 0x001,
@@ -98,13 +105,6 @@ enum pomp_fd_event {
 	POMP_FD_EVENT_ERR = 0x008,
 	POMP_FD_EVENT_HUP = 0x010,
 };
-
-/**
- * Get the string description of a context event.
- * @param event : event to convert.
- * @return string description of the context event.
- */
-POMP_API const char *pomp_event_str(enum pomp_event event);
 
 /** Socket kind */
 enum pomp_socket_kind {
@@ -120,6 +120,14 @@ enum pomp_socket_kind {
  * @return string description of the socket kind.
  */
 POMP_API const char *pomp_socket_kind_str(enum pomp_socket_kind kind);
+
+/** Send status flags */
+enum pomp_send_status {
+	POMP_SEND_STATUS_OK = 0x01,		/**< Send is OK */
+	POMP_SEND_STATUS_ERROR = 0x03,		/**< Error during send */
+	POMP_SEND_STATUS_ABORTED = 0x04,	/**< Send aborted */
+	POMP_SEND_STATUS_QUEUE_EMPTY = 0x08,	/**< No more buffer in queue */
+};
 
 /** Peer credentials for local sockets */
 struct pomp_cred {
@@ -167,6 +175,29 @@ typedef void (*pomp_socket_cb_t)(
 		struct pomp_ctx *ctx,
 		int fd,
 		enum pomp_socket_kind kind,
+		void *userdata);
+
+/**
+ * Send callback. If set, it is called to indicate that the given buffer has
+ * been sent (or not).
+ * @param ctx : context.
+ * @param conn : connection on which the event occurred.
+ * @param buf : buffer whose send status id notified. If in raw mode is it the
+ * one given in send operation, otherwise it is the internal buffer associated
+ * with the message sent.
+ * @param status : set of flags (enum pomp_send_status) indicating the status.
+ * one of OK, ERROR or ABORTED is always set. QUEUE_EMPTY indicates that there
+ * is no more buffer queued internally.
+ * @param cookie : NULL, reserved for future use.
+ * @param userdata : user data given in pomp_ctx_new.
+ *
+ */
+typedef void (*pomp_send_cb_t)(
+		struct pomp_ctx *ctx,
+		struct pomp_conn *conn,
+		struct pomp_buffer *buf,
+		uint32_t status,
+		void *cookie,
 		void *userdata);
 
 /**
@@ -235,6 +266,17 @@ POMP_API int pomp_ctx_set_raw(struct pomp_ctx *ctx, pomp_ctx_raw_cb_t cb);
  * @return 0 in case of success, negative errno value in case of error.
  */
 POMP_API int pomp_ctx_set_socket_cb(struct pomp_ctx *ctx, pomp_socket_cb_t cb);
+
+/**
+ * Set the function to call when send operations are completed. This allows
+ * application to be notified of actual completion in case operations are
+ * internally queued.
+ * @param ctx : context.
+ * @param cb : function to call when send operations are completed. The userdata
+ * argument will be the same as the one set when creating the context.
+ * @return 0 in case of success, negative errno value in case of error.
+ */
+POMP_API int pomp_ctx_set_send_cb(struct pomp_ctx *ctx, pomp_send_cb_t cb);
 
 /**
  * Destroy a context.
@@ -371,6 +413,10 @@ POMP_API const struct sockaddr *pomp_ctx_get_local_addr(struct pomp_ctx *ctx,
  * @param ctx : context.
  * @param msg : message to send.
  * @return 0 in case of success, negative errno value in case of error.
+ *
+ * @remarks the operation will be queued automatically for later processing
+ * in case the underlying socket buffer is full. Use 'pomp_ctx_set_socket_cb'
+ * to have more information about completion.
  */
 POMP_API int pomp_ctx_send_msg(struct pomp_ctx *ctx,
 		const struct pomp_msg *msg);
@@ -382,6 +428,10 @@ POMP_API int pomp_ctx_send_msg(struct pomp_ctx *ctx,
  * @param addr : destination address.
  * @param addrlen : address size.
  * @return 0 in case of success, negative errno value in case of error.
+ *
+ * @remarks the operation will be queued automatically for later processing
+ * in case the underlying socket buffer is full. Use 'pomp_ctx_set_socket_cb'
+ * to have more information about completion.
  */
 POMP_API int pomp_ctx_send_msg_to(struct pomp_ctx *ctx,
 		const struct pomp_msg *msg,
@@ -397,9 +447,14 @@ POMP_API int pomp_ctx_send_msg_to(struct pomp_ctx *ctx,
  * @param fmt : format string. Can be NULL if no arguments given.
  * @param ... : message arguments.
  * @return 0 in case of success, negative errno value in case of error.
+ *
+ * @remarks the operation will be queued automatically for later processing
+ * in case the underlying socket buffer is full. Use 'pomp_ctx_set_socket_cb'
+ * to have more information about completion.
  */
 POMP_API int pomp_ctx_send(struct pomp_ctx *ctx, uint32_t msgid,
 		const char *fmt, ...) POMP_ATTRIBUTE_FORMAT_PRINTF(3, 4);
+
 
 /**
  * Format and send a message to a context.
@@ -411,6 +466,10 @@ POMP_API int pomp_ctx_send(struct pomp_ctx *ctx, uint32_t msgid,
  * @param fmt : format string. Can be NULL if no arguments given.
  * @param args : message arguments.
  * @return 0 in case of success, negative errno value in case of error.
+ *
+ * @remarks the operation will be queued automatically for later processing
+ * in case the underlying socket buffer is full. Use 'pomp_ctx_set_socket_cb'
+ * to have more information about completion.
  */
 POMP_API int pomp_ctx_sendv(struct pomp_ctx *ctx, uint32_t msgid,
 		const char *fmt, va_list args);
@@ -423,6 +482,10 @@ POMP_API int pomp_ctx_sendv(struct pomp_ctx *ctx, uint32_t msgid,
  * @param ctx : context.
  * @param buf : buffer to send.
  * @return 0 in case of success, negative errno value in case of error.
+ *
+ * @remarks the operation will be queued automatically for later processing
+ * in case the underlying socket buffer is full. Use 'pomp_ctx_set_socket_cb'
+ * to have more information about completion.
  */
 POMP_API int pomp_ctx_send_raw_buf(struct pomp_ctx *ctx,
 		struct pomp_buffer *buf);
@@ -434,6 +497,10 @@ POMP_API int pomp_ctx_send_raw_buf(struct pomp_ctx *ctx,
  * @param addr : destination address.
  * @param addrlen : address size.
  * @return 0 in case of success, negative errno value in case of error.
+ *
+ * @remarks the operation will be queued automatically for later processing
+ * in case the underlying socket buffer is full. Use 'pomp_ctx_set_socket_cb'
+ * to have more information about completion.
  */
 POMP_API int pomp_ctx_send_raw_buf_to(struct pomp_ctx *ctx,
 		struct pomp_buffer *buf,
@@ -495,6 +562,10 @@ POMP_API int pomp_conn_resume_read(struct pomp_conn *conn);
  * @param conn : connection.
  * @param msg : message to send.
  * @return 0 in case of success, negative errno value in case of error.
+ *
+ * @remarks the operation will be queued automatically for later processing
+ * in case the underlying socket buffer is full. Use 'pomp_ctx_set_socket_cb'
+ * to have more information about completion.
  */
 POMP_API int pomp_conn_send_msg(struct pomp_conn *conn,
 		const struct pomp_msg *msg);
@@ -506,6 +577,10 @@ POMP_API int pomp_conn_send_msg(struct pomp_conn *conn,
  * @param fmt : format string. Can be NULL if no arguments given.
  * @param ... : message arguments.
  * @return 0 in case of success, negative errno value in case of error.
+ *
+ * @remarks the operation will be queued automatically for later processing
+ * in case the underlying socket buffer is full. Use 'pomp_ctx_set_socket_cb'
+ * to have more information about completion.
  */
 POMP_API int pomp_conn_send(struct pomp_conn *conn, uint32_t msgid,
 		const char *fmt, ...) POMP_ATTRIBUTE_FORMAT_PRINTF(3, 4);
@@ -517,6 +592,10 @@ POMP_API int pomp_conn_send(struct pomp_conn *conn, uint32_t msgid,
  * @param fmt : format string. Can be NULL if no arguments given.
  * @param args : message arguments.
  * @return 0 in case of success, negative errno value in case of error.
+ *
+ * @remarks the operation will be queued automatically for later processing
+ * in case the underlying socket buffer is full. Use 'pomp_ctx_set_socket_cb'
+ * to have more information about completion.
  */
 POMP_API int pomp_conn_sendv(struct pomp_conn *conn, uint32_t msgid,
 		const char *fmt, va_list args);
@@ -526,6 +605,10 @@ POMP_API int pomp_conn_sendv(struct pomp_conn *conn, uint32_t msgid,
  * @param conn : connection.
  * @param buf : buffer to send.
  * @return 0 in case of success, negative errno value in case of error.
+ *
+ * @remarks the operation will be queued automatically for later processing
+ * in case the underlying socket buffer is full. Use 'pomp_ctx_set_socket_cb'
+ * to have more information about completion.
  */
 POMP_API int pomp_conn_send_raw_buf(struct pomp_conn *conn,
 		struct pomp_buffer *buf);

@@ -92,7 +92,8 @@ static void check_fds(const int *fds1, const int *fds2)
 		if (!found) {
 			snprintf(path, sizeof(path), "/proc/self/fd/%d", *fds2);
 			target[0] = '\0';
-			readlink(path, target, sizeof(target));
+			if (readlink(path, target, sizeof(target)) < 0)
+				snprintf(target, sizeof(target), "???");
 			fprintf(stderr, "Leaked fd %d (%s)\n", *fds2, target);
 		}
 

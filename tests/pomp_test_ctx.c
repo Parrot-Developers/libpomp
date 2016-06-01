@@ -38,6 +38,7 @@ struct test_data {
 	uint32_t  disconnection;
 	uint32_t  msg;
 	uint32_t  buf;
+	uint32_t  sendcount;
 	int       isdgram;
 	int       israw;
 };
@@ -178,6 +179,31 @@ static void test_ctx_socket_cb(struct pomp_ctx *ctx,
 	CU_ASSERT_PTR_NOT_NULL(str);
 }
 
+/** */
+static void test_ctx_send_cb(struct pomp_ctx *ctx,
+		struct pomp_conn *conn,
+		struct pomp_buffer *buf,
+		uint32_t status,
+		void *cookie,
+		void *userdata)
+{
+	int res = 0;
+	struct test_data *data = userdata;
+	CU_ASSERT_PTR_NOT_NULL(ctx);
+	CU_ASSERT_PTR_NOT_NULL(conn);
+	CU_ASSERT_PTR_NOT_NULL(buf);
+	data->sendcount++;
+	CU_ASSERT_PTR_NULL(cookie);
+
+	/* Internal function invalid arguments checks */
+	res = pomp_ctx_notify_send(NULL, conn, buf, 0);
+	CU_ASSERT_EQUAL(res, -EINVAL);
+	res = pomp_ctx_notify_send(ctx, NULL, buf, 0);
+	CU_ASSERT_EQUAL(res, -EINVAL);
+	res = pomp_ctx_notify_send(ctx, conn, NULL, 0);
+	CU_ASSERT_EQUAL(res, -EINVAL);
+}
+
 #ifdef __linux__
 
 /** */
@@ -299,7 +325,7 @@ static void run_ctx(struct pomp_ctx *ctx1, struct pomp_ctx *ctx2, int timeout)
 /** */
 static void test_ctx(const struct sockaddr *addr1, uint32_t addrlen1,
 		const struct sockaddr *addr2, uint32_t addrlen2,
-		int isdgram, int israw, int withsockcb)
+		int isdgram, int israw, int withsockcb, int withsendcb)
 {
 	int res = 0;
 	struct test_data data;
@@ -329,6 +355,10 @@ static void test_ctx(const struct sockaddr *addr1, uint32_t addrlen1,
 		res = pomp_ctx_set_socket_cb(ctx1, &test_ctx_socket_cb);
 		CU_ASSERT_EQUAL(res, 0);
 	}
+	if (withsendcb) {
+		res = pomp_ctx_set_send_cb(ctx1, &test_ctx_send_cb);
+		CU_ASSERT_EQUAL(res, 0);
+	}
 
 	/* Invalid create (NULL param) */
 	ctx2 = pomp_ctx_new(NULL, &data);
@@ -347,6 +377,10 @@ static void test_ctx(const struct sockaddr *addr1, uint32_t addrlen1,
 	}
 	if (withsockcb) {
 		res = pomp_ctx_set_socket_cb(ctx2, &test_ctx_socket_cb);
+		CU_ASSERT_EQUAL(res, 0);
+	}
+	if (withsendcb) {
+		res = pomp_ctx_set_send_cb(ctx2, &test_ctx_send_cb);
 		CU_ASSERT_EQUAL(res, 0);
 	}
 
@@ -424,6 +458,14 @@ static void test_ctx(const struct sockaddr *addr1, uint32_t addrlen1,
 	res = pomp_ctx_set_socket_cb(ctx1, NULL);
 	CU_ASSERT_EQUAL(res, -EINVAL);
 	res = pomp_ctx_set_socket_cb(ctx1, &test_ctx_socket_cb);
+	CU_ASSERT_EQUAL(res, -EBUSY);
+
+	/* Invalid set send cb */
+	res = pomp_ctx_set_send_cb(NULL, &test_ctx_send_cb);
+	CU_ASSERT_EQUAL(res, -EINVAL);
+	res = pomp_ctx_set_send_cb(ctx1, NULL);
+	CU_ASSERT_EQUAL(res, -EINVAL);
+	res = pomp_ctx_set_send_cb(ctx1, &test_ctx_send_cb);
 	CU_ASSERT_EQUAL(res, -EBUSY);
 
 	/* Invalid get loop (NULL param) */
@@ -549,7 +591,6 @@ static void test_ctx(const struct sockaddr *addr1, uint32_t addrlen1,
 
 			res = pomp_ctx_send_raw_buf_to(ctx1, buf, addr2, addrlen2);
 			CU_ASSERT_EQUAL(res, 0);
-
 			res = pomp_ctx_send_raw_buf_to(ctx2, buf, addr1, addrlen1);
 			CU_ASSERT_EQUAL(res, 0);
 
@@ -574,8 +615,12 @@ static void test_ctx(const struct sockaddr *addr1, uint32_t addrlen1,
 	run_ctx(ctx1, ctx2, 100);
 	if (!israw) {
 		CU_ASSERT_EQUAL(data.msg, 4);
+		if (withsendcb)
+			CU_ASSERT_EQUAL(data.sendcount, 4);
 	} else {
 		CU_ASSERT_EQUAL(data.buf, 2);
+		if (withsendcb)
+			CU_ASSERT_EQUAL(data.sendcount, 2);
 	}
 
 	/* Dummy run */
@@ -683,7 +728,7 @@ static void test_ctx(const struct sockaddr *addr1, uint32_t addrlen1,
 }
 
 /** */
-static void test_ctx_inet_tcp(int israw, int withsockcb)
+static void test_ctx_inet_tcp(int israw, int withsockcb, int withsendcb)
 {
 	struct sockaddr_in addr_in;
 
@@ -694,25 +739,29 @@ static void test_ctx_inet_tcp(int israw, int withsockcb)
 
 	test_ctx((const struct sockaddr *)&addr_in, sizeof(addr_in),
 			(const struct sockaddr *)&addr_in, sizeof(addr_in),
-			0, israw, withsockcb);
+			0, israw, withsockcb, withsendcb);
 }
 
 /** */
 static void test_ctx_normal_inet_tcp()
 {
-	test_ctx_inet_tcp(0, 0);
-	test_ctx_inet_tcp(0, 1);
+	test_ctx_inet_tcp(0, 0, 0);
+	test_ctx_inet_tcp(0, 1, 0);
+	test_ctx_inet_tcp(0, 0, 1);
+	test_ctx_inet_tcp(0, 1, 1);
 }
 
 /** */
 static void test_ctx_raw_inet_tcp()
 {
-	test_ctx_inet_tcp(1, 0);
-	test_ctx_inet_tcp(1, 1);
+	test_ctx_inet_tcp(1, 0, 0);
+	test_ctx_inet_tcp(1, 1, 0);
+	test_ctx_inet_tcp(1, 0, 1);
+	test_ctx_inet_tcp(1, 1, 1);
 }
 
 /** */
-static void test_ctx_inet_udp(int israw, int withsockcb)
+static void test_ctx_inet_udp(int israw, int withsockcb, int withsendcb)
 {
 	struct sockaddr_in addr_in1;
 	struct sockaddr_in addr_in2;
@@ -729,27 +778,31 @@ static void test_ctx_inet_udp(int israw, int withsockcb)
 
 	test_ctx((const struct sockaddr *)&addr_in1, sizeof(addr_in1),
 			(const struct sockaddr *)&addr_in2, sizeof(addr_in2),
-			1, israw, withsockcb);
+			1, israw, withsockcb, withsendcb);
 }
 
 /** */
 static void test_ctx_normal_inet_udp()
 {
-	test_ctx_inet_udp(0, 0);
-	test_ctx_inet_udp(0, 1);
+	test_ctx_inet_udp(0, 0, 0);
+	test_ctx_inet_udp(0, 1, 0);
+	test_ctx_inet_udp(0, 0, 1);
+	test_ctx_inet_udp(0, 1, 1);
 }
 
 /** */
 static void test_ctx_raw_inet_udp()
 {
-	test_ctx_inet_udp(1, 0);
-	test_ctx_inet_udp(1, 1);
+	test_ctx_inet_udp(1, 0, 0);
+	test_ctx_inet_udp(1, 1, 0);
+	test_ctx_inet_udp(1, 0, 1);
+	test_ctx_inet_udp(1, 1, 1);
 }
 
 #ifndef _WIN32
 
 /** */
-static void test_ctx_unix(int israw, int withsockcb)
+static void test_ctx_unix(int israw, int withsockcb, int withsendcb)
 {
 	struct sockaddr_un addr_un;
 
@@ -759,21 +812,25 @@ static void test_ctx_unix(int israw, int withsockcb)
 
 	test_ctx((const struct sockaddr *)&addr_un, sizeof(addr_un),
 			(const struct sockaddr *)&addr_un, sizeof(addr_un),
-			0, israw, withsockcb);
+			0, israw, withsockcb, withsendcb);
 }
 
 /** */
 static void test_ctx_normal_unix()
 {
-	test_ctx_unix(0, 0);
-	test_ctx_unix(0, 1);
+	test_ctx_unix(0, 0, 0);
+	test_ctx_unix(0, 1, 0);
+	test_ctx_unix(0, 0, 1);
+	test_ctx_unix(0, 1, 1);
 }
 
 /** */
 static void test_ctx_raw_unix()
 {
-	test_ctx_unix(1, 0);
-	test_ctx_unix(1, 1);
+	test_ctx_unix(1, 0, 0);
+	test_ctx_unix(1, 1, 0);
+	test_ctx_unix(1, 0, 1);
+	test_ctx_unix(1, 1, 1);
 }
 
 #endif /* !WIN32 */

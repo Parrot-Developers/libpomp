@@ -190,6 +190,9 @@ int pomp_ctx_notify_msg(struct pomp_ctx *ctx, struct pomp_conn *conn,
 int pomp_ctx_notify_raw_buf(struct pomp_ctx *ctx, struct pomp_conn *conn,
 		struct pomp_buffer *buf);
 
+int pomp_ctx_notify_send(struct pomp_ctx *ctx, struct pomp_conn *conn,
+		struct pomp_buffer *buf, uint32_t status);
+
 /* Connection functions not part of public API */
 
 struct pomp_conn *pomp_conn_new(struct pomp_ctx *ctx,

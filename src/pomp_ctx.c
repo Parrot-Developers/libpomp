@@ -106,6 +106,9 @@ struct pomp_ctx {
 	/** Function to call when sockets are created */
 	pomp_socket_cb_t	sockcb;
 
+	/** Function to call when send operation are completed */
+	pomp_send_cb_t		sendcb;
+
 	/** Timer for connection retries */
 	struct pomp_timer	*timer;
 
@@ -893,6 +896,18 @@ int pomp_ctx_set_socket_cb(struct pomp_ctx *ctx, pomp_socket_cb_t cb)
 /*
  * See documentation in public header.
  */
+POMP_API int pomp_ctx_set_send_cb(struct pomp_ctx *ctx, pomp_send_cb_t cb)
+{
+	POMP_RETURN_ERR_IF_FAILED(ctx != NULL, -EINVAL);
+	POMP_RETURN_ERR_IF_FAILED(cb != NULL, -EINVAL);
+	POMP_RETURN_ERR_IF_FAILED(ctx->addr == NULL, -EBUSY);
+	ctx->sendcb = cb;
+	return 0;
+}
+
+/*
+ * See documentation in public header.
+ */
 int pomp_ctx_destroy(struct pomp_ctx *ctx)
 {
 	POMP_RETURN_ERR_IF_FAILED(ctx != NULL, -EINVAL);
@@ -1154,7 +1169,7 @@ int pomp_ctx_send_msg(struct pomp_ctx *ctx, const struct pomp_msg *msg)
 /*
  * See documentation in public header.
  */
-POMP_API int pomp_ctx_send_msg_to(struct pomp_ctx *ctx,
+int pomp_ctx_send_msg_to(struct pomp_ctx *ctx,
 		const struct pomp_msg *msg,
 		const struct sockaddr *addr, uint32_t addrlen)
 {
@@ -1183,8 +1198,8 @@ int pomp_ctx_send(struct pomp_ctx *ctx, uint32_t msgid, const char *fmt, ...)
 /*
  * See documentation in public header.
  */
-int pomp_ctx_sendv(struct pomp_ctx *ctx, uint32_t msgid, const char *fmt,
-		va_list args)
+int pomp_ctx_sendv(struct pomp_ctx *ctx, uint32_t msgid,
+		const char *fmt, va_list args)
 {
 	int res = 0;
 	struct pomp_msg msg = POMP_MSG_INITIALIZER;
@@ -1382,5 +1397,25 @@ int pomp_ctx_notify_raw_buf(struct pomp_ctx *ctx, struct pomp_conn *conn,
 	POMP_RETURN_ERR_IF_FAILED(buf != NULL, -EINVAL);
 
 	(*ctx->rawcb)(ctx, conn, buf, ctx->userdata);
+	return 0;
+}
+
+/**
+ * Notify completion status of a send operation.
+ * @param ctx : context.
+ * @param conn : connection on which the send operation was done.
+ * @param buf : buffer sent.
+ * @param status : status of the send operation.
+ * @return 0 in case of success, negative errno value in case of error.
+ */
+int pomp_ctx_notify_send(struct pomp_ctx *ctx, struct pomp_conn *conn,
+		struct pomp_buffer *buf, uint32_t status)
+{
+	POMP_RETURN_ERR_IF_FAILED(ctx != NULL, -EINVAL);
+	POMP_RETURN_ERR_IF_FAILED(conn != NULL, -EINVAL);
+	POMP_RETURN_ERR_IF_FAILED(buf != NULL, -EINVAL);
+
+	if (ctx->sendcb != NULL)
+		(*ctx->sendcb)(ctx, conn, buf, status, NULL, ctx->userdata);
 	return 0;
 }

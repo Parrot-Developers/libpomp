@@ -645,6 +645,7 @@ static void pomp_conn_process_write(struct pomp_conn *conn)
 {
 	int res = 0;
 	struct pomp_io_buffer *iobuf = NULL;
+	uint32_t status = 0;
 
 	/* Write pending buffers */
 	iobuf = conn->headbuf;
@@ -664,6 +665,13 @@ static void pomp_conn_process_write(struct pomp_conn *conn)
 			conn->headbuf = iobuf->next;
 			if (conn->headbuf == NULL)
 				conn->tailbuf = NULL;
+
+			status = POMP_SEND_STATUS_OK;
+			if (conn->headbuf == NULL)
+				status |= POMP_SEND_STATUS_QUEUE_EMPTY;
+			pomp_ctx_notify_send(conn->ctx, conn,
+					iobuf->buf, status);
+
 			pomp_io_buffer_destroy(iobuf);
 			iobuf = conn->headbuf;
 		}
@@ -825,6 +833,8 @@ int pomp_conn_destroy(struct pomp_conn *conn)
  */
 int pomp_conn_close(struct pomp_conn *conn)
 {
+	struct pomp_io_buffer *iobuf = NULL;
+	uint32_t status = 0;
 	POMP_RETURN_ERR_IF_FAILED(conn != NULL, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(conn->fd >= 0, -EINVAL);
 
@@ -837,6 +847,22 @@ int pomp_conn_close(struct pomp_conn *conn)
 			POMP_LOG_FD_ERRNO("shutdown", conn->fd);
 	}
 	pomp_loop_remove(conn->loop, conn->fd);
+
+	/* Abort pending write buffers */
+	iobuf = conn->headbuf;
+	while (iobuf != NULL) {
+		conn->headbuf = iobuf->next;
+		if (conn->headbuf == NULL)
+			conn->tailbuf = NULL;
+
+		status = POMP_SEND_STATUS_ABORTED;
+		if (conn->headbuf == NULL)
+			status |= POMP_SEND_STATUS_QUEUE_EMPTY;
+		pomp_ctx_notify_send(conn->ctx, conn, iobuf->buf, status);
+
+		pomp_io_buffer_destroy(iobuf);
+		iobuf = conn->headbuf;
+	}
 
 	/* Release resources */
 	close(conn->fd);
@@ -995,6 +1021,9 @@ static int pomp_conn_send_buf_internal(struct pomp_conn *conn,
 				return res;
 		} else if (tmpiobuf.off == tmpiobuf.len) {
 			/* If everything was written, nothing more to do */
+			pomp_ctx_notify_send(conn->ctx, conn, tmpiobuf.buf,
+					POMP_SEND_STATUS_OK |
+					POMP_SEND_STATUS_QUEUE_EMPTY);
 			return 0;
 		} else {
 			off = tmpiobuf.off;
@@ -1066,8 +1095,8 @@ int pomp_conn_send(struct pomp_conn *conn, uint32_t msgid, const char *fmt, ...)
 /*
  * See documentation in public header.
  */
-int pomp_conn_sendv(struct pomp_conn *conn, uint32_t msgid, const char *fmt,
-		va_list args)
+int pomp_conn_sendv(struct pomp_conn *conn, uint32_t msgid,
+		const char *fmt, va_list args)
 {
 	int res = 0;
 	struct pomp_msg msg = POMP_MSG_INITIALIZER;
