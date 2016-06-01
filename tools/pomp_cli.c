@@ -131,9 +131,11 @@ static int setup_timeout()
 	int res = 0;
 
 	/* Create timer */
-	s_app.timer = pomp_timer_new(s_app.loop, &timer_cb, NULL);
-	if (s_app.timer == NULL)
-		goto error;
+	if (s_app.timer == NULL) {
+		s_app.timer = pomp_timer_new(s_app.loop, &timer_cb, NULL);
+		if (s_app.timer == NULL)
+			goto error;
+	}
 
 	/* Set timer */
 	res = pomp_timer_set(s_app.timer, s_app.timeout * 1000);
@@ -476,9 +478,9 @@ error:
 	res = -1;
 out:
 	/* Cleanup */
-	cancel_timeout();
 	if (s_app.ctx != NULL) {
 		pomp_ctx_stop(s_app.ctx);
+		cancel_timeout();
 		pomp_ctx_destroy(s_app.ctx);
 		s_app.ctx = NULL;
 		s_app.loop = NULL;
