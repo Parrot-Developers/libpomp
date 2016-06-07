@@ -679,7 +679,7 @@ static void pomp_conn_process_write(struct pomp_conn *conn)
 
 	/* If queue is empty, stop monitoring OUT events */
 	if (conn->headbuf == NULL) {
-		POMP_LOGD("conn=%p fd=%d exit async mode", conn, conn->fd);
+		POMP_LOGI("conn=%p fd=%d exit async mode", conn, conn->fd);
 		pomp_loop_update2(conn->loop, conn->fd, 0, POMP_FD_EVENT_OUT);
 	}
 }
@@ -1041,7 +1041,7 @@ static int pomp_conn_send_buf_internal(struct pomp_conn *conn,
 
 	if (conn->tailbuf == NULL) {
 		/* No previous pending buffer */
-		POMP_LOGD("conn=%p fd=%d enter async mode", conn, conn->fd);
+		POMP_LOGI("conn=%p fd=%d enter async mode", conn, conn->fd);
 		conn->headbuf = iobuf;
 		conn->tailbuf = iobuf;
 		pomp_loop_update2(conn->loop, conn->fd, POMP_FD_EVENT_OUT, 0);
