@@ -16,7 +16,7 @@ LOCAL_EXPORT_C_INCLUDES := \
 # Test code needs access to internal functions
 ifndef TARGET_TEST
   LOCAL_CFLAGS += -fvisibility=hidden
-else ifeq ("$(TARGET_OS)","mingw32")
+else ifeq ("$(TARGET_OS)","windows")
   LOCAL_LDFLAGS += -Wl,--export-all-symbols
 endif
 LOCAL_CFLAGS += -DPOMP_API_EXPORTS
@@ -34,7 +34,7 @@ LOCAL_SRC_FILES := \
 	src/pomp_prot.c \
 	src/pomp_timer.c
 
-ifeq ("$(TARGET_OS)","mingw32")
+ifeq ("$(TARGET_OS)","windows")
   LOCAL_LDLIBS += -lws2_32
 endif
 
@@ -110,7 +110,7 @@ LOCAL_SRC_FILES := \
 LOCAL_LIBRARIES := libpomp libcunit
 LOCAL_CONDITIONAL_LIBRARIES := OPTIONAL:libulog
 
-ifeq ("$(TARGET_OS)","mingw32")
+ifeq ("$(TARGET_OS)","windows")
   LOCAL_LDLIBS += -lws2_32
 endif
 
