@@ -489,6 +489,17 @@ static void test_ctx(const struct sockaddr *addr1, uint32_t addrlen1,
 	res = pomp_ctx_process_fd(NULL);
 	CU_ASSERT_EQUAL(res, -EINVAL);
 
+	/* Keepalive settings */
+	if (!isdgram) {
+		/* TODO: check that it actually does something */
+		res = pomp_ctx_setup_keepalive(ctx1, 0, 0, 0, 0);
+		CU_ASSERT_EQUAL(res, 0);
+		res = pomp_ctx_setup_keepalive(ctx1, 1, 5, 2, 1);
+		CU_ASSERT_EQUAL(res, 0);
+		res = pomp_ctx_setup_keepalive(NULL, 0, 0, 0, 0);
+		CU_ASSERT_EQUAL(res, -EINVAL);
+	}
+
 	/* Run contexts (they shall connect each other) */
 	run_ctx(ctx1, ctx2, 100);
 	if (!isdgram) {

@@ -121,6 +121,14 @@ struct pomp_ctx {
 	/** Prevent event processing during stop and destroy */
 	int			stopping;
 
+	/** Keepalive settings */
+	struct {
+		int		enable;
+		int		idle;
+		int		interval;
+		int		count;
+	} keepalive;
+
 	/** Client/Server specific parameters */
 	union {
 		/** Server specific parameters */
@@ -165,15 +173,16 @@ struct pomp_ctx {
 
 /**
  * Setup keep alive for inet socket fd.
+ * @param ctx : context.
  * @param fd : fd to configure.
  * @return 0 in case of success, negative errno value in case of error.
  */
-static int fd_socket_setup_keepalive(int fd)
+static int fd_socket_setup_keepalive(struct pomp_ctx *ctx, int fd)
 {
 	int res = 0;
 
-	/* Activate keepalive */
-	int keepalive = 1;
+	/* Activate keepalive ? */
+	int keepalive = ctx->keepalive.enable;
 	if (setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &keepalive,
 			sizeof(keepalive)) < 0) {
 		res = -errno;
@@ -196,9 +205,9 @@ static int fd_socket_setup_keepalive(int fd)
 		DWORD dwres = 0;
 		struct tcp_keepalive ka;
 		memset(&ka, 0, sizeof(ka));
-		ka.onoff = 1;
-		ka.keepalivetime = 5000;
-		ka.keepaliveinterval = 1000;
+		ka.onoff = keepalive;
+		ka.keepalivetime = ctx->keepalive.idle * 1000;
+		ka.keepaliveinterval = ctx->keepalive.interval * 1000;
 		if (WSAIoctl(fd, SIO_KEEPALIVE_VALS, &ka, sizeof(ka),
 				NULL, 0, &dwres, NULL, NULL) < 0) {
 			res = -errno;
@@ -212,10 +221,10 @@ static int fd_socket_setup_keepalive(int fd)
 	 * TCP_KEEPINTVL : Interval between keepalives (in seconds)
 	 * TCP_KEEPCNT   : Number of keepalives before death
 	 */
-	{
-		int keepidle = 5;
-		int keepinterval = 1;
-		int keepcount = 2;
+	if (keepalive) {
+		int keepidle = ctx->keepalive.idle;
+		int keepinterval = ctx->keepalive.interval;
+		int keepcount = ctx->keepalive.count;
 
 		if (setsockopt(fd, SOL_TCP, TCP_KEEPIDLE, &keepidle,
 				sizeof(keepidle)) < 0) {
@@ -282,7 +291,7 @@ static int server_accept_conn(struct pomp_ctx *ctx)
 
 	/* Enable keep alive for TCP/IP sockets */
 	if (POMP_IS_INET(ctx->addr->sa_family))
-		fd_socket_setup_keepalive(fd);
+		fd_socket_setup_keepalive(ctx, fd);
 
 	/* Allocate connection structure, transfer ownership of fd */
 	conn = pomp_conn_new(ctx, ctx->loop, fd, 0, ctx->israw);
@@ -494,7 +503,7 @@ static int client_complete_conn(struct pomp_ctx *ctx)
 
 	/* Enable keep alive for TCP/IP sockets */
 	if (POMP_IS_INET(ctx->addr->sa_family))
-		fd_socket_setup_keepalive(ctx->u.client.fd);
+		fd_socket_setup_keepalive(ctx, ctx->u.client.fd);
 
 	/* Allocate connection structure */
 	conn = pomp_conn_new(ctx, ctx->loop, ctx->u.client.fd, 0, ctx->israw);
@@ -854,6 +863,12 @@ struct pomp_ctx *pomp_ctx_new_with_loop(pomp_event_cb_t cb,
 	ctx->extloop = 1;
 	ctx->israw = 0;
 
+	/* Default keepalive settings */
+	ctx->keepalive.enable = 1;
+	ctx->keepalive.idle = 5;
+	ctx->keepalive.interval = 1;
+	ctx->keepalive.count = 2;
+
 	/* Allocate timer */
 	ctx->timer = pomp_timer_new(ctx->loop, &timer_cb, ctx);
 	if (ctx->timer == NULL)
@@ -896,12 +911,26 @@ int pomp_ctx_set_socket_cb(struct pomp_ctx *ctx, pomp_socket_cb_t cb)
 /*
  * See documentation in public header.
  */
-POMP_API int pomp_ctx_set_send_cb(struct pomp_ctx *ctx, pomp_send_cb_t cb)
+int pomp_ctx_set_send_cb(struct pomp_ctx *ctx, pomp_send_cb_t cb)
 {
 	POMP_RETURN_ERR_IF_FAILED(ctx != NULL, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(cb != NULL, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(ctx->addr == NULL, -EBUSY);
 	ctx->sendcb = cb;
+	return 0;
+}
+
+/*
+ * See documentation in public header.
+ */
+int pomp_ctx_setup_keepalive(struct pomp_ctx *ctx, int enable,
+		int idle, int interval, int count)
+{
+	POMP_RETURN_ERR_IF_FAILED(ctx != NULL, -EINVAL);
+	ctx->keepalive.enable = enable;
+	ctx->keepalive.idle = idle;
+	ctx->keepalive.interval = interval;
+	ctx->keepalive.count = count;
 	return 0;
 }
 

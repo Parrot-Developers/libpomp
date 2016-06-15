@@ -279,6 +279,21 @@ POMP_API int pomp_ctx_set_socket_cb(struct pomp_ctx *ctx, pomp_socket_cb_t cb);
 POMP_API int pomp_ctx_set_send_cb(struct pomp_ctx *ctx, pomp_send_cb_t cb);
 
 /**
+ * Setup TCP keepalive. Settings will be applied to all future TCP connections.
+ * Current connections (if any) will not be affected.
+ * @param ctx : context.
+ * @param enable : 1 to enable, 0, to disable.
+ * @param idle : start keepalives after this period (in seconds).
+ * @param interval : Interval between keepalives (in seconds).
+ * @param count : number of keepalives before death.
+ * @return 0 in case of success, negative errno value in case of error.
+ *
+ * @remarks Default values if nothing else is spefified is (1, 5, 1, 2).
+ */
+POMP_API int pomp_ctx_setup_keepalive(struct pomp_ctx *ctx, int enable,
+		int idle, int interval, int count);
+
+/**
  * Destroy a context.
  * @param ctx : context.
  * @return 0 in case of success, negative errno value in case of error.
