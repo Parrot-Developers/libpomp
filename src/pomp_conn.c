@@ -122,6 +122,9 @@ struct pomp_conn {
 
 	/** Maximum number of file descriptors in 'fds' array */
 	size_t			fdmax;
+
+	/** Read suspended flag */
+	int			read_suspended;
 };
 
 /**
@@ -596,6 +599,10 @@ static void pomp_conn_process_read(struct pomp_conn *conn)
 {
 	int res = 0;
 
+	/* Do not read fd on read suspended */
+	if (conn->read_suspended)
+		return;
+
 	do {
 		/* If current read buffer is shared, unref it */
 		if (conn->readbuf != NULL && conn->readbuf->refcount > 1) {
@@ -626,7 +633,7 @@ static void pomp_conn_process_read(struct pomp_conn *conn)
 			if (!conn->isdgram)
 				conn->removeflag = 1;
 		}
-	} while (res > 0);
+	} while (res > 0 && !conn->read_suspended);
 
 	/* Always reset peer address after reading message on dgram sockets */
 	if (conn->isdgram) {
@@ -739,6 +746,7 @@ struct pomp_conn *pomp_conn_new(struct pomp_ctx *ctx,
 	conn->isdgram = isdgram;
 	conn->israw = israw;
 	conn->removeflag = 0;
+	conn->read_suspended = 0;
 	conn->readbuf = NULL;
 
 	/* Allocate protocol */
@@ -952,8 +960,14 @@ const struct pomp_cred *pomp_conn_get_peer_cred(struct pomp_conn *conn)
  */
 int pomp_conn_suspend_read(struct pomp_conn *conn)
 {
+	int res;
+
 	POMP_RETURN_ERR_IF_FAILED(conn != NULL, -EINVAL);
-	return pomp_loop_update2(conn->loop, conn->fd, 0, POMP_FD_EVENT_IN);
+	res = pomp_loop_update2(conn->loop, conn->fd, 0, POMP_FD_EVENT_IN);
+	if (res == 0)
+		conn->read_suspended = 1;
+
+	return res;
 }
 
 /*
@@ -961,8 +975,14 @@ int pomp_conn_suspend_read(struct pomp_conn *conn)
  */
 int pomp_conn_resume_read(struct pomp_conn *conn)
 {
+	int res;
+
 	POMP_RETURN_ERR_IF_FAILED(conn != NULL, -EINVAL);
-	return pomp_loop_update2(conn->loop, conn->fd, POMP_FD_EVENT_IN, 0);
+	res = pomp_loop_update2(conn->loop, conn->fd, POMP_FD_EVENT_IN, 0);
+	if (res == 0)
+		conn->read_suspended = 0;
+
+	return res;
 }
 
 /**
