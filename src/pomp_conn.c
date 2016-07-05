@@ -704,11 +704,8 @@ static void pomp_conn_cb(int fd, uint32_t revents, void *userdata)
 		pomp_conn_process_read(conn);
 	if (!conn->removeflag && (revents & POMP_FD_EVENT_OUT))
 		pomp_conn_process_write(conn);
-	if (conn->removeflag
-			|| (revents & POMP_FD_EVENT_HUP)
-			|| (revents & POMP_FD_EVENT_ERR)) {
+	if (conn->removeflag || (revents & POMP_FD_EVENT_ERR))
 		pomp_ctx_remove_conn(conn->ctx, conn);
-	}
 }
 
 /**
