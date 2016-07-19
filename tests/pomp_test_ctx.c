@@ -48,6 +48,7 @@ static void test_event_cb_t(struct pomp_ctx *ctx, enum pomp_event event,
 		struct pomp_conn *conn, const struct pomp_msg *msg,
 		void *userdata)
 {
+	int fd;
 	int res = 0;
 	struct test_data *data = userdata;
 	const char *eventstr = pomp_event_str(event);
@@ -59,6 +60,13 @@ static void test_event_cb_t(struct pomp_ctx *ctx, enum pomp_event event,
 	switch (event) {
 	case POMP_EVENT_CONNECTED:
 		data->connection++;
+
+		/* Invalid get fd (NULL param) */
+		fd = pomp_conn_get_fd(NULL);
+		CU_ASSERT_EQUAL(fd, -EINVAL);
+
+		fd = pomp_conn_get_fd(conn);
+		CU_ASSERT_TRUE(fd >= 0);
 
 		addr = pomp_conn_get_local_addr(conn, &addrlen);
 		CU_ASSERT_TRUE(addr != NULL);

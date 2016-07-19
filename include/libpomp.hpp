@@ -208,6 +208,11 @@ public:
 		return pomp_conn_get_peer_cred(mConn);
 	}
 
+	/** Get file descriptor associated with the connection. */
+	inline int getFd() {
+		return pomp_conn_get_fd(mConn);
+	}
+
 	/** Send a message to the peer of the connection. */
 	inline int sendMsg(const Message &msg) {
 		return pomp_conn_send_msg(mConn, msg.getMsg());

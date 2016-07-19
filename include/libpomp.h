@@ -559,6 +559,13 @@ POMP_API const struct pomp_cred *pomp_conn_get_peer_cred(
 		struct pomp_conn *conn);
 
 /**
+ * Get file descriptor associated with the connection.
+ * @param conn : connection.
+ * @return fd of the connection or -EINVAL in case of error.
+ */
+POMP_API int pomp_conn_get_fd(struct pomp_conn *conn);
+
+/**
  * Suspend read operation on connection.
  * @param conn : connection.
  * @return 0 in case of success, negative errno value in case of error.

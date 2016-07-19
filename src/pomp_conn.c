@@ -955,6 +955,15 @@ const struct pomp_cred *pomp_conn_get_peer_cred(struct pomp_conn *conn)
 /*
  * See documentation in public header.
  */
+int pomp_conn_get_fd(struct pomp_conn *conn)
+{
+	POMP_RETURN_ERR_IF_FAILED(conn != NULL, -EINVAL);
+	return conn->fd;
+}
+
+/*
+ * See documentation in public header.
+ */
 int pomp_conn_suspend_read(struct pomp_conn *conn)
 {
 	int res;
