@@ -407,7 +407,7 @@ static int server_start(struct pomp_ctx *ctx)
 	}
 
 	/* Start listening */
-	if (listen(ctx->u.server.fd, 0) < 0) {
+	if (listen(ctx->u.server.fd, SOMAXCONN) < 0) {
 		res = -errno;
 		POMP_LOG_FD_ERRNO("listen", ctx->u.server.fd);
 		goto error;
