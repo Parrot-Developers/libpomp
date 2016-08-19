@@ -730,6 +730,20 @@ POMP_API int pomp_buffer_get_data(struct pomp_buffer *buf,
 POMP_API int pomp_buffer_get_cdata(struct pomp_buffer *buf,
 		const void **cdata, size_t *len, size_t *size);
 
+/**
+ * Append data to the buffer.
+ * @param buf : buffer.
+ * @param data : data to append.
+ * @param len : length of the data to append.
+ * @return 0 in case of success, negative errno value in case of error.
+ * -EPERM is returned if the buffer is shared.
+ *
+ * @remarks Can re-allocate the data buffer and invalidate the cdata
+ * retrieved before.
+ */
+POMP_API int pomp_buffer_append_data(struct pomp_buffer *buf,
+		const void *data, size_t len);
+
 /*
  * Message API.
  */

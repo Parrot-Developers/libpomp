@@ -340,6 +340,21 @@ int pomp_buffer_get_cdata(struct pomp_buffer *buf,
 	return 0;
 }
 
+/*
+ * See documentation in public header.
+ */
+int pomp_buffer_append_data(struct pomp_buffer *buf,
+		const void *data, size_t len)
+{
+	size_t pos;
+
+	POMP_RETURN_ERR_IF_FAILED(buf != NULL, -EINVAL);
+	POMP_RETURN_ERR_IF_FAILED(data != NULL, -EINVAL);
+
+	pos = buf->len;
+	return pomp_buffer_write(buf, &pos, data, len);
+}
+
 /**
  * Make sure internal data has enough room for the given size.
  * @param buf : buffer.
