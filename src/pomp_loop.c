@@ -411,15 +411,12 @@ int pomp_loop_remove(struct pomp_loop *loop, int fd)
 	}
 
 	/* Implementation specific */
-	res = pomp_loop_do_remove(loop, pfd);
+	pomp_loop_do_remove(loop, pfd);
 
-	/* Remove from epoll */
-	if (res == 0) {
-		/* Remove from our own list */
-		res = pomp_loop_remove_pfd(loop, pfd);
-		if (res == 0)
-			free(pfd);
-	}
+	/* Always remove from our own list */
+	res = pomp_loop_remove_pfd(loop, pfd);
+	if (res == 0)
+		free(pfd);
 	return res;
 }
 
