@@ -38,6 +38,10 @@ ifeq ("$(TARGET_OS)","windows")
   LOCAL_LDLIBS += -lws2_32
 endif
 
+ifeq ("$(TARGET_OS_FLAVOUR)","android")
+  LOCAL_LDLIBS += -llog
+endif
+
 LOCAL_DOXYFILE := Doxyfile
 
 include $(BUILD_LIBRARY)
