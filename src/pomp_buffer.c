@@ -377,14 +377,8 @@ int pomp_buffer_ensure_capacity(struct pomp_buffer *buf, size_t capacity)
 	return 0;
 }
 
-/**
- * Write data in buffer.
- * @param buf : buffer.
- * @param pos : write position. It will be updated in case of success.
- * @param p : pointer to data to write.
- * @param n : number of bytes to write.
- * @return 0 in case of success, negative errno value in case of error.
- * -EPERM is returned if the buffer is shared (ref count is greater than 1).
+/*
+ * See documentation in public header.
  */
 int pomp_buffer_write(struct pomp_buffer *buf, size_t *pos,
 		const void *p, size_t n)
@@ -468,13 +462,8 @@ error:
 	return res;
 }
 
-/**
- * Read data from buffer.
- * @param buf : buffer.
- * @param pos : read position. It will be updated in case of success.
- * @param p : pointer to data to read.
- * @param n : number of bytes to read.
- * @return 0 in case of success, negative errno value in case of error.
+/*
+ * See documentation in public header.
  */
 int pomp_buffer_read(const struct pomp_buffer *buf, size_t *pos,
 		void *p, size_t n)
@@ -492,14 +481,8 @@ int pomp_buffer_read(const struct pomp_buffer *buf, size_t *pos,
 	return 0;
 }
 
-/**
- * Read data from buffer without copy.
- * @param buf : buffer.
- * @param pos : read position. It will be updated in case of success.
- * @param p : will receive pointer to data inside buffer. It is valid as long
- * as the buffer is valid and no write or resize operation is performed.
- * @param n : number of bytes to read.
- * @return 0 in case of success, negative errno value in case of error.
+/*
+ * See documentation in public header.
  */
 int pomp_buffer_cread(const struct pomp_buffer *buf, size_t *pos,
 		const void **p, size_t n)

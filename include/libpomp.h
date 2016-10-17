@@ -738,11 +738,49 @@ POMP_API int pomp_buffer_get_cdata(struct pomp_buffer *buf,
  * @return 0 in case of success, negative errno value in case of error.
  * -EPERM is returned if the buffer is shared.
  *
- * @remarks Can re-allocate the data buffer and invalidate the cdata
- * retrieved before.
+ * @remarks Can re-allocate the internal data buffer and invalidate the
+ * data/cdata retrieved before.
  */
 POMP_API int pomp_buffer_append_data(struct pomp_buffer *buf,
 		const void *data, size_t len);
+
+/**
+ * Write data to the buffer at the given position.
+ * @param buf : buffer.
+ * @param pos : position in the buffer (will be updated after success)
+ * @param data : data to write.
+ * @param len : length of the data to write.
+ * @return 0 in case of success, negative errno value in case of error.
+ * -EPERM is returned if the buffer is shared.
+ *
+ * @remarks Can re-allocate the internal data buffer and invalidate the
+ * data/cdata retrieved before.
+ */
+POMP_API int pomp_buffer_write(struct pomp_buffer *buf, size_t *pos,
+		const void *data, size_t len);
+
+/**
+ * Read data from buffer at the given position.
+ * @param buf : buffer.
+ * @param pos : read position. It will be updated in case of success.
+ * @param data : pointer to data to read.
+ * @param len : number of bytes to read.
+ * @return 0 in case of success, negative errno value in case of error.
+ */
+POMP_API int pomp_buffer_read(const struct pomp_buffer *buf, size_t *pos,
+		void *p, size_t n);
+
+/**
+ * Read data from buffer without copy.
+ * @param buf : buffer.
+ * @param pos : read position. It will be updated in case of success.
+ * @param cdata : will receive pointer to data inside buffer. It is valid as
+ * long as the buffer is valid and no write or resize operation is performed.
+ * @param len : number of bytes to read.
+ * @return 0 in case of success, negative errno value in case of error.
+ */
+POMP_API int pomp_buffer_cread(const struct pomp_buffer *buf, size_t *pos,
+		const void **cdata, size_t len);
 
 /*
  * Message API.
