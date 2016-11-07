@@ -289,8 +289,18 @@ struct pomp_loop *pomp_loop_new(void)
 int pomp_loop_destroy(struct pomp_loop *loop)
 {
 	int res = 0;
+	struct pomp_fd *pfd = NULL;
 	POMP_RETURN_ERR_IF_FAILED(loop != NULL, -EINVAL);
-	POMP_RETURN_ERR_IF_FAILED(loop->pfds == NULL, -EBUSY);
+
+
+	if (loop->pfds) {
+		for (pfd = loop->pfds; pfd != NULL; pfd = pfd->next) {
+			POMP_LOGE("fd=%d, cb=%p not removed from loop",
+					pfd->fd, pfd->cb);
+		}
+		return -EBUSY;
+	}
+
 
 	/* Implementation specific */
 	res = pomp_loop_do_destroy(loop);
