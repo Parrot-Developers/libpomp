@@ -689,6 +689,13 @@ POMP_API void pomp_buffer_ref(struct pomp_buffer *buf);
 POMP_API void pomp_buffer_unref(struct pomp_buffer *buf);
 
 /**
+ * Determine if the buffer is shared
+ * @param buf : buffer.
+ * @return 1 if the buffer is shared (ref count greater than 1), 0 otherwise.
+ */
+POMP_API int pomp_buffer_is_shared(struct pomp_buffer *buf);
+
+/**
  * Set the capacity of the buffer.
  * @param buf : buffer.
  * @param capacity : new capacity of buffer (shall be greater than used length).

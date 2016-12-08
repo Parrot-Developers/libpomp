@@ -279,6 +279,14 @@ void pomp_buffer_unref(struct pomp_buffer *buf)
 /*
  * See documentation in public header.
  */
+int pomp_buffer_is_shared(struct pomp_buffer *buf)
+{
+	return buf != NULL && buf->refcount > 1;
+}
+
+/*
+ * See documentation in public header.
+ */
 int pomp_buffer_set_capacity(struct pomp_buffer *buf, size_t capacity)
 {
 	uint8_t *data = NULL;

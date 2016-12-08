@@ -218,10 +218,13 @@ static void test_buffer_base(void)
 	CU_ASSERT_EQUAL(buf->capacity, 0);
 	CU_ASSERT_EQUAL(buf->len, 0);
 	CU_ASSERT_EQUAL(buf->refcount, 1);
+	CU_ASSERT_EQUAL(pomp_buffer_is_shared(buf), 0);
 	pomp_buffer_ref(buf);
 	CU_ASSERT_EQUAL(buf->refcount, 2);
+	CU_ASSERT_EQUAL(pomp_buffer_is_shared(buf), 1);
 	pomp_buffer_unref(buf);
 	CU_ASSERT_EQUAL(buf->refcount, 1);
+	CU_ASSERT_EQUAL(pomp_buffer_is_shared(buf), 0);
 
 	/* Copy (without data) */
 	buf2 = pomp_buffer_new_copy(buf);
