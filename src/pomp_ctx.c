@@ -817,8 +817,6 @@ struct pomp_ctx *pomp_ctx_new(pomp_event_cb_t cb, void *userdata)
 	struct pomp_ctx *ctx = NULL;
 	struct pomp_loop *loop = NULL;
 
-	POMP_RETURN_VAL_IF_FAILED(cb != NULL, -EINVAL, NULL);
-
 	/* Create a loop */
 	loop = pomp_loop_new();
 	if (loop == NULL)
@@ -848,7 +846,6 @@ struct pomp_ctx *pomp_ctx_new_with_loop(pomp_event_cb_t cb,
 {
 	struct pomp_ctx *ctx = NULL;
 
-	POMP_RETURN_VAL_IF_FAILED(cb != NULL, -EINVAL, NULL);
 	POMP_RETURN_VAL_IF_FAILED(loop != NULL, -EINVAL, NULL);
 
 	/* Allocate context structure */
@@ -1383,11 +1380,12 @@ int pomp_ctx_notify_event(struct pomp_ctx *ctx, enum pomp_event event,
 		struct pomp_conn *conn)
 {
 	POMP_RETURN_ERR_IF_FAILED(ctx != NULL, -EINVAL);
-	POMP_RETURN_ERR_IF_FAILED(ctx->eventcb != NULL, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(event != POMP_EVENT_MSG, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(conn != NULL, -EINVAL);
 
-	(*ctx->eventcb)(ctx, event, conn, NULL, ctx->userdata);
+	if (ctx->eventcb != NULL)
+		(*ctx->eventcb)(ctx, event, conn, NULL, ctx->userdata);
+
 	return 0;
 }
 
@@ -1402,11 +1400,12 @@ int pomp_ctx_notify_msg(struct pomp_ctx *ctx, struct pomp_conn *conn,
 		const struct pomp_msg *msg)
 {
 	POMP_RETURN_ERR_IF_FAILED(ctx != NULL, -EINVAL);
-	POMP_RETURN_ERR_IF_FAILED(ctx->eventcb != NULL, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(conn != NULL, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(msg != NULL, -EINVAL);
 
-	(*ctx->eventcb)(ctx, POMP_EVENT_MSG, conn, msg, ctx->userdata);
+	if (ctx->eventcb != NULL)
+		(*ctx->eventcb)(ctx, POMP_EVENT_MSG, conn, msg, ctx->userdata);
+
 	return 0;
 }
 
