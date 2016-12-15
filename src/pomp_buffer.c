@@ -363,14 +363,8 @@ int pomp_buffer_append_data(struct pomp_buffer *buf,
 	return pomp_buffer_write(buf, &pos, data, len);
 }
 
-/**
- * Make sure internal data has enough room for the given size.
- * @param buf : buffer.
- * @param capacity : new capacity of buffer.
- * @return 0 in case of success, negative errno value in case of error.
- * -EPERM is returned if the buffer is shared (ref count is greater than 1).
- *
- * @remarks : internally the size will be aligned to POMP_BUFFER_ALLOC_STEP.
+/*
+ * See documentation in public header.
  */
 int pomp_buffer_ensure_capacity(struct pomp_buffer *buf, size_t capacity)
 {

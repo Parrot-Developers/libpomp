@@ -705,6 +705,18 @@ POMP_API int pomp_buffer_is_shared(struct pomp_buffer *buf);
 POMP_API int pomp_buffer_set_capacity(struct pomp_buffer *buf, size_t capacity);
 
 /**
+ * Make sure internal data has enough room for the given size.
+ * @param buf : buffer.
+ * @param capacity : new capacity of buffer.
+ * @return 0 in case of success, negative errno value in case of error.
+ * -EPERM is returned if the buffer is shared (ref count is greater than 1).
+ *
+ * @remarks : internally the size will be aligned to POMP_BUFFER_ALLOC_STEP.
+ */
+POMP_API int pomp_buffer_ensure_capacity(struct pomp_buffer *buf,
+		size_t capacity);
+
+/**
  * Set the used length of the buffer.
  * @param buf : buffer.
  * @param len : used length of data (shall be lesser than allocated size).
