@@ -368,9 +368,13 @@ static void test_ctx(const struct sockaddr *addr1, uint32_t addrlen1,
 		CU_ASSERT_EQUAL(res, 0);
 	}
 
-	/* Invalid create (NULL param) */
+	/* Create context without callback */
 	ctx2 = pomp_ctx_new(NULL, &data);
-	CU_ASSERT_PTR_NULL(ctx2);
+	CU_ASSERT_PTR_NOT_NULL_FATAL(ctx2);
+	res = pomp_ctx_destroy(ctx2);
+	CU_ASSERT_EQUAL(res, 0);
+
+	/* Invalid create (NULL 3nd arg) */
 	ctx2 = pomp_ctx_new_with_loop(NULL, &data, NULL);
 	CU_ASSERT_PTR_NULL(ctx2);
 	ctx2 = pomp_ctx_new_with_loop(&test_event_cb_t, &data, NULL);
