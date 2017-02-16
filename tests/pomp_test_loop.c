@@ -503,9 +503,14 @@ static void test_loop_idle(void)
 	res = pomp_loop_idle_remove(NULL, &idle_cb, &data);
 	CU_ASSERT_EQUAL(res, -EINVAL);
 
+	/* Check register function is called by the destroy of the loop */
+	data.n = 0;
+	res = pomp_loop_idle_add(data.loop, &idle_cb, &data);
+	CU_ASSERT_EQUAL(res, 0);
 	/* Destroy loop */
 	res = pomp_loop_destroy(data.loop);
 	CU_ASSERT_EQUAL(res, 0);
+	CU_ASSERT_EQUAL(data.n, 1);
 }
 
 /** */

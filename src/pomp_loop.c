@@ -292,6 +292,10 @@ int pomp_loop_destroy(struct pomp_loop *loop)
 	struct pomp_fd *pfd = NULL;
 	POMP_RETURN_ERR_IF_FAILED(loop != NULL, -EINVAL);
 
+	/* Call idle entries */
+	res = pomp_loop_idle_check(loop);
+	if (res < 0)
+		return res;
 
 	if (loop->pfds) {
 		for (pfd = loop->pfds; pfd != NULL; pfd = pfd->next) {
