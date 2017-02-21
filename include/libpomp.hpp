@@ -483,15 +483,19 @@ private:
 
 		case POMP_EVENT_DISCONNECTED:
 			it = self->findConn(_conn);
-			conn = *it;
-			self->mEventHandler->onDisconnected(self, conn);
-			self->mConnections.erase(it);
-			delete conn;
+			if (it != self->mConnections.end()) {
+				conn = *it;
+				self->mEventHandler->onDisconnected(self, conn);
+				self->mConnections.erase(it);
+				delete conn;
+			}
 			break;
 
 		case POMP_EVENT_MSG:
 			it = self->findConn(_conn);
-			self->mEventHandler->recvMessage(self, *it, Message(_msg));
+			if (it != self->mConnections.end())
+				conn = *it;
+			self->mEventHandler->recvMessage(self, conn, Message(_msg));
 			break;
 
 		default:
