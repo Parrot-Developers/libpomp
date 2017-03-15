@@ -372,6 +372,7 @@ private:
 private:
 	/** Internal timer callback */
 	inline static void timerCb(struct pomp_timer *_timer, void *_userdata) {
+		(void)_timer;
 		Handler *handler = reinterpret_cast<Handler *>(_userdata);
 		handler->processTimer();
 	}
@@ -435,9 +436,9 @@ class EventHandler {
 public:
 	inline EventHandler() {}
 	inline virtual ~EventHandler() {}
-	inline virtual void onConnected(Context *ctx, Connection *conn) {}
-	inline virtual void onDisconnected(Context *ctx, Connection *conn) {}
-	inline virtual void recvMessage(Context *ctx, Connection *conn, const Message &msg) {}
+	inline virtual void onConnected(Context *ctx, Connection *conn) { (void)ctx; (void)conn; }
+	inline virtual void onDisconnected(Context *ctx, Connection *conn) { (void)ctx; (void)conn; }
+	inline virtual void recvMessage(Context *ctx, Connection *conn, const Message &msg) { (void)ctx; (void)conn; (void)msg; }
 };
 
 /**
@@ -469,6 +470,8 @@ private:
 			struct pomp_conn *_conn,
 			const struct pomp_msg *_msg,
 			void *_userdata) {
+		(void)_ctx;
+
 		/* Get our own object from user data */
 		Context *self = reinterpret_cast<Context *>(_userdata);
 		Connection *conn = NULL;

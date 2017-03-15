@@ -254,8 +254,8 @@ struct MessageFormat {
 template<uint32_t Id>
 struct MessageFormat<Id> {
 	enum {id = Id};
-	inline static int encode(struct pomp_encoder *enc) {return 0;}
-	inline static int decode(struct pomp_decoder *dec) {return 0;}
+	inline static int encode(struct pomp_encoder *enc) { (void)enc; return 0;}
+	inline static int decode(struct pomp_decoder *dec) { (void)dec; return 0;}
 };
 
 /** Specialization for recursion */
