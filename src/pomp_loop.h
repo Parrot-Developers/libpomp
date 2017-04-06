@@ -62,7 +62,7 @@ struct pomp_loop {
 
 	struct pomp_idle_entry	*idle_entries;	/**< Idle entries */
 	uint32_t		idle_count;	/**< Number of idle entries */
-	int			idle_pending;	/**< Idle calls in progress */
+	int			is_destroying;	/**< Destruction Flag */
 
 #ifdef POMP_HAVE_LOOP_POLL
 	struct pollfd		*pollfds;	/**< Array of pollfd */

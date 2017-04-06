@@ -442,6 +442,8 @@ static void test_loop_wakeup(void)
 struct idle_data {
 	struct pomp_loop  *loop;
 	int               n;
+	int               recursion_enabled;
+	int               isdestroying;
 };
 
 /** */
@@ -451,15 +453,23 @@ static void idle_cb(void *userdata)
 	struct idle_data *data = userdata;
 	data->n++;
 
-	res = pomp_loop_idle_add(data->loop, &idle_cb, data);
-	CU_ASSERT_EQUAL(res, -EPERM);
+	if (data->recursion_enabled) {
+		/* Check recursive idle add */
+		res = pomp_loop_idle_add(data->loop, &idle_cb, data);
+		if (data->isdestroying) {
+			CU_ASSERT_EQUAL(res, -EPERM);
+		} else {
+			CU_ASSERT_EQUAL(res, 0);
+		}
+		data->recursion_enabled = 0;
+	}
 }
 
 /** */
 static void test_loop_idle(void)
 {
 	int res = 0;
-	struct idle_data data = {NULL, 0};
+	struct idle_data data = {NULL, 0, 0, 0};
 
 	/* Create loop */
 	data.loop = pomp_loop_new();
@@ -470,7 +480,7 @@ static void test_loop_idle(void)
 	res = pomp_loop_idle_add(data.loop, &idle_cb, &data);
 	CU_ASSERT_EQUAL(res, 0);
 	res = pomp_loop_process_fd(data.loop);
-	CU_ASSERT_EQUAL(res, -ETIMEDOUT);
+	CU_ASSERT_EQUAL(res, 0);
 	CU_ASSERT_EQUAL(data.n, 1);
 	res = pomp_loop_process_fd(data.loop);
 	CU_ASSERT_EQUAL(res, -ETIMEDOUT);
@@ -478,13 +488,18 @@ static void test_loop_idle(void)
 
 	/* Check register function is called twice */
 	data.n = 0;
+	data.recursion_enabled = 1;
 	res = pomp_loop_idle_add(data.loop, &idle_cb, &data);
 	CU_ASSERT_EQUAL(res, 0);
 	res = pomp_loop_idle_add(data.loop, &idle_cb, &data);
 	CU_ASSERT_EQUAL(res, 0);
 	res = pomp_loop_process_fd(data.loop);
-	CU_ASSERT_EQUAL(res, -ETIMEDOUT);
+	CU_ASSERT_EQUAL(res, 0);
 	CU_ASSERT_EQUAL(data.n, 2);
+	/* Check register function is called by the recursive idle add */
+	res = pomp_loop_process_fd(data.loop);
+	CU_ASSERT_EQUAL(res, 0);
+	CU_ASSERT_EQUAL(data.n, 3);
 
 	/* Check register function is not called */
 	data.n = 0;
@@ -493,7 +508,7 @@ static void test_loop_idle(void)
 	res = pomp_loop_idle_remove(data.loop, &idle_cb, &data);
 	CU_ASSERT_EQUAL(res, 0);
 	res = pomp_loop_wait_and_process(data.loop, 0);
-	CU_ASSERT_EQUAL(res, -ETIMEDOUT);
+	CU_ASSERT_EQUAL(res, 0);
 	CU_ASSERT_EQUAL(data.n, 0);
 
 	res = pomp_loop_idle_add(NULL, &idle_cb, &data);
@@ -505,6 +520,8 @@ static void test_loop_idle(void)
 
 	/* Check register function is called by the destroy of the loop */
 	data.n = 0;
+	data.recursion_enabled = 1;
+	data.isdestroying = 1;
 	res = pomp_loop_idle_add(data.loop, &idle_cb, &data);
 	CU_ASSERT_EQUAL(res, 0);
 	/* Destroy loop */

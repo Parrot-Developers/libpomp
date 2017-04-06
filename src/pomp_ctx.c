@@ -1447,3 +1447,15 @@ int pomp_ctx_notify_send(struct pomp_ctx *ctx, struct pomp_conn *conn,
 		(*ctx->sendcb)(ctx, conn, buf, status, NULL, ctx->userdata);
 	return 0;
 }
+
+/**
+ * Check if the send callback is set.
+ * @param ctx : context.
+ * @return 1 if the send callback is set else 0.
+ */
+int pomp_ctx_sendcb_is_set(struct pomp_ctx *ctx)
+{
+	POMP_RETURN_VAL_IF_FAILED(ctx != NULL, -EINVAL, 0);
+
+	return (ctx->sendcb != NULL) ? 1 : 0;
+}

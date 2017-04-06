@@ -156,25 +156,29 @@ static int pomp_loop_idle_check(struct pomp_loop *loop)
 {
 	uint32_t i = 0;
 	struct pomp_idle_entry *entry = NULL;
+	struct pomp_idle_entry *svg_idle_entries = NULL;
+	uint32_t svg_idle_count = 0;
 	POMP_RETURN_ERR_IF_FAILED(loop != NULL, -EINVAL);
-	POMP_RETURN_ERR_IF_FAILED(!loop->idle_pending, -EPERM);
 
 	if (loop->idle_count == 0)
 		return 0;
 
+	/* keep ref on the current idle_entries */
+	svg_idle_entries = loop->idle_entries;
+	svg_idle_count = loop->idle_count;
+	/* reset idle_entries to allow recursive idle entries */
+	loop->idle_entries = NULL;
+	loop->idle_count = 0;
+
 	/* Call registered entries, preventing modification during the loop */
-	loop->idle_pending = 1;
-	for (i = 0; i < loop->idle_count; i++) {
-		entry = &loop->idle_entries[i];
+	for (i = 0; i < svg_idle_count; i++) {
+		entry = &svg_idle_entries[i];
 		if (!entry->removed)
 			(*entry->cb)(entry->userdata);
 	}
-	loop->idle_pending = 0;
 
-	/* Free entries */
-	free(loop->idle_entries);
-	loop->idle_entries = NULL;
-	loop->idle_count = 0;
+	/* Free old entries */
+	free(svg_idle_entries);
 
 	return 0;
 }
@@ -291,6 +295,9 @@ int pomp_loop_destroy(struct pomp_loop *loop)
 	int res = 0;
 	struct pomp_fd *pfd = NULL;
 	POMP_RETURN_ERR_IF_FAILED(loop != NULL, -EINVAL);
+
+	/* Set destruction flag */
+	loop->is_destroying = 1;
 
 	/* Call idle entries */
 	res = pomp_loop_idle_check(loop);
@@ -434,7 +441,6 @@ int pomp_loop_remove(struct pomp_loop *loop, int fd)
 	return res;
 }
 
-
 /*
  * See documentation in public header.
  */
@@ -497,7 +503,7 @@ int pomp_loop_idle_add(struct pomp_loop *loop, pomp_idle_cb_t cb,
 	struct pomp_idle_entry *newentries = NULL;
 	POMP_RETURN_ERR_IF_FAILED(loop != NULL, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(cb != NULL, -EINVAL);
-	POMP_RETURN_ERR_IF_FAILED(!loop->idle_pending, -EPERM);
+	POMP_RETURN_ERR_IF_FAILED(!loop->is_destroying, -EPERM);
 
 	/* Allocate entry */
 	newentries = realloc(loop->idle_entries, (loop->idle_count + 1)
@@ -506,11 +512,16 @@ int pomp_loop_idle_add(struct pomp_loop *loop, pomp_idle_cb_t cb,
 		return -ENOMEM;
 	loop->idle_entries = newentries;
 
+	/* Force loop wake up */
+	if (loop->idle_count == 0)
+		pomp_loop_wakeup(loop);
+
 	/* Save entry */
 	loop->idle_entries[loop->idle_count].cb = cb;
 	loop->idle_entries[loop->idle_count].userdata = userdata;
 	loop->idle_entries[loop->idle_count].removed = 0;
 	loop->idle_count++;
+
 	return 0;
 }
 

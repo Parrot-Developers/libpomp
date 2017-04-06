@@ -64,6 +64,15 @@ struct pomp_io_buffer {
 	uint32_t		addrlen;/**< Destination address for dgram */
 };
 
+/** Data for send callback in idle mode */
+struct idle_sendcb_data {
+	struct pomp_ctx			*ctx;	/**< context */
+	struct pomp_conn		*conn;	/**< connection */
+	struct pomp_buffer		*buf;	/**< buffer sent */
+	uint32_t			status;	/**< send status */
+	struct idle_sendcb_data		*next;	/**< next data in chain */
+};
+
 /** Connection structure */
 struct pomp_conn {
 	/** Associated client/server context */
@@ -125,6 +134,15 @@ struct pomp_conn {
 
 	/** Read suspended flag */
 	int			read_suspended;
+
+	/** Pending callback head */
+	struct idle_sendcb_data	*idlecbs_head;
+
+	/** Pending callback tail */
+	struct idle_sendcb_data	*idlecbs_tail;
+
+	/** Flag of socket shutdown */
+	int			is_shutdown;
 };
 
 /**
@@ -296,6 +314,9 @@ static int pomp_io_buffer_write(struct pomp_io_buffer *iobuf,
 		struct pomp_conn *conn)
 {
 	int res = 0;
+
+	if (conn->is_shutdown)
+		return -ENOTCONN;
 
 	/* When offset is 0 and buffer has file descriptors in it, write them */
 	if (conn->isdgram)
@@ -643,6 +664,166 @@ static void pomp_conn_process_read(struct pomp_conn *conn)
 }
 
 /**
+ * Destroy data for send callback in idle mode.
+ * @param icb_data : data to destroy.
+ * @return 0 in case of success, negative errno value in case of error.
+ */
+static int idle_sendcb_data_destroy(struct idle_sendcb_data *icb_data)
+{
+	pomp_buffer_unref(icb_data->buf);
+
+	free(icb_data);
+	return 0;
+}
+
+/**
+ * Create a new data for send callback in idle mode.
+ * @param conn : connection.
+ * @param ctx : context.
+ * @param buf : buffer data sent.
+ * @param status : send status.
+ * @param ret_itf : will receive the data object.
+ * @return 0 in case of success, negative errno value in case of error.
+ */
+static int idle_sendcb_data_create(struct pomp_conn *conn,
+		struct pomp_ctx *ctx, struct pomp_buffer *buf, uint32_t status,
+		struct idle_sendcb_data **ret_obj)
+{
+	struct idle_sendcb_data *icb_data = NULL;
+
+	icb_data = calloc(1, sizeof(*icb_data));
+	if (icb_data == NULL)
+		return -ENOMEM;
+
+	icb_data->ctx = ctx;
+	icb_data->conn = conn;
+	icb_data->buf = buf;
+	pomp_buffer_ref(buf);
+	icb_data->status = status;
+
+	*ret_obj = icb_data;
+	return 0;
+}
+
+/** Pop the oldest data from the tail
+ * @param conn : connection
+ * @return the oldest idle send callback data, NULL in error case or no data.
+ */
+static struct idle_sendcb_data *idlecbs_tail_pop(struct pomp_conn *conn)
+{
+	struct idle_sendcb_data *icb_data = NULL;
+
+	if (conn->idlecbs_tail == NULL)
+		return NULL;
+
+	icb_data = conn->idlecbs_tail;
+	conn->idlecbs_tail = icb_data->next;
+	if (conn->idlecbs_tail == NULL)
+		conn->idlecbs_head = NULL;
+
+	return icb_data;
+}
+
+/** Pomp idle callback use to notify a sending. */
+static void pomp_idle_cb(void *userdata)
+{
+	int res = 0;
+	struct idle_sendcb_data *icb_data = userdata;
+	struct pomp_conn *conn = NULL;
+
+	POMP_RETURN_IF_FAILED(icb_data != NULL, -EINVAL);
+	conn = icb_data->conn;
+
+	/* remove from the tail */
+	/* assuming callbacks in order */
+	if (icb_data != conn->idlecbs_tail) {
+		POMP_LOGE("idle send callback not expected.");
+		return;
+	}
+	/* pop back tail */
+	idlecbs_tail_pop(conn);
+
+	res = pomp_ctx_notify_send(icb_data->ctx, icb_data->conn, icb_data->buf,
+			icb_data->status);
+	if (res < 0)
+		POMP_LOGE("pomp_ctx_notify_send failed err=%d", res);
+
+	idle_sendcb_data_destroy(icb_data);
+}
+
+/** Call and clear all pending idle send callbacks from the tail.
+ * @param conn : connection
+ * @return 0 in case of success, negative errno value in case of error.
+ */
+static int clear_pending_callbacks(struct pomp_conn *conn)
+{
+	int res = 0;
+	struct idle_sendcb_data *icbdata = NULL;
+
+	/* Call all pending callback */
+	icbdata = idlecbs_tail_pop(conn);
+	while (icbdata != NULL) {
+		res = pomp_loop_idle_remove(conn->loop, &pomp_idle_cb, icbdata);
+		if (res < 0)
+			POMP_LOGE("pomp_loop_idle_remove failed err=%d", res);
+
+		res = pomp_ctx_notify_send(icbdata->ctx, icbdata->conn,
+				icbdata->buf, icbdata->status);
+		if (res < 0)
+			POMP_LOGE("pomp_ctx_notify_send failed err=%d", res);
+
+		idle_sendcb_data_destroy(icbdata);
+
+		/* get next idle callback data */
+		icbdata = idlecbs_tail_pop(conn);
+	}
+
+	return 0;
+}
+
+/** Add an idle send callback data on the top of the tail.
+ * @param conn : connection
+ * @param ctx : context
+ * @param buf : buffer sent
+ * @param status : send status
+ * @return 0 in case of success, negative errno value in case of error.
+ */
+static int pomp_conn_add_idle_cb(struct pomp_conn *conn, struct pomp_ctx *ctx,
+		struct pomp_buffer *buf, uint32_t status)
+{
+	int res = 0;
+	struct idle_sendcb_data *icb_data = NULL;
+
+	POMP_RETURN_ERR_IF_FAILED(conn != NULL, -EINVAL);
+
+	/* check if the send callback is set */
+	res = pomp_ctx_sendcb_is_set(ctx);
+	if (!res)
+		return 0;
+
+	res = idle_sendcb_data_create(conn, ctx, buf, status, &icb_data);
+	if (res < 0)
+		return res;
+
+	res = pomp_loop_idle_add(conn->loop, &pomp_idle_cb, icb_data);
+	if (res < 0) {
+		idle_sendcb_data_destroy(icb_data);
+		return res;
+	}
+
+	/* If first element */
+	if (conn->idlecbs_tail == NULL)
+		conn->idlecbs_tail = icb_data;
+	/* update last element */
+	if (conn->idlecbs_head != NULL)
+		conn->idlecbs_head->next = icb_data;
+	/* set as last element */
+	conn->idlecbs_head = icb_data;
+
+	return 0;
+}
+
+/**
  * Function called when the fd is writable and there is some IO buffer pending.
  * It resumes writing until either there is no more pending IO buffer or
  * data can not be written immediately ('write' returned EAGAIN).
@@ -676,8 +857,9 @@ static void pomp_conn_process_write(struct pomp_conn *conn)
 			status = POMP_SEND_STATUS_OK;
 			if (conn->headbuf == NULL)
 				status |= POMP_SEND_STATUS_QUEUE_EMPTY;
-			pomp_ctx_notify_send(conn->ctx, conn,
-					iobuf->buf, status);
+
+			pomp_conn_add_idle_cb(conn, conn->ctx, iobuf->buf,
+					status);
 
 			pomp_io_buffer_destroy(iobuf);
 			iobuf = conn->headbuf;
@@ -852,6 +1034,10 @@ int pomp_conn_close(struct pomp_conn *conn)
 			POMP_LOG_FD_ERRNO("shutdown", conn->fd);
 	}
 	pomp_loop_remove(conn->loop, conn->fd);
+	conn->is_shutdown = 1;
+
+	/* Clear all pending callbacks */
+	clear_pending_callbacks(conn);
 
 	/* Abort pending write buffers */
 	iobuf = conn->headbuf;
@@ -913,6 +1099,10 @@ int pomp_conn_disconnect(struct pomp_conn *conn)
 		if (errno != ENOTCONN)
 			POMP_LOG_FD_ERRNO("shutdown", conn->fd);
 	}
+	conn->is_shutdown = 1;
+
+	/* Clear all pending callbacks */
+	clear_pending_callbacks(conn);
 	return 0;
 }
 
@@ -1008,6 +1198,9 @@ static int pomp_conn_send_buf_internal(struct pomp_conn *conn,
 	POMP_RETURN_ERR_IF_FAILED(buf != NULL, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(buf->data != NULL, -EINVAL);
 
+	if (conn->is_shutdown)
+		return -ENOTCONN;
+
 	/* For dgram socket, the remote address must be present or we must
 	 * have one internally (for example when responding to a received
 	 * message) */
@@ -1047,10 +1240,12 @@ static int pomp_conn_send_buf_internal(struct pomp_conn *conn,
 				return res;
 		} else if (tmpiobuf.off == tmpiobuf.len) {
 			/* If everything was written, nothing more to do */
-			pomp_ctx_notify_send(conn->ctx, conn, tmpiobuf.buf,
+			pomp_conn_add_idle_cb(conn, conn->ctx,
+					tmpiobuf.buf,
 					POMP_SEND_STATUS_OK |
 					POMP_SEND_STATUS_QUEUE_EMPTY);
 			return 0;
+
 		} else {
 			off = tmpiobuf.off;
 		}
