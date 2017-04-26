@@ -288,7 +288,7 @@ POMP_API int pomp_ctx_set_send_cb(struct pomp_ctx *ctx, pomp_send_cb_t cb);
  * @param count : number of keepalives before death.
  * @return 0 in case of success, negative errno value in case of error.
  *
- * @remarks Default values if nothing else is spefified is (1, 5, 1, 2).
+ * @remarks Default values if nothing else is specified is (1, 5, 1, 2).
  */
 POMP_API int pomp_ctx_setup_keepalive(struct pomp_ctx *ctx, int enable,
 		int idle, int interval, int count);
