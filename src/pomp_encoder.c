@@ -206,6 +206,28 @@ static int encoder_write_size_u32(struct pomp_encoder *enc, uint32_t n)
 
 /**
  * Internal write
+ * @param decodepos : string to decode.
+ * @param len : len in bytes of the resulting string.
+ * @param out : allocated output buffer.
+ */
+static int parse_buffer_argv(const char *decodepos, uint32_t len, void *out)
+{
+	uint32_t i = 0;
+	/* first byte should be padded with 0 if len is odd */
+	if (strlen(decodepos) % 2 == 1)
+		sscanf(decodepos, "%hhx", &(((uint8_t *)out)[0]));
+	else
+		sscanf(decodepos, "%2hhx", &(((uint8_t *)out)[0]));
+	decodepos += 2;
+	for (i = 1; i < len; i++) {
+		sscanf(decodepos, "%2hhx", &(((uint8_t *)out)[i]));
+		decodepos += 2;
+	}
+	return 0;
+}
+
+/**
+ * Internal write
  * @param enc : encoder.
  * @param fmt : format string. Can be NULL if no arguments given.
  * @param argc : number of arguments in argv if args is NULL.
@@ -347,8 +369,32 @@ again:
 		/* Buffer */
 		case 'p':
 			if (argv != NULL) {
-				POMP_LOGW("encoder : unsupported %%p argument");
-				res = -EINVAL;
+				if (*fmt++ != '%' || *fmt++ != 'u') {
+					/* Size expected after pointer */
+					/* codecheck_ignore[LONG_LINE] */
+					POMP_LOGW("encoder : expected %%u after %%p");
+					res = -EINVAL;
+				} else {
+					int argbufferpos = argidx;
+					const char *decodepos;
+					/*go to next argument to get size*/
+					argidx++;
+					/* codecheck_ignore[LONG_LINE] */
+					EXTRACT_ARG(u32, uint32_t, unsigned int, strtoul);
+					len = v.u32;
+
+					v.buf = malloc(len);
+					if (v.buf == NULL) {
+						res = -ENOMEM;
+						break;
+					}
+					decodepos = argv[argbufferpos];
+					/* codecheck_ignore[LONG_LINE] */
+					parse_buffer_argv(decodepos, len, v.buf);
+					/* codecheck_ignore[LONG_LINE] */
+					res = pomp_encoder_write_buf(enc, v.buf, len);
+					free(v.buf);
+				}
 			} else if (*fmt++ != '%' || *fmt++ != 'u') {
 				/* Size expected after pointer */
 				POMP_LOGW("encoder : expected %%u after %%p");

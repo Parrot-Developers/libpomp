@@ -45,6 +45,9 @@
 #define TEST_VAL_STR	"Hello World !!!"
 #define TEST_VAL_BUF	"hELLO wORLD ???"
 #define TEST_VAL_BUFLEN	15
+#define TEST_VAL_BUFCMD "0123456789ABCDEFFEDCBA9876543210"
+#define TEST_VAL_BUFCMDLEN 16
+#define TEST_VAL_BUF_MEM (uint8_t []){0x01, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF, 0xFE, 0xDC, 0xBA, 0x98, 0x76, 0x54, 0x32, 0x10}
 #define TEST_VAL_F32	(3.1415927410125732421875)
 #define TEST_VAL_F64	(3.141592653589793115997963468544185161590576171875)
 
@@ -58,6 +61,7 @@
 #define TEST_VAL_U64_ENCODED	0x80, 0x80, 0xa0, 0xcf, 0xc8, 0xe0, 0xc8, 0xe3, 0x8a, 0x01
 #define TEST_VAL_STR_ENCODED	0x10, 'H', 'e', 'l', 'l', 'o', ' ', 'W', 'o', 'r', 'l', 'd', ' ', '!', '!', '!', 0x00
 #define TEST_VAL_BUF_ENCODED	0x0f, 'h', 'E', 'L', 'L', 'O', ' ', 'w', 'O', 'R', 'L', 'D', ' ', '?', '?', '?'
+#define TEST_VAL_BUFCMD_ENCODED 0x10, 0x01, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF, 0xFE, 0xDC, 0xBA, 0x98, 0x76, 0x54, 0x32, 0x10
 #define TEST_VAL_F32_ENCODED	0xdb, 0x0f, 0x49, 0x40
 #define TEST_VAL_F64_ENCODED	0x18, 0x2d, 0x44, 0x54, 0xfb, 0x21, 0x09, 0x40
 
@@ -129,6 +133,7 @@ static const uint8_t s_refdata_enc_argv[] = {
 	0x07, TEST_VAL_I64_ENCODED,
 	0x08, TEST_VAL_U64_ENCODED,
 	0x09, TEST_VAL_STR_ENCODED,
+	0x0a, TEST_VAL_BUFCMD_ENCODED,
 	0x0b, TEST_VAL_F32_ENCODED,
 	0x0c, TEST_VAL_F64_ENCODED,
 };
@@ -179,8 +184,8 @@ static const char *s_msg_dump =
 static const char **get_refdata_argv(int *argc)
 {
 	int i = 0;
-	static char bufs[16][256];
-	static const char *argv[16];
+	static char bufs[18][256];
+	static const char *argv[18];
 
 	REFDATA_ARGV_ADD("%hhi", TEST_VAL_I8);
 	REFDATA_ARGV_ADD("%hhu", TEST_VAL_U8);
@@ -191,6 +196,8 @@ static const char **get_refdata_argv(int *argc)
 	REFDATA_ARGV_ADD("%" PRIi64, (int64_t)TEST_VAL_I64);
 	REFDATA_ARGV_ADD("%" PRIu64, (uint64_t)TEST_VAL_U64);
 	REFDATA_ARGV_ADD("%s", TEST_VAL_STR);
+	REFDATA_ARGV_ADD("%s", TEST_VAL_BUFCMD);
+	REFDATA_ARGV_ADD("%u", TEST_VAL_BUFCMDLEN);
 	REFDATA_ARGV_ADD("%.32f", TEST_VAL_F32);
 	REFDATA_ARGV_ADD("%.64f", TEST_VAL_F64);
 
@@ -912,20 +919,21 @@ static void test_msg_write_argv(void)
 	/* argv write */
 	argv = get_refdata_argv(&argc);
 	res = pomp_msg_write_argv(msg, TEST_MSGID,
-			"%hhd%hhu%hd%hu%d%u%"PRId64"%"PRIu64"%s%f%lf",
+			"%hhd%hhu%hd%hu%d%u%"PRId64"%"PRIu64"%s%p%u%f%lf",
 			argc, argv);
 	CU_ASSERT_EQUAL(res, 0);
 
 	/* Read */
 	memset(&dout, 0, sizeof(dout));
 	res = pomp_msg_read(msg,
-			"%hhd%hhu%hd%hu%d%u%"SCNd64"%"SCNu64"%ms%f%lf",
+			"%hhd%hhu%hd%hu%d%u%"SCNd64"%"SCNu64"%ms%p%u%f%lf",
 			&dout.i8, &dout.u8,
 			&dout.i16, &dout.u16,
 			&dout.i32, &dout.u32,
 			&dout.i64, &dout.u64,
-			&dout.str,
-			&dout.f32, &dout.f64);
+			&dout.str, &dout.cbuf,
+			&dout.buflen, &dout.f32,
+			&dout.f64);
 	CU_ASSERT_EQUAL_FATAL(res, 0);
 
 	/* Check */
@@ -938,13 +946,15 @@ static void test_msg_write_argv(void)
 	CU_ASSERT_EQUAL(dout.i64, TEST_VAL_I64);
 	CU_ASSERT_EQUAL(dout.u64, TEST_VAL_U64);
 	CU_ASSERT_STRING_EQUAL(dout.str, TEST_VAL_STR);
+	CU_ASSERT_EQUAL(dout.buflen, TEST_VAL_BUFCMDLEN);
+	CU_ASSERT_EQUAL(memcmp(dout.cbuf, TEST_VAL_BUF_MEM, TEST_VAL_BUFLEN), 0);
 	CU_ASSERT_EQUAL(dout.f32, TEST_VAL_F32);
 	CU_ASSERT_EQUAL(dout.f64, TEST_VAL_F64);
 	free(dout.str);
 
 	/* Invalid write (NULL param) */
 	res = pomp_msg_write_argv(NULL, TEST_MSGID,
-			"%hhd%hhu%hd%hu%d%u%"PRId64"%"PRIu64"%s%f%lf",
+			"%hhd%hhu%hd%hu%d%u%"PRId64"%"PRIu64"%s%p%u%f%lf",
 			argc, argv);
 	CU_ASSERT_EQUAL(res, -EINVAL);
 
@@ -1327,7 +1337,7 @@ static void test_encoder_argv(void)
 	/* argv write */
 	argv = get_refdata_argv(&argc);
 	res = pomp_encoder_write_argv(enc,
-			"%hhd%hhu%hd%hu%d%u%"PRId64"%"PRIu64"%s%f%lf",
+			"%hhd%hhu%hd%hu%d%u%"PRId64"%"PRIu64"%s%p%u%f%lf",
 			argc, argv);
 	CU_ASSERT_EQUAL(res, 0);
 
@@ -1365,7 +1375,7 @@ static void test_encoder_argv(void)
 	res = pomp_encoder_init(enc, &msg);
 	CU_ASSERT_EQUAL(res, 0);
 	res = pomp_encoder_write_argv(enc,
-			"%hhd%hhu%hd%hu%d%u%"PRId64"%"PRIu64"%s%f%lf",
+			"%hhd%hhu%hd%hu%d%u%"PRId64"%"PRIu64"%s%p%u%f%lf",
 			argc, NULL);
 	CU_ASSERT_EQUAL(res, -EINVAL);
 
@@ -1397,6 +1407,9 @@ static void test_encoder_argv(void)
 	CU_ASSERT_EQUAL(res, -EINVAL);
 	res = pomp_encoder_write_argv(enc, "%hhd%lf", argc, argv);
 	CU_ASSERT_EQUAL(res, -EINVAL);
+	res = pomp_encoder_write_argv(enc, "%p", argc, argv);
+	CU_ASSERT_EQUAL(res, -EINVAL);
+
 
 	/* Invalid write (NULL arg) */
 	argc = 2;
@@ -1427,6 +1440,9 @@ static void test_encoder_argv(void)
 	CU_ASSERT_EQUAL(res, -EINVAL);
 	res = pomp_encoder_write_argv(enc, "%hhd%lf", argc, argv);
 	CU_ASSERT_EQUAL(res, -EINVAL);
+	res = pomp_encoder_write_argv(enc, "%p%u", argc, argv);
+	CU_ASSERT_EQUAL(res, -EINVAL);
+
 
 	/* Invalid write (Not supported) */
 	argc = 2;
