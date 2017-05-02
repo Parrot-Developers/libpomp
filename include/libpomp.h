@@ -1168,14 +1168,10 @@ POMP_API int pomp_addr_is_unix(const struct sockaddr *addr, uint32_t addrlen);
 
 /*
  * Advanced API.
- * Always compiled in the library but user code shall explicitly define
- * POMP_ENABLE_ADVANCED_API to use it.
  *
  * Basic API is sufficient for normal usage. Advanced API offers better
  * tuning of encoding/decoding.
  */
-
-#ifdef POMP_ENABLE_ADVANCED_API
 
 /* Forward declarations */
 struct pomp_encoder;
@@ -1605,8 +1601,6 @@ POMP_API int pomp_decoder_read_f64(struct pomp_decoder *dec, double *v);
  * you need to use it after the decoder or the message is released.
  */
 POMP_API int pomp_decoder_read_fd(struct pomp_decoder *dec, int *v);
-
-#endif /* POMP_ENABLE_ADVANCED_API */
 
 #ifdef __cplusplus
 }

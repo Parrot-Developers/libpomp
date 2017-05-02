@@ -55,7 +55,6 @@
 		_cls(const _cls &); \
 		_cls &operator=(const _cls &);
 
-#define POMP_ENABLE_ADVANCED_API
 #include "libpomp.h"
 #ifdef POMP_CXX11
 #  include "libpomp-cxx11.hpp"

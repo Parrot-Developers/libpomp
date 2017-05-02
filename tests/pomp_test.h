@@ -55,7 +55,6 @@
 #include <arpa/inet.h>
 #endif /* !_WIN32 */
 
-#define POMP_ENABLE_ADVANCED_API
 #include "libpomp.h"
 #include "pomp_priv.h"
 

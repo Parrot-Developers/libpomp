@@ -54,8 +54,6 @@
 #  include <sys/socket.h>
 #endif /* !_WIN32 */
 
-/* Need access to advanced API (for loop and timers) */
-#define POMP_ENABLE_ADVANCED_API
 #include "libpomp.h"
 
 #define DIAG_PFX "POMPCLI: "

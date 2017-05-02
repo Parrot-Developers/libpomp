@@ -115,9 +115,6 @@
 #  define POMP_TIMER_POSIX_SIGNO	SIGRTMIN
 #endif /* POMP_TIMER_POSIX_SIGNO */
 
-/** Enable advance API */
-#define POMP_ENABLE_ADVANCED_API
-
 #include "libpomp.h"
 
 #include "pomp_log.h"
