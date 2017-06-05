@@ -45,22 +45,28 @@ extern "C" {
 
 /** Wrapper for gcc printf attribute */
 #ifndef POMP_ATTRIBUTE_FORMAT_PRINTF
-#  ifndef _MSC_VER
+#  if defined(__GNUC__) && defined(__MINGW32__) && !defined(__clang__)
 #    define POMP_ATTRIBUTE_FORMAT_PRINTF(_x, _y) \
-			__attribute__((__format__(__printf__, _x, _y)))
-#  else /* _MSC_VER */
+		__attribute__((__format__(__gnu_printf__, _x, _y)))
+#  elif defined(__GNUC__)
+#    define POMP_ATTRIBUTE_FORMAT_PRINTF(_x, _y) \
+		__attribute__((__format__(__printf__, _x, _y)))
+#  else
 #    define POMP_ATTRIBUTE_FORMAT_PRINTF(_x, _y)
-#  endif /* _MSC_VER */
+#  endif
 #endif /* !POMP_ATTRIBUTE_FORMAT_PRINTF */
 
 /** Wrapper for gcc scanf attribute */
 #ifndef POMP_ATTRIBUTE_FORMAT_SCANF
-#  ifndef _MSC_VER
+#  if defined(__GNUC__) && defined(__MINGW32__) && !defined(__clang__)
 #    define POMP_ATTRIBUTE_FORMAT_SCANF(_x, _y) \
-			__attribute__((__format__(__scanf__, _x, _y)))
-#  else /* _MSC_VER */
+		__attribute__((__format__(__gnu_scanf__, _x, _y)))
+#  elif defined(__GNUC__)
+#    define POMP_ATTRIBUTE_FORMAT_SCANF(_x, _y) \
+		__attribute__((__format__(__scanf__, _x, _y)))
+#  else
 #    define POMP_ATTRIBUTE_FORMAT_SCANF(_x, _y)
-#  endif /* _MSC_VER */
+#  endif
 #endif /* !POMP_ATTRIBUTE_FORMAT_SCANF */
 
 /** To be used for all public API */
