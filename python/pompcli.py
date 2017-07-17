@@ -35,6 +35,7 @@ import sys, logging
 import optparse
 import socket
 import threading
+import time
 
 import pomp
 
@@ -100,7 +101,8 @@ class App(object):
         except KeyboardInterrupt:
             pomp.looper.exitLoop()
 
-        # Stop everything
+        # Stop everything (wait a little to make sure message is sent)
+        time.sleep(0.100)
         self.ctx.stop()
 
     def onConnected(self, ctx, conn):

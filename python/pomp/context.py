@@ -228,7 +228,7 @@ class Context(object):
 
                     # Create connection object
                     if sockPeer is not None:
-                        conn = Connection(self, sockPeer)
+                        conn = Connection(self, sockPeer[0])
                         self.mainHandler.post((_CONN_ADD, conn, None))
                     else:
                         # Release our token
