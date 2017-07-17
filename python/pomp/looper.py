@@ -31,8 +31,12 @@
 # THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #===============================================================================
 
+import sys
 import threading
-import Queue as queue
+if(sys.version_info.major == 3):
+    import queue
+else:
+    import Queue as queue
 
 #===============================================================================
 #===============================================================================

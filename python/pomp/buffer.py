@@ -33,13 +33,17 @@
 
 import os
 import struct
-from cStringIO import StringIO
+import sys
+if(sys.version_info.major == 3):
+    from io import BytesIO
+else:
+    from cStringIO import StringIO as BytesIO
 
 #===============================================================================
 #===============================================================================
 class Buffer(object):
     def __init__(self):
-        self.data = StringIO()
+        self.data = BytesIO()
         self.readonly = False
 
     def __len__(self):

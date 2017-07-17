@@ -32,7 +32,12 @@
 #===============================================================================
 
 import struct
-from cStringIO import StringIO
+import sys
+if(sys.version_info.major == 3):
+    from io import StringIO
+else:
+    from cStringIO import StringIO
+
 
 import pomp.protocol as protocol
 
@@ -89,9 +94,9 @@ class Decoder(object):
             elif datatype == protocol.DATA_TYPE_BUF:
                 buf.write(", BUF:'%s'" % repr(self.readBuf()))
             elif datatype == protocol.DATA_TYPE_F32:
-                buf.write(", F32:%s" % str(self.readF32()))
+                buf.write(", F32:%s" % repr(self.readF32()))
             elif datatype == protocol.DATA_TYPE_F64:
-                buf.write(", F64:%s" % str(self.readF64()))
+                buf.write(", F64:%s" % repr(self.readF64()))
             else:
                 raise DecodeException("decoder : unknown type: %d" % datatype)
         buf.write("}")
@@ -229,7 +234,7 @@ class Decoder(object):
         nullb = self._readByte()
         if nullb != 0:
             raise DecodeException("String not null terminated")
-        return sval
+        return sval.decode("ascii")
 
     def readBuf(self):
         self._readType(protocol.DATA_TYPE_BUF)

@@ -33,7 +33,7 @@
 
 import unittest
 import struct
-from cStringIO import StringIO
+from io import BytesIO
 
 from pomp import EncodeException
 from pomp import DecodeException
@@ -55,53 +55,53 @@ VAL_U32 = (3000000000)
 VAL_I64 = (-4000000000)
 VAL_U64 = (10000000000000000000)
 VAL_STR = "Hello World !!!"
-VAL_BUF = "hELLO wORLD ???"
+VAL_BUF = b"hELLO wORLD ???"
 VAL_BUFLEN = 15
 VAL_F32 = (3.1415927410125732421875)
 VAL_F64 = (3.141592653589793115997963468544185161590576171875)
 
-VAL_I8_ENCODED = "\xe0"
-VAL_U8_ENCODED = "\xd4"
-VAL_I16_ENCODED = "\x18\xfc"
-VAL_U16_ENCODED = "\xd8\x59"
-VAL_I32_ENCODED = "\xaf\xd5\x08"
-VAL_U32_ENCODED = "\x80\xbc\xc1\x96\x0b"
-VAL_I64_ENCODED = "\xff\x9f\xd9\xe6\x1d"
-VAL_U64_ENCODED = "\x80\x80\xa0\xcf\xc8\xe0\xc8\xe3\x8a\x01"
-VAL_STR_ENCODED = "\x10Hello World !!!\x00"
-VAL_BUF_ENCODED = "\x0fhELLO wORLD ???"
-VAL_F32_ENCODED = "\xdb\x0f\x49\x40"
-VAL_F64_ENCODED = "\x18\x2d\x44\x54\xfb\x21\x09\x40"
+VAL_I8_ENCODED = b"\xe0"
+VAL_U8_ENCODED = b"\xd4"
+VAL_I16_ENCODED = b"\x18\xfc"
+VAL_U16_ENCODED = b"\xd8\x59"
+VAL_I32_ENCODED = b"\xaf\xd5\x08"
+VAL_U32_ENCODED = b"\x80\xbc\xc1\x96\x0b"
+VAL_I64_ENCODED = b"\xff\x9f\xd9\xe6\x1d"
+VAL_U64_ENCODED = b"\x80\x80\xa0\xcf\xc8\xe0\xc8\xe3\x8a\x01"
+VAL_STR_ENCODED = b"\x10Hello World !!!\x00"
+VAL_BUF_ENCODED = b"\x0fhELLO wORLD ???"
+VAL_F32_ENCODED = b"\xdb\x0f\x49\x40"
+VAL_F64_ENCODED = b"\x18\x2d\x44\x54\xfb\x21\x09\x40"
 
-PAYLOAD_BUF = StringIO()
-PAYLOAD_BUF.write("\x01")
+PAYLOAD_BUF = BytesIO()
+PAYLOAD_BUF.write(b"\x01")
 PAYLOAD_BUF.write(VAL_I8_ENCODED)
-PAYLOAD_BUF.write("\x02")
+PAYLOAD_BUF.write(b"\x02")
 PAYLOAD_BUF.write(VAL_U8_ENCODED)
-PAYLOAD_BUF.write("\x03")
+PAYLOAD_BUF.write(b"\x03")
 PAYLOAD_BUF.write(VAL_I16_ENCODED)
-PAYLOAD_BUF.write("\x04")
+PAYLOAD_BUF.write(b"\x04")
 PAYLOAD_BUF.write(VAL_U16_ENCODED)
-PAYLOAD_BUF.write("\x05")
+PAYLOAD_BUF.write(b"\x05")
 PAYLOAD_BUF.write(VAL_I32_ENCODED)
-PAYLOAD_BUF.write("\x06")
+PAYLOAD_BUF.write(b"\x06")
 PAYLOAD_BUF.write(VAL_U32_ENCODED)
-PAYLOAD_BUF.write("\x07")
+PAYLOAD_BUF.write(b"\x07")
 PAYLOAD_BUF.write(VAL_I64_ENCODED)
-PAYLOAD_BUF.write("\x08")
+PAYLOAD_BUF.write(b"\x08")
 PAYLOAD_BUF.write(VAL_U64_ENCODED)
-PAYLOAD_BUF.write("\x09")
+PAYLOAD_BUF.write(b"\x09")
 PAYLOAD_BUF.write(VAL_STR_ENCODED)
-PAYLOAD_BUF.write("\x0a")
+PAYLOAD_BUF.write(b"\x0a")
 PAYLOAD_BUF.write(VAL_BUF_ENCODED)
-PAYLOAD_BUF.write("\x0b")
+PAYLOAD_BUF.write(b"\x0b")
 PAYLOAD_BUF.write(VAL_F32_ENCODED)
-PAYLOAD_BUF.write("\x0c")
+PAYLOAD_BUF.write(b"\x0c")
 PAYLOAD_BUF.write(VAL_F64_ENCODED)
 PAYLOAD = PAYLOAD_BUF.getvalue()
 
-HEADER_BUF = StringIO()
-HEADER_BUF.write("POMP")
+HEADER_BUF = BytesIO()
+HEADER_BUF.write(b"POMP")
 HEADER_BUF.write(struct.pack("<I", MSGID))
 HEADER_BUF.write(struct.pack("<I", 12 + len(PAYLOAD)))
 HEADER = HEADER_BUF.getvalue()
@@ -117,12 +117,12 @@ MSG_DUMP = (
     ", U32:3000000000"
     ", I64:-4000000000"
     ", U64:10000000000000000000"
-    ", STR:'Hello World !!!'"
-    ", BUF:'hELLO wORLD ???'"
-    ", F32:3.14159274101"
-    ", F64:3.14159265359"
+    ", STR:'%s'"
+    ", BUF:'%s'"
+    ", F32:3.1415927410125732"
+    ", F64:3.141592653589793"
     "}"
-)
+) % (VAL_STR, repr(VAL_BUF))
 
 #===============================================================================
 #===============================================================================

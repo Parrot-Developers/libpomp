@@ -149,7 +149,10 @@ class Protocol(object):
         self.msg = None
 
     def _checkMagic(self, idx, val, state):
-        magic = ord(self.headerBuf.getData()[idx])
+        if isinstance(self.headerBuf.getData(), str):
+            magic = ord(self.headerBuf.getData()[idx])
+        else:
+            magic = self.headerBuf.getData()[idx]
         if magic != val:
             _log.warning("Bad header magic %d: 0x%02x(0x%02x)", idx, magic, val)
             self.state = Protocol._STATE_HEADER_MAGIC_0

@@ -32,8 +32,17 @@
 #===============================================================================
 
 import struct
+import sys
 
 import pomp.protocol as protocol
+
+
+def nextIter(it):
+    if(sys.version_info.major == 3):
+        return it.__next__()
+    else:
+        return it.next()
+
 
 #===============================================================================
 #===============================================================================
@@ -85,7 +94,7 @@ class Encoder(object):
                     flags |= Encoder._FLAG_HH
             elif c == 'i' or c == 'd':
                 # Signed integer
-                val = argsiter.next()
+                val = nextIter(argsiter)
                 try:
                     val = int(val)
                 except ValueError:
@@ -103,7 +112,7 @@ class Encoder(object):
                 waitpercent = True
             elif c == 'u':
                 # Unsigned integer
-                val = argsiter.next()
+                val = nextIter(argsiter)
                 try:
                     val = int(val)
                 except ValueError:
@@ -120,16 +129,16 @@ class Encoder(object):
                     self.writeU32(val)
                 waitpercent = True
             elif c == 's':
-                val = argsiter.next()
+                val = nextIter(argsiter)
                 self.writeStr(val)
                 waitpercent = True
             elif c == 'p':
-                val = argsiter.next()
+                val = nextIter(argsiter)
                 self.writeBuf(val)
                 waitpercent = True
             elif c == 'f' or c == 'F' or c == 'e' or c == 'E' or c == 'g' or c == 'G':
                 # Floating point
-                val = argsiter.next()
+                val = nextIter(argsiter)
                 try:
                     val = float(val)
                 except ValueError:
@@ -191,7 +200,7 @@ class Encoder(object):
         # Write type, size, data and final null
         self._writeType(protocol.DATA_TYPE_STR)
         self._writeSizeU16(len(sval) + 1)
-        self._write(sval)
+        self._write(sval.encode("ascii"))
         self._writeByte(0)
 
     def writeBuf(self, buf):
