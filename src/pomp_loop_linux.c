@@ -94,7 +94,9 @@ static int pomp_loop_epoll_ctl(struct pomp_loop *loop, int op,
 		struct pomp_fd *pfd)
 {
 	int res = 0;
-	struct epoll_event event = EPOLL_EVENT_INITIALIZER;
+	struct epoll_event event;
+
+	memset(&event, 0, sizeof(event));
 
 	event.events = fd_events_to_epoll(pfd->events);
 	event.data.fd = pfd->fd;
@@ -128,7 +130,9 @@ static void pomp_loop_epoll_wakeup_cb(struct pomp_loop *loop)
 static int pomp_loop_epoll_do_new(struct pomp_loop *loop)
 {
 	int res = 0;
-	struct epoll_event event = EPOLL_EVENT_INITIALIZER;
+	struct epoll_event event;
+
+	memset(&event, 0, sizeof(event));
 
 	/* Initialize implementation specific fields */
 	loop->efd = -1;
@@ -246,6 +250,8 @@ static int pomp_loop_epoll_do_wait_and_process(struct pomp_loop *loop,
 	struct epoll_event events[16];
 	struct pomp_fd *pfd = NULL;
 	uint32_t revents = 0;
+
+	memset(events, 0, sizeof(events));
 
 	/* Wait for epoll events */
 	do {
