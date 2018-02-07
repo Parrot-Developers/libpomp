@@ -563,9 +563,14 @@ public:
 		return pomp_ctx_wait_and_process(mCtx, timeout);
 	}
 
-	/** Wakeup the comtext from another thread */
+	/** Wakeup the context from another thread. */
 	inline int wakeup() {
 		return pomp_ctx_wakeup(mCtx);
+	}
+
+	/** Get context local address (for server or udp context started with listen or bind ). */
+	inline const struct sockaddr *getLocalAddr(uint32_t *addrlen) {
+		return pomp_ctx_get_local_addr(mCtx, addrlen);
 	}
 
 	/** Get the loop of the context. */
