@@ -21,6 +21,7 @@ libpomp_la_SOURCES = \
 	pomp_ctx.c \
 	pomp_decoder.c \
 	pomp_encoder.c \
+	pomp_evt.c \
 	pomp_log.c \
 	pomp_loop.c \
 	pomp_msg.c \

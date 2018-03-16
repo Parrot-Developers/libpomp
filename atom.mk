@@ -28,6 +28,7 @@ LOCAL_SRC_FILES := \
 	src/pomp_ctx.c \
 	src/pomp_decoder.c \
 	src/pomp_encoder.c \
+	src/pomp_evt.c \
 	src/pomp_log.c \
 	src/pomp_loop.c \
 	src/pomp_msg.c \
@@ -107,6 +108,7 @@ LOCAL_SRC_FILES := \
 	tests/pomp_test_addr.c \
 	tests/pomp_test_basic.c \
 	tests/pomp_test_ctx.c \
+	tests/pomp_test_evt.c \
 	tests/pomp_test_loop.c \
 	tests/pomp_test_ipc.c \
 	tests/pomp_test_timer.c

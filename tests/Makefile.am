@@ -14,6 +14,7 @@ tst_pomp_SOURCES = pomp_test.c \
 	pomp_test_addr.c \
 	pomp_test_basic.c \
 	pomp_test_ctx.c \
+	pomp_test_evt.c \
 	pomp_test_loop.c \
 	pomp_test_ipc.c \
 	pomp_test_timer.c

@@ -51,6 +51,7 @@ extern "C" {
 #endif /* __cplusplus */
 
 #define POMP_HAVE_TIMER_WIN32
+#define POMP_HAVE_EVENT_WIN32
 #define POMP_HAVE_LOOP_WIN32
 
 #ifndef SIO_KEEPALIVE_VALS

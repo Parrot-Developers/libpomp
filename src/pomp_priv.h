@@ -49,6 +49,7 @@
 
 #ifndef _MSC_VER
 #  include <unistd.h>
+#  define POMP_HAVE_EVENT_POSIX
 #else /* !_MSC_VER */
 #  include <io.h>
 #endif /* !_MSC_VER */
@@ -70,8 +71,10 @@
 #endif
 #ifdef HAVE_SYS_EVENTFD_H
 #  include <sys/eventfd.h>
+#  define POMP_HAVE_EVENT_FD
 #elif defined(__linux__)
 #  include "sys_eventfd.h"
+#  define POMP_HAVE_EVENT_FD
 #endif
 #ifdef HAVE_SYS_PARAM_H
 #  include <sys/param.h>
@@ -119,6 +122,7 @@
 
 #include "pomp_log.h"
 #include "pomp_buffer.h"
+#include "pomp_evt.h"
 #include "pomp_timer.h"
 #include "pomp_loop.h"
 #include "pomp_prot.h"

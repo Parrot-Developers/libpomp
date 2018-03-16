@@ -155,6 +155,7 @@ int main(int argc, char *argv[])
 	CU_register_suites(g_suites_loop);
 	CU_register_suites(g_suites_timer);
 	CU_register_suites(g_suites_ctx);
+	CU_register_suites(g_suites_evt);
 #ifndef _WIN32
 	CU_register_suites(g_suites_ipc);
 #endif /* !_WIN32 */

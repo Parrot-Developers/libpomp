@@ -67,6 +67,7 @@ class Message;
 class Connection;
 class EventHandler;
 class Loop;
+class Event;
 class Timer;
 class Context;
 
@@ -359,6 +360,38 @@ public:
 		Func mFunc;
 	};
 #endif /* POMP_CXX11 */
+};
+
+/**
+ * Event class.
+ */
+class Event {
+	POMP_DISABLE_COPY(Event);
+private:
+	struct pomp_evt *mEvt;  /**< Internal event */
+
+public:
+	/** Constructor */
+	inline Event() {
+		mEvt = pomp_evt_new();
+	}
+
+	/** Destructor */
+	inline ~Event() {
+		pomp_evt_destroy(mEvt);
+	}
+
+	inline intptr_t getFd() {
+		return pomp_evt_get_fd(mEvt);
+	}
+
+	inline int signal() {
+		return pomp_evt_signal(mEvt);
+	}
+
+	inline int clear() {
+		return pomp_evt_clear(mEvt);
+	}
 };
 
 /**

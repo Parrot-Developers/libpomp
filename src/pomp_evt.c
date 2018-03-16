@@ -1,10 +1,5 @@
 /**
- * @file pomp_test.h
- *
- * @author yves-marie.morgan@parrot.com
- *
- * Copyright (c) 2014 Parrot S.A.
- * All rights reserved.
+ *  Copyright (c) 2018 Parrot Drones SAS
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -27,49 +22,76 @@
  * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
  */
 
-#ifndef _POMP_TEST_H_
-#define _POMP_TEST_H_
-
-#define _GNU_SOURCE
-
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
-#include <ctype.h>
-#include <dirent.h>
-#include <signal.h>
-#include <inttypes.h>
-#include <stddef.h>
-
-#include <sys/stat.h>
-
-#ifndef _WIN32
-#include <pthread.h>
-#include <sys/poll.h>
-#include <sys/socket.h>
-#include <sys/wait.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#endif /* !_WIN32 */
-
-#include "libpomp.h"
 #include "pomp_priv.h"
 
-#include <CUnit/CUnit.h>
-#include <CUnit/Basic.h>
-#include <CUnit/Automated.h>
+/* Include all available implementations */
+#include "pomp_evt_linux.c"
+#include "pomp_evt_posix.c"
+#include "pomp_evt_win32.c"
+
+/** Choose best implementation */
+static const struct pomp_evt_ops *s_pomp_evt_ops =
+#if defined(POMP_HAVE_EVENT_FD)
+	&pomp_evt_fd_ops;
+#elif defined(POMP_HAVE_EVENT_POSIX)
+	&pomp_evt_posix_ops;
+#elif defined(POMP_HAVE_EVENT_WIN32)
+	&pomp_evt_win32_ops;
+#else
+#error "No event implementation available"
+#endif
 
 /**
+ * For testing purposes, allow modification of event operations.
+ * @param ops : new event operations.
+ * @return previous event operations.
  */
-extern CU_SuiteInfo g_suites_basic[];
-extern CU_SuiteInfo g_suites_addr[];
-extern CU_SuiteInfo g_suites_loop[];
-extern CU_SuiteInfo g_suites_timer[];
-extern CU_SuiteInfo g_suites_ctx[];
-extern CU_SuiteInfo g_suites_evt[];
-extern CU_SuiteInfo g_suites_ipc[];
+const struct pomp_evt_ops *pomp_evt_set_ops(
+		const struct pomp_evt_ops *ops)
+{
+	const struct pomp_evt_ops *prev = s_pomp_evt_ops;
+	s_pomp_evt_ops = ops;
+	return prev;
+}
 
-#endif /* !_POMP_TEST_H_ */
+/*
+ * See documentation in public header.
+ */
+struct pomp_evt *pomp_evt_new(void)
+{
+	return (*s_pomp_evt_ops->event_new)();
+}
+
+/*
+ * See documentation in public header.
+ */
+int pomp_evt_destroy(struct pomp_evt *evt)
+{
+	return (*s_pomp_evt_ops->event_destroy)(evt);
+}
+
+/*
+ * See documentation in public header.
+ */
+intptr_t pomp_evt_get_fd(const struct pomp_evt *evt)
+{
+	return (*s_pomp_evt_ops->event_get_fd)(evt);
+}
+
+/*
+ * See documentation in public header.
+ */
+int pomp_evt_signal(struct pomp_evt *evt)
+{
+	return (*s_pomp_evt_ops->event_signal)(evt);
+}
+
+/*
+ * See documentation in public header.
+ */
+int pomp_evt_clear(struct pomp_evt *evt)
+{
+	return (*s_pomp_evt_ops->event_clear)(evt);
+}

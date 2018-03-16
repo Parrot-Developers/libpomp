@@ -87,6 +87,7 @@ struct pomp_conn;
 struct pomp_buffer;
 struct pomp_msg;
 struct pomp_loop;
+struct pomp_evt;
 struct pomp_timer;
 
 /** Context event */
@@ -1085,6 +1086,55 @@ POMP_API int pomp_loop_idle_add(struct pomp_loop *loop, pomp_idle_cb_t cb,
  */
 POMP_API int pomp_loop_idle_remove(struct pomp_loop *loop, pomp_idle_cb_t cb,
 		void *userdata);
+
+/*
+ * Event API.
+ */
+
+/**
+ * Create a new event.
+ * @return new event or NULL in case of error.
+ */
+POMP_API struct pomp_evt *pomp_evt_new(void);
+
+/**
+ * Destroy an event.
+ * @param evt : event to destroy.
+ * @return 0 in case of success, negative errno value in case of error.
+ */
+POMP_API int pomp_evt_destroy(struct pomp_evt *evt);
+
+/**
+ * Get the fd/event of the pomp_evt.
+ *
+ * This fd/event can be put in the user main loop (typically a pomp_loop). It
+ * will become readable when the event is signalled.
+ *
+ * @param evt : event.
+ * @return file descriptor (or event handle for win32), negative errno value
+ * in case of error.
+ */
+POMP_API intptr_t pomp_evt_get_fd(const struct pomp_evt *evt);
+
+/**
+ * Signal an event.
+ *
+ * The fd associated with the pomp_evt will become readable.
+ *
+ * @param evt : event.
+ * @return 0 in case of success, negative errno value in case of error.
+ */
+POMP_API int pomp_evt_signal(struct pomp_evt *evt);
+
+/**
+ * Clear an event.
+ *
+ * The fd associated with the pomp_evt will no longer be readable.
+ *
+ * @param evt : event.
+ * @return 0 in case of success, negative errno value in case of error.
+ */
+POMP_API int pomp_evt_clear(struct pomp_evt *event);
 
 /*
  * Timer API.

@@ -1,10 +1,5 @@
 /**
- * @file pomp_test.h
- *
- * @author yves-marie.morgan@parrot.com
- *
- * Copyright (c) 2014 Parrot S.A.
- * All rights reserved.
+ *  Copyright (c) 2018 Parrot Drones SAS
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -27,49 +22,59 @@
  * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
  */
 
-#ifndef _POMP_TEST_H_
-#define _POMP_TEST_H_
-
-#define _GNU_SOURCE
-
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
-#include <ctype.h>
-#include <dirent.h>
-#include <signal.h>
-#include <inttypes.h>
-#include <stddef.h>
-
-#include <sys/stat.h>
-
-#ifndef _WIN32
-#include <pthread.h>
-#include <sys/poll.h>
-#include <sys/socket.h>
-#include <sys/wait.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#endif /* !_WIN32 */
-
-#include "libpomp.h"
 #include "pomp_priv.h"
 
-#include <CUnit/CUnit.h>
-#include <CUnit/Basic.h>
-#include <CUnit/Automated.h>
+#ifdef POMP_HAVE_EVENT_WIN32
 
 /**
+ * @see pomp_evt_destroy.
  */
-extern CU_SuiteInfo g_suites_basic[];
-extern CU_SuiteInfo g_suites_addr[];
-extern CU_SuiteInfo g_suites_loop[];
-extern CU_SuiteInfo g_suites_timer[];
-extern CU_SuiteInfo g_suites_ctx[];
-extern CU_SuiteInfo g_suites_evt[];
-extern CU_SuiteInfo g_suites_ipc[];
+static int pomp_evt_win32_destroy(struct pomp_evt *evt)
+{
+	return -ENOSYS;
+}
 
-#endif /* !_POMP_TEST_H_ */
+/**
+ * @see pomp_evt_new.
+ */
+static struct pomp_evt *pomp_evt_win32_new()
+{
+	return NULL;
+}
+
+/**
+ * @see pomp_evt_get_fd
+ */
+static intptr_t pomp_evt_win32_get_fd(const struct pomp_evt *evt)
+{
+	return -ENOSYS;
+}
+
+/**
+ * @see pomp_evt_signal
+ */
+static int pomp_evt_win32_signal(struct pomp_evt *evt)
+{
+	return -ENOSYS;
+}
+
+/**
+ * @see pomp_evt_clear
+ */
+static int pomp_evt_win32_clear(struct pomp_evt *evt)
+{
+	return -ENOSYS;
+}
+
+/** Event operations for 'eventfd' implementation */
+const struct pomp_evt_ops pomp_evt_win32_ops = {
+	.event_new = &pomp_evt_win32_new,
+	.event_destroy = &pomp_evt_win32_destroy,
+	.event_get_fd = &pomp_evt_win32_get_fd,
+	.event_signal = &pomp_evt_win32_signal,
+	.event_clear = &pomp_evt_win32_clear,
+};
+
+#endif /* POMP_HAVE_EVENT_WIN32 */
