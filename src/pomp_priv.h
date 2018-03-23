@@ -49,7 +49,6 @@
 
 #ifndef _MSC_VER
 #  include <unistd.h>
-#  define POMP_HAVE_EVENT_POSIX
 #else /* !_MSC_VER */
 #  include <io.h>
 #endif /* !_MSC_VER */
@@ -107,6 +106,8 @@
 
 #ifdef _WIN32
 #  include "pomp_priv_win32.h"
+#else /* _WIN32 */
+#  define POMP_HAVE_EVENT_POSIX
 #endif /* _WIN32 */
 
 #if defined(__FreeBSD__) || defined(__APPLE__)
