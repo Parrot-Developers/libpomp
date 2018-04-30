@@ -182,14 +182,12 @@ class Context(object):
     def _doConnAdd(self, conn):
         self.connections.append(conn)
         conn.start()
-        if not self.isDgram:
-            self.eventHandler.onConnected(self, conn)
+        self.eventHandler.onConnected(self, conn)
 
     def _doConnRemove(self, conn):
         # Could be called again during close or disconnection
         if conn in self.connections:
-            if not self.isDgram:
-                self.eventHandler.onDisconnected(self, conn)
+            self.eventHandler.onDisconnected(self, conn)
             self.connections.remove(conn)
             conn.close()
             self.semaphore.release()
