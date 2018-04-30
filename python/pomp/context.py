@@ -304,6 +304,9 @@ class Context(object):
             if not self._setupSock(socktype=socket.SOCK_DGRAM):
                 break
 
+            # Acquire token
+            self.semaphore.acquire()
+
             # Bind to address
             bound = False
             try:
@@ -330,9 +333,6 @@ class Context(object):
 
             # Cleanup socket
             self._cleanupSock()
-
-            # Wait for current connection if any to complete
-            self.semaphore.acquire()
 
             # Retry again later
             self._waitForRetry(_DGRAM_RECONNECT_DELAY)
