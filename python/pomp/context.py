@@ -251,6 +251,9 @@ class Context(object):
             if not self._setupSock():
                 break
 
+            # connect() will block for max 1 sec
+            self.sock.settimeout(1)
+
             # Connect to address
             connected = False
             try:
