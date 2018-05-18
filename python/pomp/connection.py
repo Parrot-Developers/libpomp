@@ -60,6 +60,8 @@ class Connection(object):
     _WRITE_MSG = 2
     _WRITE_MSG_TO = 3
 
+    _BUFSIZ = 4096
+
     def __init__(self, ctx, sock, isDgram=False):
         self.ctx = ctx
         self.sock = sock
@@ -157,9 +159,9 @@ class Connection(object):
             while self.running:
                 # Read and decode data into messages and notify them
                 if self.isDgram:
-                    (buf, self.peerAddr) = self.sock.recvfrom(1024)
+                    (buf, self.peerAddr) = self.sock.recvfrom(self._BUFSIZ)
                 else:
-                    buf = self.sock.recv(1024)
+                    buf = self.sock.recv(self._BUFSIZ)
                 if not buf and not self.isDgram:
                     break
                 off = 0
@@ -169,6 +171,8 @@ class Connection(object):
                         self.ctx.notifyMessage(self, rxMsg)
                 if self.isDgram:
                     self.peerAddr
+                if off == self._BUFSIZ:
+                    _log.warning("Rx buffer full (%s bytes)" % self._BUFSIZ)
         except (OSError, IOError) as ex:
             _log.warning("recv: err=%d(%s)", ex.errno, ex.strerror)
 
