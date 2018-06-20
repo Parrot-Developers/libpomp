@@ -269,8 +269,8 @@ struct MessageFormat<Id, Arg1, Args...> {
 			const typename pomp::internal::traits<Arg1>::type& arg1,
 			const typename pomp::internal::traits<Args>::type&... args) {
 		static_assert(pomp::internal::traits<Arg1>::valid, "Invalid type");
-		pomp::internal::traits<Arg1>::encode(enc, arg1);
-		return _Base::encode(enc, std::forward<
+		int res = pomp::internal::traits<Arg1>::encode(enc, arg1);
+		return res !=0 ? res : _Base::encode(enc, std::forward<
 				const typename pomp::internal::traits<Args>::type&>(args)...);
 	}
 
@@ -279,8 +279,8 @@ struct MessageFormat<Id, Arg1, Args...> {
 			typename pomp::internal::traits<Arg1>::type& arg1,
 			typename pomp::internal::traits<Args>::type&... args) {
 		static_assert(pomp::internal::traits<Arg1>::valid, "Invalid type");
-		pomp::internal::traits<Arg1>::decode(dec, arg1);
-		return _Base::decode(dec, std::forward<
+		int res = pomp::internal::traits<Arg1>::decode(dec, arg1);
+		return res !=0 ? res : _Base::decode(dec, std::forward<
 				typename pomp::internal::traits<Args>::type&>(args)...);
 	}
 };
