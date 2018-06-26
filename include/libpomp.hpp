@@ -81,6 +81,8 @@ private:
 	const struct pomp_msg  *mConstMsg;  /**< Internal const message */
 	friend class Connection;
 	friend class Context;
+	friend class Decoder;
+	friend class Encoder;
 
 private:
 	/** Internal constructor from a const message. */
@@ -170,6 +172,190 @@ public:
 		return res;
 	}
 #endif /* POMP_CXX11 */
+};
+
+/**
+ * Decoder class.
+ */
+class Decoder {
+    POMP_DISABLE_COPY(Decoder)
+private:
+    const Message &mMsg; /**< Decoded message */
+    pomp_decoder *mDec;  /**< Internal decoder */
+
+public:
+    Decoder(const Message &message) :
+        mMsg(message),
+        mDec(pomp_decoder_new()) {
+        pomp_decoder_init(mDec, mMsg.getMsg());
+    }
+
+    ~Decoder() {
+        pomp_decoder_destroy(mDec);
+    }
+
+    int read(int8_t &v) {
+        return pomp_decoder_read_i8(mDec, &v);
+    }
+
+    int read(uint8_t &v) {
+        return pomp_decoder_read_u8(mDec, &v);
+    }
+
+    int read(int16_t &v) {
+        return pomp_decoder_read_i16(mDec, &v);
+    }
+
+    int read(uint16_t &v) {
+        return pomp_decoder_read_u16(mDec, &v);
+    }
+
+    int read(int32_t &v) {
+        return pomp_decoder_read_i32(mDec, &v);
+    }
+
+    int read(uint32_t &v) {
+        return pomp_decoder_read_u32(mDec, &v);
+    }
+
+    int read(int64_t &v) {
+        return pomp_decoder_read_i64(mDec, &v);
+    }
+
+    int read(uint64_t &v) {
+        return pomp_decoder_read_u64(mDec, &v);
+    }
+
+    int read(float &v) {
+        return pomp_decoder_read_f32(mDec, &v);
+    }
+
+    int read(double &v) {
+        return pomp_decoder_read_f64(mDec, &v);
+    }
+
+    int read(std::string &v) {
+        const char *s = NULL;
+        int res = pomp_decoder_read_cstr(mDec, &s);
+        if (res == 0)
+            v.assign(s);
+        return res;
+    }
+
+    int read(std::vector<uint8_t> &v) {
+        const void *p = NULL;
+        uint32_t n = 0;
+        int res = pomp_decoder_read_cbuf(mDec, &p, &n);
+        if (res == 0) {
+            const uint8_t *start = reinterpret_cast<const uint8_t *>(p);
+            const uint8_t *end = start + n;
+            v.assign(start, end);
+        }
+        return res;
+    }
+
+    //dedicated function to avoid conflict with read(int32_t &)
+    int readFd(int &v) {
+        return pomp_decoder_read_fd(mDec, &v);
+    }
+};
+
+/**
+ * Encoder class.
+ *
+ * Use writeXX functions to avoid cast when using numeric constants.
+ */
+class Encoder {
+    POMP_DISABLE_COPY(Encoder)
+private:
+    Message mMsg;       /**< Encoded message */
+    pomp_encoder *mEnc; /**< Internal encoder */
+    bool mFinished;     /**< Is message encoding finished */
+
+public:
+    Encoder(uint32_t msgId) :
+        mEnc(pomp_encoder_new()),
+        mFinished(false) {
+        pomp_msg_init(mMsg.mMsg, msgId);
+        pomp_encoder_init(mEnc, mMsg.mMsg);
+    }
+    ~Encoder() {
+        pomp_encoder_destroy(mEnc);
+    }
+
+    const Message &getMessage() {
+        if (!mFinished) {
+            pomp_msg_finish(mMsg.mMsg);
+            mFinished = true;
+        }
+        return mMsg;
+    }
+
+    int writeI8(int8_t v) { return write(v); }
+    int write(int8_t v) {
+        return pomp_encoder_write_i8(mEnc, v);
+    }
+
+    int writeU8(uint8_t v) { return write(v); }
+    int write(uint8_t v) {
+        return pomp_encoder_write_u8(mEnc, v);
+    }
+
+    int writeI16(int16_t v) { return write(v); }
+    int write(int16_t v) {
+        return pomp_encoder_write_i16(mEnc, v);
+    }
+
+    int writeU16(uint16_t v) { return write(v); }
+    int write(uint16_t v) {
+        return pomp_encoder_write_u16(mEnc, v);
+    }
+
+    int writeI32(int32_t v) { return write(v); }
+    int write(int32_t v) {
+        return pomp_encoder_write_i32(mEnc, v);
+    }
+
+    int writeU32(uint32_t v) { return write(v); }
+    int write(uint32_t v) {
+        return pomp_encoder_write_u32(mEnc, v);
+    }
+
+    int writeI64(int64_t v) { return write(v); }
+    int write(int64_t v) {
+        return pomp_encoder_write_i64(mEnc, v);
+    }
+
+    int writeU64(uint64_t v) { return write(v); }
+    int write(uint64_t v) {
+        return pomp_encoder_write_u64(mEnc, v);
+    }
+
+    int writeF32(float v) { return write(v); }
+    int write(float v) {
+        return pomp_encoder_write_f32(mEnc, v);
+    }
+
+    int writeF64(double v) { return write(v); }
+    int write(double v) {
+        return pomp_encoder_write_f64(mEnc, v);
+    }
+
+    int write(const std::string &v) { return write(v.c_str()); }
+    int write(const char *v) {
+        return pomp_encoder_write_str(mEnc, v);
+    }
+
+    int write(const std::vector<uint8_t> &v) {
+        const uint8_t *p = v.data();
+        uint32_t n = static_cast<uint32_t>(v.size());
+        return pomp_encoder_write_buf(mEnc, p, n);
+    }
+
+    //dedicated function to avoid conflict with write(int32_t)
+    int writeFd(int fd) {
+        return pomp_encoder_write_fd(mEnc, fd);
+    }
 };
 
 /**
