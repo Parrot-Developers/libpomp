@@ -41,6 +41,11 @@
 #include <utility>
 #include <vector>
 #include <functional>
+#ifdef _WIN32
+#include <winsock2.h>
+#else
+#include <sys/socket.h>
+#endif
 
 /* Detect support for C++11 */
 #if defined(__cplusplus) && (__cplusplus >= 201103L)
@@ -647,6 +652,39 @@ public:
 };
 
 /**
+ * Pomp address.
+ * Format of string is:
+ * - inet:<host>:<port> : ipv4 address with host name and port.
+ * - inet6:<host>:<port> : ipv6 address with host name and port
+ * - unix:<pathname> : unix local address with file system name.
+ * - unix:@<name> : unix local address with abstract name.
+ */
+class Address
+{
+public:
+	Address() : mAddressLength(0), mValid(false) {}
+	Address(const char * str) :
+		mAddressLength(sizeof(mAddress)),
+		mValid(pomp_addr_parse(str, &mAddress.sa, &mAddressLength) == 0)
+	{
+	}
+	bool isValid() const { return mValid; }
+	const sockaddr * addr() const { return &mAddress.sa; }
+	uint32_t len() const { return mAddressLength; }
+#ifdef POMP_CXX11
+	explicit operator bool () const { return isValid(); }
+#endif
+
+private:
+	union { //ensure we have enough space for all formats supported by pomp
+		sockaddr sa;
+		sockaddr_storage sa_storage;
+	} mAddress;
+	uint32_t mAddressLength;
+	const bool mValid;
+};
+
+/**
  * EventHandler class.
  */
 class EventHandler {
@@ -752,14 +790,29 @@ public:
 		return pomp_ctx_listen(mCtx, addr, addrlen);
 	}
 
+	/** Start a server. */
+	inline int listen(const Address & address) {
+		return listen(address.addr(), address.len());
+	}
+
 	/** Start a client. */
 	inline int connect(const struct sockaddr *addr, uint32_t addrlen) {
 		return pomp_ctx_connect(mCtx, addr, addrlen);
 	}
 
+	/** Start a client. */
+	inline int connect(const Address & address) {
+		return connect(address.addr(), address.len());
+	}
+
 	/** Bind a connection-less context (inet-udp). */
 	inline int bind(const struct sockaddr *addr, uint32_t addrlen) {
 		return pomp_ctx_bind(mCtx, addr, addrlen);
+	}
+
+	/** Bind a connection-less context (inet-udp). */
+	inline int bind(const Address & address) {
+		return bind(address.addr(), address.len());
 	}
 
 	/** Stop the context. It will disconnects all peers (with notification). */
@@ -817,6 +870,11 @@ public:
 	/** Send a message on dgram context to a remote address. */
 	inline int sendMsgTo(const Message &msg, const struct sockaddr *addr, uint32_t addrlen) {
 		return pomp_ctx_send_msg_to(mCtx, msg.getMsg(), addr, addrlen);
+	}
+
+	/** Send a message on dgram context to a remote address. */
+	inline int sendMsgTo(const Message &msg, const Address & address) {
+		return sendMsgTo(msg, address.addr(), address.len());
 	}
 
 	/** Format and send a message to all connections. */
