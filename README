@@ -20,7 +20,7 @@ be a shared header with defines.
 Key points :
 - no need to use a description language and code generator, the format string
   indicates the type of the message arguments.
-- the use of printf/scanf like functions allow the compiler to check the
+- the use of printf/scanf like functions allows the compiler to check the
   coherence between the format string and the actual type of the arguments so
   the encoding/decoding engine can be generic and safe.
 - as the type of arguments is included in the payload, the decoding engine can
@@ -76,7 +76,7 @@ How to use :
    pomp_msg_read(msg, "%d%ms", &counter, &str);
    free(str);
 
-   Again the format string allow the compiler to check that the type of the
+   Again the format string allows the compiler to check that the type of the
    argument is valid. The decoding engine will also make sure it matches the
    real message payload.
    Note that string decoding uses a special string specifier '%ms' that
