@@ -131,7 +131,7 @@ POMP_API const char *pomp_socket_kind_str(enum pomp_socket_kind kind);
 /** Send status flags */
 enum pomp_send_status {
 	POMP_SEND_STATUS_OK = 0x01,		/**< Send is OK */
-	POMP_SEND_STATUS_ERROR = 0x03,		/**< Error during send */
+	POMP_SEND_STATUS_ERROR = 0x02,		/**< Error during send */
 	POMP_SEND_STATUS_ABORTED = 0x04,	/**< Send aborted */
 	POMP_SEND_STATUS_QUEUE_EMPTY = 0x08,	/**< No more buffer in queue */
 };
