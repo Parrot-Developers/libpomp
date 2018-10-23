@@ -101,9 +101,9 @@ def runLoop():
 
 #===============================================================================
 #===============================================================================
-def stepLoop(maxMsg=32):
+def stepLoop(maxMsg=32, timeout=0):
     count = 0
-    while _tls.loop.step() and count < maxMsg:
+    while _tls.loop.step(timeout=timeout) and count < maxMsg:
         count += 1
 
 #===============================================================================
