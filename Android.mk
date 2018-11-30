@@ -32,6 +32,6 @@ LOCAL_SRC_FILES := \
 ifdef NDK_PROJECT_PATH
 include $(BUILD_STATIC_LIBRARY)
 else
-LOCAL_SHARED_LIBRARIES := liblog
+LOCAL_SHARED_LIBRARIES := liblog libcutils
 include $(BUILD_SHARED_LIBRARY)
 endif
