@@ -1658,6 +1658,47 @@ POMP_API int pomp_decoder_read_f64(struct pomp_decoder *dec, double *v);
  */
 POMP_API int pomp_decoder_read_fd(struct pomp_decoder *dec, int *v);
 
+/*
+ * Internal API.
+ */
+
+enum pomp_loop_impl {
+	POMP_LOOP_IMPL_EPOLL,		/**< epoll impl. (linux only) */
+	POMP_LOOP_IMPL_POLL,		/**< poll impl. */
+	POMP_LOOP_IMPL_WIN32,		/**< win32 impl. */
+};
+
+enum pomp_timer_impl {
+	POMP_TIMER_IMPL_TIMER_FD,	/**< timer fd impl. (linux only) */
+	POMP_TIMER_IMPL_KQUEUE,		/**< kqueue impl. (darwin,bsd only) */
+	POMP_TIMER_IMPL_POSIX,		/**< posix (signals) impl. */
+	POMP_TIMER_IMPL_WIN32,		/**< win32 impl. */
+
+};
+
+/**
+ * Force the loop implementation to use.
+ * @param impl: the implementation to use.
+ * @return 0 in case of success, negative errno value in case of error.
+ *
+ * @remarks : This function modifies the implementation of ALL loops. It shall
+ * only be called BEFORE creating anything and ONLY for tests or specific use
+ * cases. Not all implementations are available on all platforms.
+ */
+POMP_API int pomp_internal_set_loop_impl(enum pomp_loop_impl impl);
+
+/**
+ * Force the timer implementation to use.
+ * @param impl: the implementation to use.
+ * @return 0 in case of success, negative errno value in case of error.
+ *
+ * @remarks : This function modifies the implementation of ALL timers. It shall
+ * only be called BEFORE creating anything and ONLY for tests or specific use
+ * cases. Not all implementations are available on all platforms.
+ */
+POMP_API int pomp_internal_set_timer_impl(enum pomp_timer_impl impl);
+
+
 #ifdef __cplusplus
 }
 #endif /* __cplusplus */

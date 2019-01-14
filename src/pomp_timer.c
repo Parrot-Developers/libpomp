@@ -108,3 +108,46 @@ int pomp_timer_clear(struct pomp_timer *timer)
 {
 	return (*s_pomp_timer_ops->timer_clear)(timer);
 }
+
+/*
+ * See documentation in public header.
+ */
+int pomp_internal_set_timer_impl(enum pomp_timer_impl impl)
+{
+	switch (impl) {
+	case POMP_TIMER_IMPL_TIMER_FD:
+#ifdef POMP_HAVE_TIMER_FD
+		pomp_timer_set_ops(&pomp_timer_fd_ops);
+		return 0;
+#else
+		return -EINVAL;
+#endif
+
+	case POMP_TIMER_IMPL_KQUEUE:
+#ifdef POMP_HAVE_TIMER_KQUEUE
+		pomp_timer_set_ops(&pomp_timer_kqueue_ops);
+		return 0;
+#else
+		return -EINVAL;
+#endif
+
+	case POMP_TIMER_IMPL_POSIX:
+#ifdef POMP_HAVE_TIMER_POSIX
+		pomp_timer_set_ops(&pomp_timer_posix_ops);
+		return 0;
+#else
+		return -EINVAL;
+#endif
+
+	case POMP_TIMER_IMPL_WIN32:
+#ifdef POMP_HAVE_TIMER_WIN32
+		pomp_timer_set_ops(&pomp_timer_win32_ops);
+		return 0;
+#else
+		return -EINVAL;
+#endif
+
+	default:
+		return -EINVAL;
+	}
+}

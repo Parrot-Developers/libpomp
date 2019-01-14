@@ -130,17 +130,17 @@ struct pomp_loop_ops {
 /** Loop operations for 'poll' implementation */
 #ifdef POMP_HAVE_LOOP_POLL
 extern const struct pomp_loop_ops pomp_loop_poll_ops;
-#endif /* POMP_HAVE_TIMER_POSIX */
+#endif /* POMP_HAVE_LOOP_POLL */
 
 /** Loop operations for 'epoll' implementation */
 #ifdef POMP_HAVE_LOOP_EPOLL
 extern const struct pomp_loop_ops pomp_loop_epoll_ops;
-#endif /* POMP_HAVE_TIMER_FD */
+#endif /* POMP_HAVE_LOOP_EPOLL */
 
 /** Timer operations for 'win32' implementation */
 #ifdef POMP_HAVE_LOOP_WIN32
 extern const struct pomp_loop_ops pomp_loop_win32_ops;
-#endif /* POMP_HAVE_TIMER_WIN32 */
+#endif /* POMP_HAVE_LOOP_WIN32 */
 
 /* Loop functions not part of public API */
 
@@ -161,6 +161,6 @@ struct pomp_fd *pomp_loop_win32_find_pfd_by_hevt(struct pomp_loop *loop,
 struct pomp_fd *pomp_loop_win32_add_pfd_with_hevt(struct pomp_loop *loop,
 		HANDLE hevt, pomp_fd_event_cb_t cb, void *userdata);
 
-#endif /* POMP_HAVE_TIMER_WIN32 */
+#endif /* POMP_HAVE_LOOP_WIN32 */
 
 #endif /* !_POMP_TIMER_H_ */

@@ -545,3 +545,38 @@ int pomp_loop_idle_remove(struct pomp_loop *loop, pomp_idle_cb_t cb,
 
 	return 0;
 }
+
+/*
+ * See documentation in public header.
+ */
+int pomp_internal_set_loop_impl(enum pomp_loop_impl impl)
+{
+	switch (impl) {
+	case POMP_LOOP_IMPL_EPOLL:
+#ifdef POMP_HAVE_LOOP_EPOLL
+		pomp_loop_set_ops(&pomp_loop_epoll_ops);
+		return 0;
+#else
+		return -EINVAL;
+#endif
+
+	case POMP_LOOP_IMPL_POLL:
+#ifdef POMP_HAVE_LOOP_POLL
+		pomp_loop_set_ops(&pomp_loop_poll_ops);
+		return 0;
+#else
+		return -EINVAL;
+#endif
+
+	case POMP_LOOP_IMPL_WIN32:
+#ifdef POMP_HAVE_LOOP_WIN32
+		pomp_loop_set_ops(&pomp_loop_win32_ops);
+		return 0;
+#else
+		return -EINVAL;
+#endif
+
+	default:
+		return -EINVAL;
+	}
+}
