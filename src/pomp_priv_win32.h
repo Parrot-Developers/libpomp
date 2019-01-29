@@ -86,8 +86,8 @@ struct tcp_keepalive {
 #define EINPROGRESS	WSAEINPROGRESS
 
 #define SHUT_RD		SD_RECEIVE	/**< No more receptions */
-#define SHUT_WR		SD_SEND		/**< No more transmissions */
-#define SHUT_RDWR	SD_BOTH		/**< No more receptions or transmissions */
+#define SHUT_WR		SD_SEND	/**< No more transmissions */
+#define SHUT_RDWR	SD_BOTH	/**< No more receptions or transmissions */
 
 #define O_NONBLOCK	00004000
 
