@@ -1345,16 +1345,18 @@ int pomp_ctx_remove_conn(struct pomp_ctx *ctx, struct pomp_conn *conn)
 		break;
 	}
 
-	if (!found)
+	if (!found) {
 		POMP_LOGE("conn %p not found in ctx %p", conn, ctx);
+	} else {
+		/* Notify user */
+		if (ctx->type != POMP_CTX_TYPE_DGRAM)
+			pomp_ctx_notify_event(ctx,
+					POMP_EVENT_DISCONNECTED, conn);
 
-	/* Notify user */
-	if (ctx->type != POMP_CTX_TYPE_DGRAM)
-		pomp_ctx_notify_event(ctx, POMP_EVENT_DISCONNECTED, conn);
-
-	/* Free connection itself */
-	pomp_conn_close(conn);
-	pomp_conn_destroy(conn);
+		/* Free connection itself */
+		pomp_conn_close(conn);
+		pomp_conn_destroy(conn);
+	}
 
 	/* Reconnect client if needed */
 	if (ctx->type == POMP_CTX_TYPE_CLIENT
