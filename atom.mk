@@ -97,6 +97,20 @@ include $(BUILD_CUSTOM)
 ###############################################################################
 ###############################################################################
 
+include $(CLEAR_VARS)
+
+LOCAL_MODULE := libpomp-py
+LOCAL_CATEGORY_PATH := libs
+LOCAL_DESCRIPTION := Python binding for libpomp
+
+LOCAL_CUSTOM_MACROS := \
+	pybinding-macro:libpomp,libpomp,$(LOCAL_PATH)/include/libpomp.h,$(TARGET_OUT_STAGING)/usr/lib/libpomp.so
+
+include $(BUILD_CUSTOM)
+
+###############################################################################
+###############################################################################
+
 ifdef TARGET_TEST
 
 include $(CLEAR_VARS)
