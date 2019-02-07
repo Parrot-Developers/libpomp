@@ -312,10 +312,6 @@ static int server_accept_conn(struct pomp_ctx *ctx)
 
 	/* Cleanup in case of error */
 error:
-	if (conn != NULL) {
-		pomp_conn_close(conn);
-		pomp_conn_destroy(conn);
-	}
 	if (fd >= 0)
 		close(fd);
 	return res;
