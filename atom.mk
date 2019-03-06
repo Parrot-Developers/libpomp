@@ -13,6 +13,11 @@ LOCAL_CONDITIONAL_LIBRARIES := OPTIONAL:libulog
 LOCAL_EXPORT_C_INCLUDES := \
 	$(LOCAL_PATH)/include
 
+# Public API headers - top level headers first
+# This header list is currently used to generate a python binding
+LOCAL_EXPORT_CUSTOM_VARIABLES := LIBPOMP_HEADERS=$\
+	$(LOCAL_PATH)/include/libpomp.h;
+
 # Test code needs access to internal functions
 ifndef TARGET_TEST
   LOCAL_CFLAGS += -fvisibility=hidden
