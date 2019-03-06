@@ -557,7 +557,7 @@ public:
  * Event class.
  */
 class Event {
-	POMP_DISABLE_COPY(Event);
+	POMP_DISABLE_COPY(Event)
 private:
 	struct pomp_evt *mEvt;  /**< Internal event */
 
