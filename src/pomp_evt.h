@@ -31,6 +31,10 @@
 
 /** Event structure */
 struct pomp_evt {
+	struct pomp_loop *loop;
+	pomp_evt_cb_t cb;
+	void *userdata;
+
 #ifdef POMP_HAVE_EVENT_POSIX
 	int		pipefds[2];	/**< Notification pipes */
 #endif /* POMP_HAVE_EVENT_POSIX */
@@ -77,5 +81,8 @@ extern const struct pomp_evt_ops pomp_evt_win32_ops;
 
 const struct pomp_evt_ops *pomp_evt_set_ops(
 		const struct pomp_evt_ops *ops);
+
+
+intptr_t pomp_evt_get_fd(const struct pomp_evt *evt);
 
 #endif /* !_POMP_EVT_H_ */

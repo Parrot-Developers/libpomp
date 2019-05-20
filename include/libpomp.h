@@ -225,6 +225,14 @@ typedef void (*pomp_send_cb_t)(
 typedef void (*pomp_fd_event_cb_t)(int fd, uint32_t revents, void *userdata);
 
 /**
+ * pomp_evt event callback.
+ * @note The event will be cleared automatically before calling this.
+ * @param evt : triggered event.
+ * @param userdata : callback user data.
+ */
+typedef void (*pomp_evt_cb_t)(struct pomp_evt *evt, void *userdata);
+
+/**
  * Timer callback
  * @param timer : timer.
  * @param userdata : callback user data.
@@ -1114,16 +1122,24 @@ POMP_API struct pomp_evt *pomp_evt_new(void);
 POMP_API int pomp_evt_destroy(struct pomp_evt *evt);
 
 /**
- * Get the fd/event of the pomp_evt.
- *
- * This fd/event can be put in the user main loop (typically a pomp_loop). It
- * will become readable when the event is signalled.
- *
- * @param evt : event.
- * @return file descriptor (or event handle for win32), negative errno value
- * in case of error.
+ * Attach a pomp_evt to a loop.
+ * @param evt : event to attach.
+ * @param loop : loop to attach to.
+ * @param cb : callback for notifications.
+ * @param userdata user data for callback.
+ * @return 0 in case of success, negative errno value in case of error.
  */
-POMP_API intptr_t pomp_evt_get_fd(const struct pomp_evt *evt);
+POMP_API int pomp_evt_attach_to_loop(struct pomp_evt *evt,
+		struct pomp_loop *loop, pomp_evt_cb_t cb, void *userdata);
+
+/**
+ * Detach an event from a loop.
+ * @param evt : event to detach.
+ * @param loop : loop.
+ * @return 0 in case of success, negative errno value in case of error.
+ */
+POMP_API int pomp_evt_detach_from_loop(struct pomp_evt *evt,
+		struct pomp_loop *loop);
 
 /**
  * Signal an event.

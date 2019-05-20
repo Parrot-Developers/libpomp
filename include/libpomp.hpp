@@ -449,6 +449,7 @@ private:
 	bool              mOwner;  /**< True if owner of internal loop */
 	friend class Context;
 	friend class Timer;
+	friend class Event;
 private:
 	/** Internal fd event callback */
 	inline static void fdEventCb(int _fd, uint32_t _revents, void *_userdata) {
@@ -560,8 +561,24 @@ class Event {
 	POMP_DISABLE_COPY(Event)
 private:
 	struct pomp_evt *mEvt;  /**< Internal event */
+private:
+	/** Internal event callback */
+	inline static void eventCb(struct pomp_evt *_evt, void *_userdata) {
+		(void)_evt;
+		Handler *handler = reinterpret_cast<Handler *>(_userdata);
+		handler->processEvent();
+	}
 
 public:
+	/** Handler class */
+	class Handler {
+		POMP_DISABLE_COPY(Handler)
+	public:
+		inline Handler() {}
+		inline virtual ~Handler() {}
+		virtual void processEvent() = 0;
+	};
+
 	/** Constructor */
 	inline Event() {
 		mEvt = pomp_evt_new();
@@ -572,16 +589,21 @@ public:
 		pomp_evt_destroy(mEvt);
 	}
 
-	inline intptr_t getFd() {
-		return pomp_evt_get_fd(mEvt);
-	}
-
 	inline int signal() {
 		return pomp_evt_signal(mEvt);
 	}
 
 	inline int clear() {
 		return pomp_evt_clear(mEvt);
+	}
+
+	inline int attachToLoop(Loop *loop, Handler *handler) {
+		return pomp_evt_attach_to_loop(mEvt, loop->mLoop,
+					&Event::eventCb, handler);
+	}
+
+	inline int detachFromLoop(Loop *loop) {
+		return pomp_evt_detach_from_loop(mEvt, loop->mLoop);
 	}
 };
 

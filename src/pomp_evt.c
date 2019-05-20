@@ -57,6 +57,28 @@ const struct pomp_evt_ops *pomp_evt_set_ops(
 }
 
 /*
+ * Internal callback for pomp_evt handling.
+ * See pomp_fd_event_cb_t documentation in public header.
+ */
+static void pomp_evt_cb(int fd, uint32_t revents, void *userdata)
+{
+	int res;
+	struct pomp_evt *evt = userdata;
+
+	POMP_RETURN_IF_FAILED(evt != NULL, -EINVAL);
+
+	res = pomp_evt_clear(evt);
+	POMP_RETURN_IF_FAILED(res == 0, res);
+
+	evt->cb(evt, evt->userdata);
+}
+
+intptr_t pomp_evt_get_fd(const struct pomp_evt *evt)
+{
+	return (*s_pomp_evt_ops->event_get_fd)(evt);
+}
+
+/*
  * See documentation in public header.
  */
 struct pomp_evt *pomp_evt_new(void)
@@ -69,15 +91,84 @@ struct pomp_evt *pomp_evt_new(void)
  */
 int pomp_evt_destroy(struct pomp_evt *evt)
 {
+	POMP_RETURN_ERR_IF_FAILED(evt != NULL, -EINVAL);
+
+	if (evt->loop != NULL) {
+		POMP_LOGW("event %p is still attached to loop %p",
+			evt, evt->loop);
+		return -EBUSY;
+	}
+
 	return (*s_pomp_evt_ops->event_destroy)(evt);
 }
 
 /*
  * See documentation in public header.
  */
-intptr_t pomp_evt_get_fd(const struct pomp_evt *evt)
+int pomp_evt_attach_to_loop(struct pomp_evt *evt,
+		struct pomp_loop *loop, pomp_evt_cb_t cb, void *userdata)
 {
-	return (*s_pomp_evt_ops->event_get_fd)(evt);
+	int res = 0;
+	int fd;
+	int events = POMP_FD_EVENT_IN;
+	POMP_RETURN_ERR_IF_FAILED(evt != NULL, -EINVAL);
+	POMP_RETURN_ERR_IF_FAILED(loop != NULL, -EINVAL);
+	POMP_RETURN_ERR_IF_FAILED(cb != NULL, -EINVAL);
+
+	/* Make sure event is not already attached */
+	if (evt->loop != NULL) {
+		POMP_LOGW("event %p is already attached in %s loop",
+			evt, (evt->loop == loop) ? "this" : "another");
+		return -EEXIST;
+	}
+
+	/* Get evt fd */
+	fd = pomp_evt_get_fd(evt);
+	if (fd < 0)
+		return fd;
+
+	res = pomp_loop_add(loop, fd, events, pomp_evt_cb, evt);
+	if (res < 0)
+		return res;
+	evt->cb = cb;
+	evt->userdata = userdata;
+	evt->loop = loop;
+
+	return 0;
+}
+
+/*
+ * See documentation in public header.
+ */
+int pomp_evt_detach_from_loop(struct pomp_evt *evt, struct pomp_loop *loop)
+{
+	int res = 0;
+	int fd;
+	POMP_RETURN_ERR_IF_FAILED(loop != NULL, -EINVAL);
+	POMP_RETURN_ERR_IF_FAILED(evt != NULL, -EINVAL);
+
+	/* Make sure event is properly attached in this loop */
+	if (evt->loop == NULL) {
+		POMP_LOGW("event %p is not attached to any loop", evt);
+		return -ENOENT;
+	} else if (evt->loop != loop) {
+		POMP_LOGW("event %p is not attached to this loop", evt);
+		return -EINVAL;
+	}
+
+	/* Get evt fd */
+	fd = pomp_evt_get_fd(evt);
+	if (fd < 0)
+		return fd;
+
+	res = pomp_loop_remove(loop, fd);
+	if (res < 0)
+		return res;
+	evt->cb = NULL;
+	evt->userdata = NULL;
+	evt->loop = NULL;
+
+	return res;
 }
 
 /*

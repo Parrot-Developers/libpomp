@@ -28,26 +28,76 @@
 
 /** */
 struct test_data {
+	struct pomp_loop *loop;
 	struct pomp_evt *evt;
 	uint64_t counter;
 };
 
 /** */
-static void test_event_cb(int fd, uint32_t revents, void *userdata)
+static void test_evt_cb(struct pomp_evt *evt, void *userdata)
 {
 	struct test_data *data = userdata;
 
-	int res = pomp_evt_clear(data->evt);
+	data->counter++;
+}
+
+static void test_event_internal(struct test_data *data)
+{
+	int res;
+	data->counter = 0;
+
+	/* Shall not fire before signal */
+	res = pomp_loop_wait_and_process(data->loop, 250);
+	CU_ASSERT_EQUAL(res, -ETIMEDOUT);
+	CU_ASSERT_EQUAL(data->counter, 0);
+
+	/* Signal the event */
+	res = pomp_evt_signal(data->evt);
 	CU_ASSERT_EQUAL(res, 0);
 
-	data->counter++;
+	/* Shall fire once */
+	res = pomp_loop_wait_and_process(data->loop, 250);
+	CU_ASSERT_EQUAL(res, 0);
+	CU_ASSERT_EQUAL(data->counter, 1);
+
+	/* Signal the event twice */
+	res = pomp_evt_signal(data->evt);
+	CU_ASSERT_EQUAL(res, 0);
+	res = pomp_evt_signal(data->evt);
+	CU_ASSERT_EQUAL(res, 0);
+
+	/* Shall fire only once */
+	res = pomp_loop_wait_and_process(data->loop, 250);
+	CU_ASSERT_EQUAL(res, 0);
+	CU_ASSERT_EQUAL(data->counter, 2);
+
+	/* Shall not fire */
+	res = pomp_loop_wait_and_process(data->loop, 250);
+	CU_ASSERT_EQUAL(res, -ETIMEDOUT);
+	CU_ASSERT_EQUAL(data->counter, 2);
+
+	/* Signal the event */
+	res = pomp_evt_signal(data->evt);
+	CU_ASSERT_EQUAL(res, 0);
+
+	/* Clear the event */
+	res = pomp_evt_clear(data->evt);
+	CU_ASSERT_EQUAL(res, 0);
+
+	/* Shall not fire */
+	res = pomp_loop_wait_and_process(data->loop, 250);
+	CU_ASSERT_EQUAL(res, -ETIMEDOUT);
+	CU_ASSERT_EQUAL(data->counter, 2);
+
+	/* Clear on an unsignalled event */
+	res = pomp_evt_clear(data->evt);
+	CU_ASSERT_EQUAL(res, 0);
 }
 
 /** */
 static void test_event(void)
 {
 	int res = 0;
-	int fd;
 	struct test_data data;
 	struct pomp_loop *loop = NULL;
 	struct pomp_evt *evt = NULL;
@@ -62,66 +112,52 @@ static void test_event(void)
 	evt = pomp_evt_new();
 	CU_ASSERT_PTR_NOT_NULL(evt);
 
-	/* Save event into data */
+	/* Save event/loop into data */
 	data.evt = evt;
+	data.loop = loop;
 
-	/* Get event fd */
-	fd = pomp_evt_get_fd(evt);
-
-	/* Add fd to loop */
-	res = pomp_loop_add(loop, fd, POMP_FD_EVENT_IN, test_event_cb, &data);
+	/* Attach event to loop */
+	res = pomp_evt_attach_to_loop(evt, loop, test_evt_cb, &data);
 	CU_ASSERT_EQUAL(res, 0);
 
-	/* Shall not fire before signal */
-	res = pomp_loop_wait_and_process(loop, 250);
-	CU_ASSERT_EQUAL(res, -ETIMEDOUT);
-	CU_ASSERT_EQUAL(data.counter, 0);
+	/* Run actual test */
+	test_event_internal(&data);
 
-	/* Signal the event */
-	res = pomp_evt_signal(evt);
+	/* Detach event from loop */
+	res = pomp_evt_detach_from_loop(evt, loop);
 	CU_ASSERT_EQUAL(res, 0);
 
-	/* Shall fire once */
-	res = pomp_loop_wait_and_process(loop, 250);
-	CU_ASSERT_EQUAL(res, 0);
-	CU_ASSERT_EQUAL(data.counter, 1);
+	/* Invalid usage tests */
 
-	/* Signal the twice */
-	res = pomp_evt_signal(evt);
+	/* Attach event to loop twice */
+	res = pomp_evt_attach_to_loop(evt, loop, test_evt_cb, &data);
 	CU_ASSERT_EQUAL(res, 0);
-	res = pomp_evt_signal(evt);
-	CU_ASSERT_EQUAL(res, 0);
-
-	/* Shall fire only once */
-	res = pomp_loop_wait_and_process(loop, 250);
-	CU_ASSERT_EQUAL(res, 0);
-	CU_ASSERT_EQUAL(data.counter, 2);
-
-	/* Shall not fire */
-	res = pomp_loop_wait_and_process(loop, 250);
-	CU_ASSERT_EQUAL(res, -ETIMEDOUT);
-	CU_ASSERT_EQUAL(data.counter, 2);
-
-	/* Signal the event */
-	res = pomp_evt_signal(evt);
+	res = pomp_evt_attach_to_loop(evt, loop, test_evt_cb, &data);
+	CU_ASSERT_EQUAL(res, -EEXIST);
+	res = pomp_evt_detach_from_loop(evt, loop);
 	CU_ASSERT_EQUAL(res, 0);
 
-	/* Clear the event */
-	res = pomp_evt_clear(evt);
+	/* Detacth a non-attached event */
+	res = pomp_evt_detach_from_loop(evt, loop);
+	CU_ASSERT_EQUAL(res, -ENOENT);
+
+	/* Detach from the wrong loop */
+	res = pomp_evt_attach_to_loop(evt, loop, test_evt_cb, &data);
 	CU_ASSERT_EQUAL(res, 0);
-
-	/* Shall not fire */
-	res = pomp_loop_wait_and_process(loop, 250);
-	CU_ASSERT_EQUAL(res, -ETIMEDOUT);
-	CU_ASSERT_EQUAL(data.counter, 2);
-
-	/* Clear on an unsignalled event */
-	res = pomp_evt_clear(evt);
-	CU_ASSERT_EQUAL(res, 0);
-
-	/* Invalid get_fd (NULL param) */
-	res = pomp_evt_get_fd(NULL);
+	res = pomp_evt_detach_from_loop(evt, (struct pomp_loop *)1);
 	CU_ASSERT_EQUAL(res, -EINVAL);
+	res = pomp_evt_detach_from_loop(evt, loop);
+	CU_ASSERT_EQUAL(res, 0);
+
+	/* Delete an attached event */
+	res = pomp_evt_attach_to_loop(evt, loop, test_evt_cb, &data);
+	CU_ASSERT_EQUAL(res, 0);
+	res = pomp_evt_destroy(evt);
+	CU_ASSERT_EQUAL(res, -EBUSY);
+	res = pomp_evt_detach_from_loop(evt, loop);
+	CU_ASSERT_EQUAL(res, 0);
+
+	/* Invalid parameters tests */
 
 	/* Invalid clear (NULL param) */
 	res = pomp_evt_clear(NULL);
@@ -131,17 +167,27 @@ static void test_event(void)
 	res = pomp_evt_signal(NULL);
 	CU_ASSERT_EQUAL(res, -EINVAL);
 
-	/* Remove fd from loop */
-	res = pomp_loop_remove(loop, fd);
-	CU_ASSERT_EQUAL(res, 0);
+	/* Invalid destroy (NULL param) */
+	res = pomp_evt_destroy(NULL);
+	CU_ASSERT_EQUAL(res, -EINVAL);
+
+	/* Invalid attach (NULL params) */
+	res = pomp_evt_attach_to_loop(NULL, loop, test_evt_cb, &data);
+	CU_ASSERT_EQUAL(res, -EINVAL);
+	res = pomp_evt_attach_to_loop(evt, NULL, test_evt_cb, &data);
+	CU_ASSERT_EQUAL(res, -EINVAL);
+	res = pomp_evt_attach_to_loop(evt, loop, NULL, &data);
+	CU_ASSERT_EQUAL(res, -EINVAL);
+
+	/* Invalid detach (NULL params) */
+	res = pomp_evt_detach_from_loop(NULL, loop);
+	CU_ASSERT_EQUAL(res, -EINVAL);
+	res = pomp_evt_detach_from_loop(evt, NULL);
+	CU_ASSERT_EQUAL(res, -EINVAL);
 
 	/* Destroy event */
 	res = pomp_evt_destroy(evt);
 	CU_ASSERT_EQUAL(res, 0);
-
-	/* Invalid destroy (NULL param) */
-	res = pomp_evt_destroy(NULL);
-	CU_ASSERT_EQUAL(res, -EINVAL);
 
 	/* Destroy loop */
 	res = pomp_loop_destroy(loop);
