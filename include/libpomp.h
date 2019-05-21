@@ -841,7 +841,7 @@ POMP_API struct pomp_msg *pomp_msg_new(void);
 POMP_API struct pomp_msg *pomp_msg_new_copy(const struct pomp_msg *msg);
 
 /**
- * Create a new message structure from a buufer with data.
+ * Create a new message structure from a buffer with data.
  * @param buf : buffer with message content (header + playload).
  * @return new message structure or NULL in case of error.
  */
