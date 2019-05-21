@@ -90,6 +90,15 @@ struct pomp_loop;
 struct pomp_evt;
 struct pomp_timer;
 
+#ifdef __PYBINDING_MACRO__
+/* python binding requires the size of sockaddr_storage for memory allocation.*/
+#include <sys/socket.h>
+struct pomp_sockaddr_storage {
+	char __data[sizeof(struct sockaddr_storage)];
+};
+#endif
+
+
 /** Context event */
 enum pomp_event {
 	POMP_EVENT_CONNECTED = 0,	/**< Peer is connected */
