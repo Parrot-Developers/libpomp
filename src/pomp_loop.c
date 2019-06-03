@@ -51,6 +51,9 @@ static const struct pomp_loop_ops *s_pomp_loop_ops =
 #error "No loop implementation available"
 #endif
 
+/** Number maximum of consecutive idle entry check to prevent infinite loop. */
+#define POMP_IDLE_CHECK_MAX 10
+
 /**
  * For testing purposes, allow modification of loop operations.
  * @param ops : new loop operations.
@@ -154,31 +157,41 @@ static int pomp_loop_do_wakeup(struct pomp_loop *loop)
  */
 static int pomp_loop_idle_check(struct pomp_loop *loop)
 {
+	uint32_t run_i = 0;
 	uint32_t i = 0;
 	struct pomp_idle_entry *entry = NULL;
 	struct pomp_idle_entry *svg_idle_entries = NULL;
 	uint32_t svg_idle_count = 0;
 	POMP_RETURN_ERR_IF_FAILED(loop != NULL, -EINVAL);
 
-	if (loop->idle_count == 0)
-		return 0;
+	/* Run several times the idle entries check
+	   to execute directly entries added by an idle entry call */
+	for (run_i = 0; run_i < POMP_IDLE_CHECK_MAX; run_i++) {
 
-	/* keep ref on the current idle_entries */
-	svg_idle_entries = loop->idle_entries;
-	svg_idle_count = loop->idle_count;
-	/* reset idle_entries to allow recursive idle entries */
-	loop->idle_entries = NULL;
-	loop->idle_count = 0;
+		if (loop->idle_count == 0)
+			return 0;
 
-	/* Call registered entries, preventing modification during the loop */
-	for (i = 0; i < svg_idle_count; i++) {
-		entry = &svg_idle_entries[i];
-		if (!entry->removed)
-			(*entry->cb)(entry->userdata);
+		/* keep ref on the current idle_entries */
+		svg_idle_entries = loop->idle_entries;
+		svg_idle_count = loop->idle_count;
+		/* reset idle_entries to allow recursive idle entries */
+		loop->idle_entries = NULL;
+		loop->idle_count = 0;
+
+		/* Call registered entries,
+		   preventing modification during the loop */
+		for (i = 0; i < svg_idle_count; i++) {
+			entry = &svg_idle_entries[i];
+			if (!entry->removed)
+				(*entry->cb)(entry->userdata);
+		}
+
+		/* Free old entries */
+		free(svg_idle_entries);
 	}
 
-	/* Free old entries */
-	free(svg_idle_entries);
+	if (loop->idle_count > 0)
+		POMP_LOGW("%u pending idle(s) after check", loop->idle_count);
 
 	return 0;
 }
