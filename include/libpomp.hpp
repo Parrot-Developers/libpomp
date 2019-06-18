@@ -605,6 +605,21 @@ public:
 	inline int detachFromLoop(Loop *loop) {
 		return pomp_evt_detach_from_loop(mEvt, loop->mLoop);
 	}
+
+#ifdef POMP_CXX11
+	/** Handler wrapper that can take a std::function */
+	class HandlerFunc : public Handler {
+		POMP_DISABLE_COPY(HandlerFunc)
+	public:
+		typedef std::function<void ()> Func;
+		inline HandlerFunc() {}
+		inline HandlerFunc(const Func &func) : mFunc(func) {}
+		inline void set(const Func &func) {mFunc = func;}
+		inline virtual void processEvent() {mFunc();}
+	private:
+		Func mFunc;
+	};
+#endif /* POMP_CXX11 */
 };
 
 /**
