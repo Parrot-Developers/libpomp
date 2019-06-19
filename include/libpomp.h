@@ -1142,6 +1142,15 @@ POMP_API int pomp_evt_detach_from_loop(struct pomp_evt *evt,
 		struct pomp_loop *loop);
 
 /**
+ * Check if the event is attached to the given loop.
+ * @param evt : event to check.
+ * @param loop : loop to check.
+ *               If NULL, check if the event is attached to any loop.
+ * @return 1 if event is attached to the given loop, 0 otherwise.
+ */
+POMP_API int pomp_evt_is_attached(struct pomp_evt *evt, struct pomp_loop *loop);
+
+/**
  * Signal an event.
  *
  * The fd associated with the pomp_evt will become readable.

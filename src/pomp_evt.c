@@ -174,6 +174,19 @@ int pomp_evt_detach_from_loop(struct pomp_evt *evt, struct pomp_loop *loop)
 /*
  * See documentation in public header.
  */
+POMP_API int pomp_evt_is_attached(struct pomp_evt *evt, struct pomp_loop *loop)
+{
+	POMP_RETURN_ERR_IF_FAILED(evt != NULL, 0);
+
+	if (loop == NULL)
+		return evt->loop != NULL;
+	else
+		return evt->loop == loop;
+}
+
+/*
+ * See documentation in public header.
+ */
 int pomp_evt_signal(struct pomp_evt *evt)
 {
 	return (*s_pomp_evt_ops->event_signal)(evt);

@@ -123,8 +123,28 @@ static void test_event(void)
 	/* Run actual test */
 	test_event_internal(&data);
 
+	/* Test is_attached to good loop, attached */
+	res = pomp_evt_is_attached(evt, loop);
+	CU_ASSERT_EQUAL(res, 1);
+	/* Test is_attached to any loop, attached */
+	res = pomp_evt_is_attached(evt, NULL);
+	CU_ASSERT_EQUAL(res, 1);
+	/* Test is_attached to wrong loop, attached */
+	res = pomp_evt_is_attached(evt, (struct pomp_loop *)1);
+	CU_ASSERT_EQUAL(res, 0);
+
 	/* Detach event from loop */
 	res = pomp_evt_detach_from_loop(evt, loop);
+	CU_ASSERT_EQUAL(res, 0);
+
+	/* Test is_attached to good loop, detached */
+	res = pomp_evt_is_attached(evt, loop);
+	CU_ASSERT_EQUAL(res, 0);
+	/* Test is_attached to any loop, detached */
+	res = pomp_evt_is_attached(evt, NULL);
+	CU_ASSERT_EQUAL(res, 0);
+	/* Test is_attached to wrong loop, detached */
+	res = pomp_evt_is_attached(evt, (struct pomp_loop *)1);
 	CU_ASSERT_EQUAL(res, 0);
 
 	/* Invalid usage tests */
@@ -184,6 +204,10 @@ static void test_event(void)
 	CU_ASSERT_EQUAL(res, -EINVAL);
 	res = pomp_evt_detach_from_loop(evt, NULL);
 	CU_ASSERT_EQUAL(res, -EINVAL);
+
+	/* Invalid is_attached (NULL param) */
+	res = pomp_evt_is_attached(NULL, NULL);
+	CU_ASSERT_EQUAL(res, 0);
 
 	/* Destroy event */
 	res = pomp_evt_destroy(evt);

@@ -606,6 +606,11 @@ public:
 		return pomp_evt_detach_from_loop(mEvt, loop->mLoop);
 	}
 
+	inline bool isAttached(Loop *loop) {
+		struct pomp_loop *_loop = loop ? loop->mLoop : NULL;
+		return pomp_evt_is_attached(mEvt, _loop) != 0;
+	}
+
 #ifdef POMP_CXX11
 	/** Handler wrapper that can take a std::function */
 	class HandlerFunc : public Handler {
