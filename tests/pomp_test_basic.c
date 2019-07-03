@@ -341,6 +341,88 @@ static void test_buffer_base(void)
 }
 
 /** */
+static void test_buffer_append_data(void)
+{
+	int res = 0;
+	struct pomp_buffer *buf = NULL;
+	static const uint8_t refdata[4] = {0x11, 0x22, 0x33, 0x44};
+	static uint8_t refdata2[500] = {0x00};
+	refdata2[496] = 0x55;
+	refdata2[497] = 0x66;
+	refdata2[498] = 0x77;
+	refdata2[499] = 0x88;
+
+	buf = pomp_buffer_new(0);
+	CU_ASSERT_PTR_NOT_NULL_FATAL(buf);
+
+	/* Bad parameters */
+	res = pomp_buffer_append_data(NULL, refdata, 1);
+	CU_ASSERT_EQUAL(res, -EINVAL);
+	CU_ASSERT_EQUAL(buf->len, 0);
+	CU_ASSERT_TRUE(buf->capacity == 0);
+
+	res = pomp_buffer_append_data(buf, NULL, 1);
+	CU_ASSERT_EQUAL(res, -EINVAL);
+	CU_ASSERT_EQUAL(buf->len, 0);
+	CU_ASSERT_TRUE(buf->capacity == 0);
+
+	/* Append of length 0 */
+	res = pomp_buffer_append_data(buf, refdata, 0);
+	CU_ASSERT_EQUAL(res, 0);
+	CU_ASSERT_EQUAL(buf->len, 0);
+	CU_ASSERT_TRUE(buf->capacity == 0);
+
+	/* Append of length 4 */
+	res = pomp_buffer_append_data(buf, refdata, 4);
+	CU_ASSERT_EQUAL(res, 0);
+	CU_ASSERT_EQUAL(buf->len, 4);
+	CU_ASSERT_TRUE(buf->capacity >= 4);
+	CU_ASSERT_EQUAL(buf->data[0], refdata[0]);
+	CU_ASSERT_EQUAL(buf->data[1], refdata[1]);
+	CU_ASSERT_EQUAL(buf->data[2], refdata[2]);
+	CU_ASSERT_EQUAL(buf->data[3], refdata[3]);
+
+	/* Append of length 500 with realloc */
+	res = pomp_buffer_append_data(buf, refdata2, 500);
+	CU_ASSERT_EQUAL(res, 0);
+	CU_ASSERT_EQUAL(buf->len, 504);
+	CU_ASSERT_TRUE(buf->capacity >= 504);
+
+	CU_ASSERT_EQUAL(buf->data[0], refdata[0]);
+	CU_ASSERT_EQUAL(buf->data[1], refdata[1]);
+	CU_ASSERT_EQUAL(buf->data[2], refdata[2]);
+	CU_ASSERT_EQUAL(buf->data[3], refdata[3]);
+
+	CU_ASSERT_EQUAL(buf->data[500], refdata2[496]);
+	CU_ASSERT_EQUAL(buf->data[501], refdata2[497]);
+	CU_ASSERT_EQUAL(buf->data[502], refdata2[498]);
+	CU_ASSERT_EQUAL(buf->data[503], refdata2[499]);
+
+	/* Overwrite of length 4 */
+	res = pomp_buffer_set_len(buf, 500);
+	CU_ASSERT_EQUAL(res, 0);
+	CU_ASSERT_EQUAL(buf->len, 500);
+	CU_ASSERT_TRUE(buf->capacity >= 504);
+	res = pomp_buffer_append_data(buf, refdata, 4);
+	CU_ASSERT_EQUAL(res, 0);
+	CU_ASSERT_EQUAL(buf->len, 504);
+	CU_ASSERT_TRUE(buf->capacity >= 504);
+
+	CU_ASSERT_EQUAL(buf->data[0], refdata[0]);
+	CU_ASSERT_EQUAL(buf->data[1], refdata[1]);
+	CU_ASSERT_EQUAL(buf->data[2], refdata[2]);
+	CU_ASSERT_EQUAL(buf->data[3], refdata[3]);
+
+	CU_ASSERT_EQUAL(buf->data[500], refdata[0]);
+	CU_ASSERT_EQUAL(buf->data[501], refdata[1]);
+	CU_ASSERT_EQUAL(buf->data[502], refdata[2]);
+	CU_ASSERT_EQUAL(buf->data[503], refdata[3]);
+
+	/* Release */
+	pomp_buffer_unref(buf);
+}
+
+/** */
 static void test_buffer_read_write(void)
 {
 	static const uint8_t refdata[4] = {0x11, 0x22, 0x33, 0x44};
@@ -2793,6 +2875,7 @@ static void test_prot_decode_error(void)
 /** */
 static CU_TestInfo s_buffer_tests[] = {
 	{(char *)"base", &test_buffer_base},
+	{(char *)"test_buffer_append_data", &test_buffer_append_data},
 	{(char *)"read_write", &test_buffer_read_write},
 	{(char *)"perm", &test_buffer_perm},
 	{(char *)"fd", &test_buffer_fd},
