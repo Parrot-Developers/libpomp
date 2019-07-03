@@ -366,6 +366,30 @@ int pomp_buffer_append_data(struct pomp_buffer *buf,
 /*
  * See documentation in public header.
  */
+int pomp_buffer_append_buffer(struct pomp_buffer *buf,
+		struct pomp_buffer *src)
+{
+	int res;
+	const void *src_cdata = NULL;
+	size_t src_len = 0;
+
+	POMP_RETURN_ERR_IF_FAILED(buf != NULL, -EINVAL);
+	POMP_RETURN_ERR_IF_FAILED(src != NULL, -EINVAL);
+
+	res = pomp_buffer_get_cdata(src, &src_cdata, &src_len, NULL);
+	if (res < 0)
+		return res;
+
+	/* No data to append. */
+	if (src_len == 0)
+		return 0;
+
+	return pomp_buffer_append_data(buf, src_cdata, src_len);
+}
+
+/*
+ * See documentation in public header.
+ */
 int pomp_buffer_ensure_capacity(struct pomp_buffer *buf, size_t capacity)
 {
 	POMP_RETURN_ERR_IF_FAILED(buf != NULL, -EINVAL);

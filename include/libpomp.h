@@ -788,6 +788,19 @@ POMP_API int pomp_buffer_append_data(struct pomp_buffer *buf,
 		const void *data, size_t len);
 
 /**
+ * Append source buffer data to the buffer.
+ * @param buf : destination buffer.
+ * @param src : source buffer to append.
+ * @return 0 in case of success, negative errno value in case of error.
+ * -EPERM is returned if the buffer is shared.
+ *
+ * @remarks Can re-allocate the internal data buffer and invalidate the
+ * data/cdata retrieved before.
+ */
+POMP_API int pomp_buffer_append_buffer(struct pomp_buffer *buf,
+		struct pomp_buffer *src);
+
+/**
  * Write data to the buffer at the given position.
  * @param buf : buffer.
  * @param pos : position in the buffer (will be updated after success)
