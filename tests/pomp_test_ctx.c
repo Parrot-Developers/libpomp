@@ -504,7 +504,7 @@ static void test_ctx(const struct sockaddr *addr1, uint32_t addrlen1,
 	res = pomp_ctx_destroy(data.cli.ctx);
 	CU_ASSERT_EQUAL(res, 0);
 
-	/* Invalid create (NULL 3nd arg) */
+	/* Invalid create (NULL 3rd arg) */
 	data.cli.ctx = pomp_ctx_new_with_loop(NULL, &data, NULL);
 	CU_ASSERT_PTR_NULL(data.cli.ctx);
 	data.cli.ctx = pomp_ctx_new_with_loop(&test_event_cb_t, &data, NULL);
@@ -625,11 +625,9 @@ static void test_ctx(const struct sockaddr *addr1, uint32_t addrlen1,
 	/* Get loop and fd */
 	loop = pomp_ctx_get_loop(data.srv.ctx);
 	CU_ASSERT_PTR_NOT_NULL(loop);
+#if defined(POMP_HAVE_LOOP_EPOLL)
 	fd = pomp_ctx_get_fd(data.srv.ctx);
-#ifdef POMP_HAVE_LOOP_EPOLL
 	CU_ASSERT_TRUE(fd >= 0);
-#else
-	CU_ASSERT_EQUAL(fd, -ENOSYS);
 #endif
 	/* Invalid process fd (NULL param) */
 	res = pomp_ctx_process_fd(NULL);
