@@ -1113,6 +1113,7 @@ POMP_API int pomp_loop_idle_add(struct pomp_loop *loop, pomp_idle_cb_t cb,
  * @return 0 in case of success, negative errno value in case of error.
  *
  * @remarks: if nothing match the given criteria, no error is returned.
+ * @remarks: if several match the given criteria, all are removed.
  */
 POMP_API int pomp_loop_idle_remove(struct pomp_loop *loop, pomp_idle_cb_t cb,
 		void *userdata);

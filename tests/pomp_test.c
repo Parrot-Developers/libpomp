@@ -145,6 +145,10 @@ int main(int argc, char *argv[])
 	WSAStartup(MAKEWORD(2, 0), &wsadata);
 #endif /* _WIN32 */
 
+#ifdef SIGPIPE
+	signal(SIGPIPE, SIG_IGN);
+#endif /* SIGPIPE */
+
 	/* Get initial list of open file descriptors */
 	fds1 = lsof();
 

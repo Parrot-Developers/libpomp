@@ -51,9 +51,6 @@ static const struct pomp_loop_ops *s_pomp_loop_ops =
 #error "No loop implementation available"
 #endif
 
-/** Number maximum of consecutive idle entry check to prevent infinite loop. */
-#define POMP_IDLE_CHECK_MAX 10
-
 /**
  * For testing purposes, allow modification of loop operations.
  * @param ops : new loop operations.
@@ -151,47 +148,26 @@ static int pomp_loop_do_wakeup(struct pomp_loop *loop)
 }
 
 /**
- * Check if there is some idle entries to call.
+ * Flush idle entries.
+ * Calls all pending idles.
+ *
  * @param loop : loop.
  * @return 0 in case of success, negative errno value in case of error.
  */
-static int pomp_loop_idle_check(struct pomp_loop *loop)
+static int pomp_loop_idle_flush(struct pomp_loop *loop)
 {
-	uint32_t run_i = 0;
-	uint32_t i = 0;
 	struct pomp_idle_entry *entry = NULL;
-	struct pomp_idle_entry *svg_idle_entries = NULL;
-	uint32_t svg_idle_count = 0;
 	POMP_RETURN_ERR_IF_FAILED(loop != NULL, -EINVAL);
 
-	/* Run several times the idle entries check
-	   to execute directly entries added by an idle entry call */
-	for (run_i = 0; run_i < POMP_IDLE_CHECK_MAX; run_i++) {
+	/* Call all idles */
+	entry = list_pop(&loop->idle_entries, struct pomp_idle_entry, node);
+	while (entry != NULL) {
+		(*entry->cb)(entry->userdata);
+		free(entry);
 
-		if (loop->idle_count == 0)
-			return 0;
-
-		/* keep ref on the current idle_entries */
-		svg_idle_entries = loop->idle_entries;
-		svg_idle_count = loop->idle_count;
-		/* reset idle_entries to allow recursive idle entries */
-		loop->idle_entries = NULL;
-		loop->idle_count = 0;
-
-		/* Call registered entries,
-		   preventing modification during the loop */
-		for (i = 0; i < svg_idle_count; i++) {
-			entry = &svg_idle_entries[i];
-			if (!entry->removed)
-				(*entry->cb)(entry->userdata);
-		}
-
-		/* Free old entries */
-		free(svg_idle_entries);
+		entry = list_pop(&loop->idle_entries, struct pomp_idle_entry,
+				node);
 	}
-
-	if (loop->idle_count > 0)
-		POMP_LOGW("%u pending idle(s) after check", loop->idle_count);
 
 	return 0;
 }
@@ -278,11 +254,29 @@ int pomp_loop_remove_pfd(struct pomp_loop *loop, struct pomp_fd *pfd)
 	return -ENOENT;
 }
 
+static void pomp_idle_evt_cb(struct pomp_evt *evt, void *userdata)
+{
+	struct pomp_loop *loop = userdata;
+	struct pomp_idle_entry *entry;
+	POMP_RETURN_IF_FAILED(loop != NULL, -EINVAL);
+
+	entry = list_pop(&loop->idle_entries, struct pomp_idle_entry, node);
+	if (entry == NULL)
+		return;
+
+	(*entry->cb)(entry->userdata);
+	free(entry);
+
+	if (!list_is_empty(&loop->idle_entries))
+		pomp_evt_signal(loop->idle_evt);
+}
+
 /*
  * See documentation in public header.
  */
 struct pomp_loop *pomp_loop_new(void)
 {
+	int res;
 	struct pomp_loop *loop = NULL;
 
 	/* Allocate loop structure */
@@ -296,8 +290,21 @@ struct pomp_loop *pomp_loop_new(void)
 		return NULL;
 	}
 
+	list_init(&loop->idle_entries);
+	loop->idle_evt = pomp_evt_new();
+	if (loop->idle_evt == NULL)
+		goto error;
+
+	res = pomp_evt_attach_to_loop(loop->idle_evt, loop,
+			&pomp_idle_evt_cb, loop);
+	if (res < 0)
+		goto error;
+
 	/* Success */
 	return loop;
+error:
+	pomp_loop_destroy(loop);
+	return NULL;
 }
 
 /*
@@ -313,9 +320,12 @@ int pomp_loop_destroy(struct pomp_loop *loop)
 	loop->is_destroying = 1;
 
 	/* Call idle entries */
-	res = pomp_loop_idle_check(loop);
+	res = pomp_loop_idle_flush(loop);
 	if (res < 0)
 		return res;
+
+	/* Detach the event */
+	pomp_evt_detach_from_loop(loop->idle_evt, loop);
 
 	if (loop->pfds) {
 		for (pfd = loop->pfds; pfd != NULL; pfd = pfd->next) {
@@ -325,14 +335,13 @@ int pomp_loop_destroy(struct pomp_loop *loop)
 		return -EBUSY;
 	}
 
-
 	/* Implementation specific */
 	res = pomp_loop_do_destroy(loop);
 	if (res < 0)
 		return res;
 
 	/* Free resources */
-	free(loop->idle_entries);
+	pomp_evt_destroy(loop->idle_evt);
 	free(loop);
 	return 0;
 }
@@ -491,9 +500,6 @@ int pomp_loop_wait_and_process(struct pomp_loop *loop, int timeout)
 	/* Implementation specific */
 	res = pomp_loop_do_wait_and_process(loop, timeout);
 
-	/* Check for idle function to call */
-	pomp_loop_idle_check(loop);
-
 	return res;
 }
 
@@ -513,29 +519,34 @@ int pomp_loop_wakeup(struct pomp_loop *loop)
 int pomp_loop_idle_add(struct pomp_loop *loop, pomp_idle_cb_t cb,
 		void *userdata)
 {
-	struct pomp_idle_entry *newentries = NULL;
+	int res;
+	struct pomp_idle_entry *newentry = NULL;
 	POMP_RETURN_ERR_IF_FAILED(loop != NULL, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(cb != NULL, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(!loop->is_destroying, -EPERM);
 
 	/* Allocate entry */
-	newentries = realloc(loop->idle_entries, (loop->idle_count + 1)
-			 * sizeof(struct pomp_idle_entry));
-	if (newentries == NULL)
+	newentry = calloc(1, sizeof(*newentry));
+	if (newentry == NULL)
 		return -ENOMEM;
-	loop->idle_entries = newentries;
+	/* Initialize  entry */
+	newentry->cb = cb;
+	newentry->userdata = userdata;
+
+	list_push(&loop->idle_entries, &newentry->node);
 
 	/* Force loop wake up */
-	if (loop->idle_count == 0)
-		pomp_loop_wakeup(loop);
-
-	/* Save entry */
-	loop->idle_entries[loop->idle_count].cb = cb;
-	loop->idle_entries[loop->idle_count].userdata = userdata;
-	loop->idle_entries[loop->idle_count].removed = 0;
-	loop->idle_count++;
+	res = pomp_evt_signal(loop->idle_evt);
+	if (res < 0) {
+		POMP_LOGE("pomp_evt_signal err=%d(%s)", -res, strerror(-res));
+		goto error;
+	}
 
 	return 0;
+error:
+	list_del(&newentry->node);
+	free(newentry);
+	return res;
 }
 
 /*
@@ -544,17 +555,21 @@ int pomp_loop_idle_add(struct pomp_loop *loop, pomp_idle_cb_t cb,
 int pomp_loop_idle_remove(struct pomp_loop *loop, pomp_idle_cb_t cb,
 		void *userdata)
 {
-	uint32_t i = 0;
 	struct pomp_idle_entry *entry = NULL;
+	struct pomp_idle_entry *entrytmp = NULL;
 	POMP_RETURN_ERR_IF_FAILED(loop != NULL, -EINVAL);
 
-	/* Walk entries, just mark matching entries as removed, next call to
-	 * pomp_loop_idle_check will do the cleaning */
-	for (i = 0; i < loop->idle_count; i++) {
-		entry = &loop->idle_entries[i];
-		if (entry->cb == cb && entry->userdata == userdata)
-			entry->removed = 1;
+	/* Walk entries to remove all entries corresponding. */
+	list_walk_entry_forward_safe(&loop->idle_entries,
+				     entry, entrytmp, node) {
+		if (entry->cb == cb && entry->userdata == userdata) {
+			list_del(&entry->node);
+			free(entry);
+		}
 	}
+
+	if (list_is_empty(&loop->idle_entries))
+		pomp_evt_clear(loop->idle_evt);
 
 	return 0;
 }

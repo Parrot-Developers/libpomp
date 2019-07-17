@@ -8,6 +8,7 @@ include $(CLEAR_VARS)
 LOCAL_MODULE := libpomp
 LOCAL_CATEGORY_PATH := libs
 LOCAL_DESCRIPTION := Printf Oriented Message Protocol
+LOCAL_LIBRARIES := libfutils
 LOCAL_CONDITIONAL_LIBRARIES := OPTIONAL:libulog
 
 LOCAL_EXPORT_C_INCLUDES := \

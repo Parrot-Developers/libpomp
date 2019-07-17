@@ -56,7 +56,6 @@ struct test_data {
 	uint32_t  dataread;
 	uint32_t  datasent;
 	uint32_t  sendcount;
-	uint8_t   isdisconnecting;
 	int       isdgram;
 	int       israw;
 	struct test_peer srv;
@@ -864,6 +863,7 @@ static void test_ctx(const struct sockaddr *addr1, uint32_t addrlen1,
 		} else {
 			if (data.isdgram)
 				CU_ASSERT_EQUAL(data.buf, 2);
+
 			CU_ASSERT_EQUAL(data.dataread, data.datasent);
 			CU_ASSERT_EQUAL(data.sendcount, 2);
 		}
@@ -878,7 +878,6 @@ static void test_ctx(const struct sockaddr *addr1, uint32_t addrlen1,
 		if (withsendcb) {
 			/* Check recursive write during disconnection */
 			data.srv.recurs_send_enabled = 1;
-			data.isdisconnecting = 1;
 		}
 
 		res = pomp_conn_disconnect(pomp_ctx_get_next_conn(data.srv.ctx, NULL));
