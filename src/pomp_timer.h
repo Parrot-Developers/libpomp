@@ -52,12 +52,12 @@ struct pomp_timer {
 
 #ifdef POMP_HAVE_TIMER_KQUEUE
 	int			kq;		/**< kqueue */
-	uint32_t		period;		/**< Pediod (in ms)*/
+	uint32_t		period;		/**< Period (in ms)*/
 #endif /* POMP_HAVE_TIMER_KQUEUE */
 
 #ifdef POMP_HAVE_TIMER_WIN32
+	struct pomp_fd		*pfd;		/**< Associated pomp_fd */
 	HANDLE			htimer;		/**< Timer handle */
-	HANDLE			hevt;		/**< Notification event */
 #endif /* POMP_HAVE_TIMER_WIN32 */
 };
 

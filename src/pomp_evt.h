@@ -42,6 +42,11 @@ struct pomp_evt {
 #ifdef POMP_HAVE_EVENT_FD
 	int		efd;		/**< Event fd */
 #endif /* POMP_HAVE_EVENT_FD */
+
+#ifdef POMP_HAVE_EVENT_WIN32
+	struct pomp_fd	*pfd;
+	int		signaled;	/**< Event is signaled */
+#endif /* POMP_HAVE_EVENT_WIN32 */
 };
 
 /** Event operations */
@@ -52,14 +57,18 @@ struct pomp_evt_ops {
 	/** Implementation specific 'destroy' operation. */
 	int (*event_destroy)(struct pomp_evt *evt);
 
-	/** Implementation specific 'get_fd' operation. */
-	intptr_t (*event_get_fd)(const struct pomp_evt *evt);
-
 	/** Implementation specific 'signal' operation. */
 	int (*event_signal)(struct pomp_evt *evt);
 
 	/** Implementation specific 'clear' operation. */
 	int (*event_clear)(struct pomp_evt *evt);
+
+	/** Implementation specific 'attach' operation. */
+	int (*event_attach)(struct pomp_evt *evt, struct pomp_loop *loop,
+			pomp_evt_cb_t cb, void *userdata);
+
+	/** Implementation specific 'detach' operation. */
+	int (*event_detach)(struct pomp_evt *evt, struct pomp_loop *loop);
 };
 
 /** Event operations for 'posix' implementation */
@@ -81,8 +90,5 @@ extern const struct pomp_evt_ops pomp_evt_win32_ops;
 
 const struct pomp_evt_ops *pomp_evt_set_ops(
 		const struct pomp_evt_ops *ops);
-
-
-intptr_t pomp_evt_get_fd(const struct pomp_evt *evt);
 
 #endif /* !_POMP_EVT_H_ */

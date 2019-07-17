@@ -43,13 +43,14 @@
  */
 static void CALLBACK pomp_timer_win32_native_cb(void *userdata, BOOLEAN fired)
 {
+	/* Mark timer as ready and wakeup loop */
 	struct pomp_timer *timer = userdata;
-	/* Set event handle to wake up loop */
-	SetEvent(timer->hevt);
+	timer->pfd->revents = POMP_FD_EVENT_IN;
+	pomp_loop_wakeup(timer->loop);
 }
 
 /**
- * Function called when the notification event is ready for events.
+ * Function called when the timer is signaled.
  * @param fd : triggered fd.
  * @param revents : event that occurred.
  * @param userdata : timer object.
@@ -57,8 +58,6 @@ static void CALLBACK pomp_timer_win32_native_cb(void *userdata, BOOLEAN fired)
 static void pomp_timer_win32_cb(int fd, uint32_t revents, void *userdata)
 {
 	struct pomp_timer *timer = userdata;
-	/* Reset event and notify callback */
-	ResetEvent(timer->hevt);
 	(*timer->cb)(timer, timer->userdata);
 }
 
@@ -67,8 +66,13 @@ static void pomp_timer_win32_cb(int fd, uint32_t revents, void *userdata)
  */
 static int pomp_timer_win32_destroy(struct pomp_timer *timer)
 {
-	struct pomp_fd *pfd = NULL;
 	POMP_RETURN_ERR_IF_FAILED(timer != NULL, -EINVAL);
+
+	/* Remove from loop */
+	if (timer->pfd != NULL) {
+		pomp_loop_remove_pfd(timer->loop, timer->pfd);
+		free(timer->pfd);
+	}
 
 	/* Free resources */
 	if (timer->htimer != NULL) {
@@ -76,18 +80,7 @@ static int pomp_timer_win32_destroy(struct pomp_timer *timer)
 		DeleteTimerQueueTimer(NULL, timer->htimer,
 				INVALID_HANDLE_VALUE);
 	}
-	if (timer->hevt != NULL) {
-		pfd = pomp_loop_win32_find_pfd_by_hevt(
-				timer->loop, timer->hevt);
-		if (pfd == NULL) {
-			POMP_LOGW("hevt %p not found in loop %p",
-					timer->hevt, timer->loop);
-		} else {
-			pomp_loop_remove_pfd(timer->loop, pfd);
-			free(pfd);
-		}
-		CloseHandle(timer->hevt);
-	}
+
 	free(timer);
 	return 0;
 }
@@ -99,36 +92,30 @@ static struct pomp_timer *pomp_timer_win32_new(struct pomp_loop *loop,
 		pomp_timer_cb_t cb, void *userdata)
 {
 	struct pomp_timer *timer = NULL;
-	struct pomp_fd *pfd = NULL;
 	POMP_RETURN_VAL_IF_FAILED(loop != NULL, -EINVAL, NULL);
 	POMP_RETURN_VAL_IF_FAILED(cb != NULL, -EINVAL, NULL);
 
 	/* Allocate timer structure */
 	timer = calloc(1, sizeof(*timer));
 	if (timer == NULL)
-		goto error;
+		return NULL;
 	timer->loop = loop;
 	timer->cb = cb;
 	timer->userdata = userdata;
 
-	/* Create event for notification */
-	timer->hevt = CreateEvent(NULL, TRUE, FALSE, NULL);
-	if (timer->hevt == NULL)
-		goto error;
-
 	/* Add it in loop */
-	pfd = pomp_loop_win32_add_pfd_with_hevt(timer->loop, timer->hevt,
+	timer->pfd = pomp_loop_add_pfd(loop, (intptr_t)timer, POMP_FD_EVENT_IN,
 			&pomp_timer_win32_cb, timer);
-	if (pfd == NULL)
+	if (timer->pfd == NULL)
 		goto error;
+	timer->pfd->nofd = 1;
 
 	/* Success */
 	return timer;
 
 	/* Cleanup in case of error */
 error:
-	if (timer != NULL)
-		pomp_timer_win32_destroy(timer);
+	pomp_timer_win32_destroy(timer);
 	return NULL;
 }
 

@@ -72,8 +72,10 @@ static int pomp_addr_parse_inet(const char *buf, struct sockaddr *addr,
 	 * WIN32 returns positive value for errors */
 	res = getaddrinfo(ip, sep + 1, &hints, &ai);
 	if (res != 0) {
+#ifndef _WIN32
 		POMP_LOGE("getaddrinfo(%s:%s): err=%d(%s)", ip, sep + 1,
 				res, gai_strerror(res));
+#endif /* !_WIN32 */
 		res = -EINVAL;
 		goto out;
 	}

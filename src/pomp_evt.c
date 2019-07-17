@@ -57,28 +57,6 @@ const struct pomp_evt_ops *pomp_evt_set_ops(
 }
 
 /*
- * Internal callback for pomp_evt handling.
- * See pomp_fd_event_cb_t documentation in public header.
- */
-static void pomp_evt_cb(int fd, uint32_t revents, void *userdata)
-{
-	int res;
-	struct pomp_evt *evt = userdata;
-
-	POMP_RETURN_IF_FAILED(evt != NULL, -EINVAL);
-
-	res = pomp_evt_clear(evt);
-	POMP_RETURN_IF_FAILED(res == 0, res);
-
-	evt->cb(evt, evt->userdata);
-}
-
-intptr_t pomp_evt_get_fd(const struct pomp_evt *evt)
-{
-	return (*s_pomp_evt_ops->event_get_fd)(evt);
-}
-
-/*
  * See documentation in public header.
  */
 struct pomp_evt *pomp_evt_new(void)
@@ -109,8 +87,6 @@ int pomp_evt_attach_to_loop(struct pomp_evt *evt,
 		struct pomp_loop *loop, pomp_evt_cb_t cb, void *userdata)
 {
 	int res = 0;
-	int fd;
-	int events = POMP_FD_EVENT_IN;
 	POMP_RETURN_ERR_IF_FAILED(evt != NULL, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(loop != NULL, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(cb != NULL, -EINVAL);
@@ -122,18 +98,15 @@ int pomp_evt_attach_to_loop(struct pomp_evt *evt,
 		return -EEXIST;
 	}
 
-	/* Get evt fd */
-	fd = pomp_evt_get_fd(evt);
-	if (fd < 0)
-		return fd;
-
-	res = pomp_loop_add(loop, fd, events, pomp_evt_cb, evt);
+	/* Call implementation specific function */
+	res = (*s_pomp_evt_ops->event_attach)(evt, loop, cb, userdata);
 	if (res < 0)
 		return res;
+
+	/* Save cb and loop */
 	evt->cb = cb;
 	evt->userdata = userdata;
 	evt->loop = loop;
-
 	return 0;
 }
 
@@ -143,7 +116,6 @@ int pomp_evt_attach_to_loop(struct pomp_evt *evt,
 int pomp_evt_detach_from_loop(struct pomp_evt *evt, struct pomp_loop *loop)
 {
 	int res = 0;
-	int fd;
 	POMP_RETURN_ERR_IF_FAILED(loop != NULL, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(evt != NULL, -EINVAL);
 
@@ -156,25 +128,22 @@ int pomp_evt_detach_from_loop(struct pomp_evt *evt, struct pomp_loop *loop)
 		return -EINVAL;
 	}
 
-	/* Get evt fd */
-	fd = pomp_evt_get_fd(evt);
-	if (fd < 0)
-		return fd;
-
-	res = pomp_loop_remove(loop, fd);
+	/* Call implementation specific function */
+	res = (*s_pomp_evt_ops->event_detach)(evt, loop);
 	if (res < 0)
 		return res;
+
+	/* Clear cb and loop */
 	evt->cb = NULL;
 	evt->userdata = NULL;
 	evt->loop = NULL;
-
-	return res;
+	return 0;
 }
 
 /*
  * See documentation in public header.
  */
-POMP_API int pomp_evt_is_attached(struct pomp_evt *evt, struct pomp_loop *loop)
+int pomp_evt_is_attached(struct pomp_evt *evt, struct pomp_loop *loop)
 {
 	POMP_RETURN_ERR_IF_FAILED(evt != NULL, 0);
 

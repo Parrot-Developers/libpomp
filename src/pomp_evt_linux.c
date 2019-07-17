@@ -68,16 +68,6 @@ error:
 }
 
 /**
- * @see pomp_evt_get_fd
- */
-static intptr_t pomp_evt_fd_get_fd(const struct pomp_evt *evt)
-{
-	POMP_RETURN_ERR_IF_FAILED(evt != NULL, -EINVAL);
-
-	return evt->efd;
-}
-
-/**
  * @see pomp_evt_signal
  */
 static int pomp_evt_fd_signal(struct pomp_evt *evt)
@@ -127,13 +117,44 @@ static int pomp_evt_fd_clear(struct pomp_evt *evt)
 	return 0;
 }
 
+/**
+ * Called when event is signaled
+ */
+static void pomp_evt_fd_cb(int fd, uint32_t revents, void *userdata)
+{
+	struct pomp_evt *evt = userdata;
+	pomp_evt_fd_clear(evt);
+	(*evt->cb)(evt, evt->userdata);
+}
+
+/**
+ * @see pomp_evt_attach_to_loop
+ */
+static int pomp_evt_fd_attach(struct pomp_evt *evt, struct pomp_loop *loop,
+		pomp_evt_cb_t cb, void *userdata)
+{
+	/* Add event fd in loop */
+	return pomp_loop_add(loop, evt->efd, POMP_FD_EVENT_IN,
+			&pomp_evt_fd_cb, evt);
+}
+
+/**
+ * @see pomp_evt_detach_from_loop
+ */
+static int pomp_evt_fd_detach(struct pomp_evt *evt, struct pomp_loop *loop)
+{
+	/* Remove event fd from loop */
+	return pomp_loop_remove(loop, evt->efd);
+}
+
 /** Event operations for 'eventfd' implementation */
 const struct pomp_evt_ops pomp_evt_fd_ops = {
 	.event_new = &pomp_evt_fd_new,
 	.event_destroy = &pomp_evt_fd_destroy,
-	.event_get_fd = &pomp_evt_fd_get_fd,
 	.event_signal = &pomp_evt_fd_signal,
 	.event_clear = &pomp_evt_fd_clear,
+	.event_attach = &pomp_evt_fd_attach,
+	.event_detach = &pomp_evt_fd_detach,
 };
 
 #endif /* POMP_HAVE_EVENT_FD */

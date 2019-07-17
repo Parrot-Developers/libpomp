@@ -86,10 +86,14 @@ static void test_event_internal(struct test_data *data)
 
 	/* Shall not fire */
 	res = pomp_loop_wait_and_process(data->loop, 250);
+#ifdef _WIN32
+	CU_ASSERT_EQUAL(res, 0);
+#else /* !_WIN32 */
 	CU_ASSERT_EQUAL(res, -ETIMEDOUT);
+#endif /* !_WIN32 */
 	CU_ASSERT_EQUAL(data->counter, 2);
 
-	/* Clear on an unsignalled event */
+	/* Clear on an non signaled event */
 	res = pomp_evt_clear(data->evt);
 	CU_ASSERT_EQUAL(res, 0);
 }

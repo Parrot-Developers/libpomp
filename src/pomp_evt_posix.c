@@ -82,16 +82,6 @@ error:
 }
 
 /**
- * @see pomp_evt_get_fd
- */
-static intptr_t pomp_evt_posix_get_fd(const struct pomp_evt *evt)
-{
-	POMP_RETURN_ERR_IF_FAILED(evt != NULL, -EINVAL);
-
-	return evt->pipefds[0];
-}
-
-/**
  * @see pomp_evt_signal
  */
 static int pomp_evt_posix_signal(struct pomp_evt *evt)
@@ -141,13 +131,44 @@ static int pomp_evt_posix_clear(struct pomp_evt *evt)
 	}
 }
 
-/** Event operations for 'eventfd' implementation */
+/**
+ * Called when event is signaled
+ */
+static void pomp_evt_posix_cb(int fd, uint32_t revents, void *userdata)
+{
+	struct pomp_evt *evt = userdata;
+	pomp_evt_posix_clear(evt);
+	(*evt->cb)(evt, evt->userdata);
+}
+
+/**
+ * @see pomp_evt_attach_to_loop
+ */
+static int pomp_evt_posix_attach(struct pomp_evt *evt, struct pomp_loop *loop,
+		pomp_evt_cb_t cb, void *userdata)
+{
+	/* Add read pipe fd in loop */
+	return pomp_loop_add(loop, evt->pipefds[0], POMP_FD_EVENT_IN,
+			&pomp_evt_posix_cb, evt);
+}
+
+/**
+ * @see pomp_evt_detach_from_loop
+ */
+static int pomp_evt_posix_detach(struct pomp_evt *evt, struct pomp_loop *loop)
+{
+	/* Remove read pipe fd from loop */
+	return pomp_loop_remove(loop, evt->pipefds[0]);
+}
+
+/** Event operations for 'posix' implementation */
 const struct pomp_evt_ops pomp_evt_posix_ops = {
 	.event_new = &pomp_evt_posix_new,
 	.event_destroy = &pomp_evt_posix_destroy,
-	.event_get_fd = &pomp_evt_posix_get_fd,
 	.event_signal = &pomp_evt_posix_signal,
 	.event_clear = &pomp_evt_posix_clear,
+	.event_attach = &pomp_evt_posix_attach,
+	.event_detach = &pomp_evt_posix_detach,
 };
 
 #endif /* POMP_HAVE_EVENT_POSIX */

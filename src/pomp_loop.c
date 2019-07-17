@@ -178,7 +178,7 @@ static int pomp_loop_idle_flush(struct pomp_loop *loop)
  * @param fd : fd to search.
  * @return fd structure or NULL if not found.
  */
-struct pomp_fd *pomp_loop_find_pfd(struct pomp_loop *loop, int fd)
+struct pomp_fd *pomp_loop_find_pfd(struct pomp_loop *loop, intptr_t fd)
 {
 	struct pomp_fd *pfd = NULL;
 	for (pfd = loop->pfds; pfd != NULL; pfd = pfd->next) {
@@ -197,7 +197,7 @@ struct pomp_fd *pomp_loop_find_pfd(struct pomp_loop *loop, int fd)
  * @param userdata : user data for notifications.
  * @return fd structure or NULL in case of error.
  */
-struct pomp_fd *pomp_loop_add_pfd(struct pomp_loop *loop, int fd,
+struct pomp_fd *pomp_loop_add_pfd(struct pomp_loop *loop, intptr_t fd,
 		uint32_t events, pomp_fd_event_cb_t cb, void *userdata)
 {
 	struct pomp_fd *pfd = NULL;
@@ -250,7 +250,8 @@ int pomp_loop_remove_pfd(struct pomp_loop *loop, struct pomp_fd *pfd)
 			}
 		}
 	}
-	POMP_LOGE("fd %d (%p) not found in loop %p", pfd->fd, pfd, loop);
+	POMP_LOGE("fd %" PRIiPTR " (%p) not found in loop %p",
+			pfd->fd, pfd, loop);
 	return -ENOENT;
 }
 
@@ -329,7 +330,7 @@ int pomp_loop_destroy(struct pomp_loop *loop)
 
 	if (loop->pfds) {
 		for (pfd = loop->pfds; pfd != NULL; pfd = pfd->next) {
-			POMP_LOGE("fd=%d, cb=%p not removed from loop",
+			POMP_LOGE("fd=%" PRIiPTR ", cb=%p still in loop",
 					pfd->fd, pfd->cb);
 		}
 		return -EBUSY;

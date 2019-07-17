@@ -280,38 +280,37 @@ static void test_loop_wakeup(void)
 #ifdef _WIN32
 
 /** */
-static HANDLE setup_timer_win32(uint32_t delay, uint32_t period)
-{
-	int res = 0;
-	HANDLE htimer = NULL;
-	LARGE_INTEGER tval;
-
-	htimer = CreateWaitableTimer(NULL, 0, NULL);
-	CU_ASSERT_PTR_NOT_NULL_FATAL(htimer);
-
-	/* Setup timeout, convert ms to 100th of ns */
-	tval.QuadPart = - (LONGLONG)delay * 1000 * 10;
-	res = SetWaitableTimer(htimer, &tval, period, NULL, NULL, 0);
-	CU_ASSERT_EQUAL_FATAL(res, 1);
-
-	return htimer;
-}
-
-/** */
-static void timer_win32_cb(int fd, uint32_t events, void *userdata)
+static void timer_win32_cb(struct pomp_timer *timer, void *userdata)
 {
 	struct test_data *data = userdata;
 	data->counter++;
 }
 
 /** */
+static struct pomp_timer *setup_timer_win32(struct pomp_loop *loop,
+		uint32_t delay, uint32_t period,
+		struct test_data *data)
+{
+	int res = 0;
+	struct pomp_timer *timer = NULL;
+
+	timer = pomp_timer_new(loop, &timer_win32_cb, data);
+	CU_ASSERT_PTR_NOT_NULL_FATAL(timer);
+
+	res = pomp_timer_set_periodic(timer, delay, period);
+	CU_ASSERT_EQUAL(res, 0);
+
+	return timer;
+}
+
+/** */
 static void test_loop(void)
 {
 	int res = 0;
-	HANDLE htimer1 = NULL, htimer2 = NULL, htimer3 = NULL;
+	struct pomp_timer *timer1 = NULL, *timer2 = NULL, *timer3 = NULL;
 	struct test_data data;
 	struct pomp_loop *loop = NULL;
-	struct pomp_fd *pfd = NULL;
+	HANDLE hevt = NULL;
 
 	memset(&data, 0, sizeof(data));
 
@@ -320,25 +319,23 @@ static void test_loop(void)
 	CU_ASSERT_PTR_NOT_NULL_FATAL(loop);
 
 	/* Create timers for testing */
-	htimer1 = setup_timer_win32(100, 500);
-	CU_ASSERT_PTR_NOT_NULL_FATAL(htimer1);
-	htimer2 = setup_timer_win32(50, 500);
-	CU_ASSERT_PTR_NOT_NULL_FATAL(htimer2);
-	htimer3 = setup_timer_win32(150, 500);
-	CU_ASSERT_PTR_NOT_NULL_FATAL(htimer3);
+	timer1 = setup_timer_win32(loop, 100, 500, &data);
+	CU_ASSERT_PTR_NOT_NULL_FATAL(timer1);
+	timer2 = setup_timer_win32(loop, 50, 500, &data);
+	CU_ASSERT_PTR_NOT_NULL_FATAL(timer2);
+	timer3 = setup_timer_win32(loop, 150, 500, &data);
+	CU_ASSERT_PTR_NOT_NULL_FATAL(timer3);
 
-	/* Add timer in loop */
-	pfd = pomp_loop_win32_add_pfd_with_hevt(loop, htimer1, &timer_win32_cb, &data);
-	CU_ASSERT_PTR_NOT_NULL(pfd);
+	/* Get the event handle of the loop */
+	hevt = (HANDLE)pomp_loop_get_fd(NULL);
+	CU_ASSERT_PTR_EQUAL(hevt, (HANDLE)-EINVAL);
+	hevt = (HANDLE)pomp_loop_get_fd(loop);
+	CU_ASSERT_PTR_NOT_NULL(hevt);
 
-	/* Add 2nd and 3rd timer in loop */
-	pfd = pomp_loop_win32_add_pfd_with_hevt(loop, htimer2, &timer_win32_cb, &data);
-	CU_ASSERT_PTR_NOT_NULL(pfd);
-	pfd = pomp_loop_win32_add_pfd_with_hevt(loop, htimer3, &timer_win32_cb, &data);
-	CU_ASSERT_PTR_NOT_NULL(pfd);
-
-	/* Run loop with different timeout first one should have all timers) */
-	res = pomp_loop_wait_and_process(loop, 500);
+	/* Run loop with different timeout (first one should have all timers) */
+	res = WaitForSingleObject(hevt, 500);
+	CU_ASSERT_EQUAL(res, WAIT_OBJECT_0);
+	res = pomp_loop_wait_and_process(loop, 0);
 	CU_ASSERT_EQUAL(res, 0);
 	res = pomp_loop_wait_and_process(loop, 0);
 	CU_ASSERT_TRUE(res == -ETIMEDOUT || res == 0);
@@ -357,30 +354,13 @@ static void test_loop(void)
 	res = pomp_loop_destroy(loop);
 	CU_ASSERT_EQUAL(res, -EBUSY);
 
-	/* Remove timers */
-	pfd = pomp_loop_win32_find_pfd_by_hevt(loop, htimer1);
-	CU_ASSERT_PTR_NOT_NULL(pfd);
-	res = pomp_loop_remove_pfd(loop, pfd);
+	/* Delete timers */
+	res = pomp_timer_destroy(timer1);
 	CU_ASSERT_EQUAL(res, 0);
-	free(pfd);
-	pfd = pomp_loop_win32_find_pfd_by_hevt(loop, htimer2);
-	CU_ASSERT_PTR_NOT_NULL(pfd);
-	res = pomp_loop_remove_pfd(loop, pfd);
+	res = pomp_timer_destroy(timer2);
 	CU_ASSERT_EQUAL(res, 0);
-	free(pfd);
-	pfd = pomp_loop_win32_find_pfd_by_hevt(loop, htimer3);
-	CU_ASSERT_PTR_NOT_NULL(pfd);
-	res = pomp_loop_remove_pfd(loop, pfd);
+	res = pomp_timer_destroy(timer3);
 	CU_ASSERT_EQUAL(res, 0);
-	free(pfd);
-
-	/* Close timers */
-	res = CloseHandle(htimer1);
-	CU_ASSERT_EQUAL(res, 1);
-	res = CloseHandle(htimer2);
-	CU_ASSERT_EQUAL(res, 1);
-	res = CloseHandle(htimer3);
-	CU_ASSERT_EQUAL(res, 1);
 
 	/* Destroy loop */
 	res = pomp_loop_destroy(loop);

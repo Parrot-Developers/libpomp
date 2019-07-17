@@ -44,14 +44,15 @@ struct pomp_idle_entry {
 
 /** Fd structure */
 struct pomp_fd {
-	int			fd;		/**< Associated fd */
+	intptr_t		fd;		/**< Associated fd (or ptr) */
 	uint32_t		events;		/**< Monitored events */
 	pomp_fd_event_cb_t	cb;		/**< Registered callback */
 	void			*userdata;	/**< Callback user data */
 	struct pomp_fd		*next;		/**< Next structure in list */
 
 #ifdef POMP_HAVE_LOOP_WIN32
-	HANDLE			hevt;		/**< Event for notifications */
+	int			nofd;		/**< 1 if fd is a fake fd */
+	uint32_t		revents;	/**< Events ready */
 #endif /* POMP_HAVE_LOOP_WIN32 */
 };
 
@@ -87,17 +88,6 @@ struct pomp_loop {
 		HANDLE		hevt;		/**< Event handle */
 #endif /* POMP_HAVE_LOOP_WIN32 */
 	} wakeup;
-
-	/** Waiter thread */
-	struct {
-#ifdef POMP_HAVE_LOOP_WIN32
-		BOOL		stopped;	/**< Stopped flag */
-		HANDLE		thread;		/**< Thread handle */
-		HANDLE		hevtready;	/**< Global ready event */
-		HANDLE		hevtdone;	/**< Process done event */
-		CRITICAL_SECTION	lock;	/**< Lock */
-#endif /* POMP_HAVE_LOOP_WIN32 */
-	} waiter;
 };
 
 /** Loop operations */
@@ -146,21 +136,11 @@ extern const struct pomp_loop_ops pomp_loop_win32_ops;
 
 const struct pomp_loop_ops *pomp_loop_set_ops(const struct pomp_loop_ops *ops);
 
-struct pomp_fd *pomp_loop_find_pfd(struct pomp_loop *loop, int fd);
+struct pomp_fd *pomp_loop_find_pfd(struct pomp_loop *loop, intptr_t fd);
 
-struct pomp_fd *pomp_loop_add_pfd(struct pomp_loop *loop, int fd,
+struct pomp_fd *pomp_loop_add_pfd(struct pomp_loop *loop, intptr_t fd,
 		uint32_t events, pomp_fd_event_cb_t cb, void *userdata);
 
 int pomp_loop_remove_pfd(struct pomp_loop *loop, struct pomp_fd *pfd);
-
-#ifdef POMP_HAVE_LOOP_WIN32
-
-struct pomp_fd *pomp_loop_win32_find_pfd_by_hevt(struct pomp_loop *loop,
-		HANDLE hevt);
-
-struct pomp_fd *pomp_loop_win32_add_pfd_with_hevt(struct pomp_loop *loop,
-		HANDLE hevt, pomp_fd_event_cb_t cb, void *userdata);
-
-#endif /* POMP_HAVE_LOOP_WIN32 */
 
 #endif /* !_POMP_TIMER_H_ */
