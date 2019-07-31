@@ -32,11 +32,19 @@
 
 #include "pomp_test.h"
 
+enum test_peer_state {
+	TEST_PEER_STATE_IDLE = 0,
+	TEST_PEER_STATE_CONNECTING,
+	TEST_PEER_STATE_CONNECTED,
+	TEST_PEER_STATE_DISCONNECTED,
+};
+
 struct test_peer {
 	struct pomp_ctx		*ctx;
 	const struct sockaddr	*addr;
 	uint32_t		addrlen;
 	uint8_t			recurs_send_enabled;
+	enum test_peer_state	state;
 };
 
 /** */
@@ -68,10 +76,18 @@ static void test_event_cb_t(struct pomp_ctx *ctx, enum pomp_event event,
 	uint32_t addrlen = 0;
 	const struct pomp_cred *cred = NULL;
 	int isunix = 0;
+	struct test_peer *peer = (ctx == data->cli.ctx) ? &data->cli :
+							  &data->srv;
+
+	/* Check that event callback is not called before the pomp_ctx_connect return */
+	CU_ASSERT_NOT_EQUAL(peer->state, TEST_PEER_STATE_IDLE);
 
 	switch (event) {
 	case POMP_EVENT_CONNECTED:
+		/* Check that a connection is waiting. */
+		CU_ASSERT_EQUAL(peer->state, TEST_PEER_STATE_CONNECTING);
 		data->connection++;
+		peer->state = TEST_PEER_STATE_CONNECTED;
 
 		/* Invalid get fd (NULL param) */
 		fd = pomp_conn_get_fd(NULL);
@@ -109,10 +125,15 @@ static void test_event_cb_t(struct pomp_ctx *ctx, enum pomp_event event,
 		break;
 
 	case POMP_EVENT_DISCONNECTED:
+		/* Check that the peer was connected. */
+		CU_ASSERT_EQUAL(peer->state, TEST_PEER_STATE_CONNECTED);
 		data->disconnection++;
+		peer->state = TEST_PEER_STATE_DISCONNECTED;
 		break;
 
 	case POMP_EVENT_MSG:
+		/* Check that the peer is connected. */
+		CU_ASSERT_EQUAL(peer->state, TEST_PEER_STATE_CONNECTED);
 		data->msg++;
 		if (pomp_msg_get_id(msg) == 1) {
 			res = pomp_conn_send(conn, 2, "%s", eventstr);
@@ -224,9 +245,13 @@ static int send_msg(struct test_data *tdata, struct test_peer *src,
 			buf->len = strlen(msg);
 
 			res = pomp_ctx_send_raw_buf(src->ctx, buf);
-			if (tdata->isdisconnecting && src == &tdata->cli) {
-				/* Check failed if send after client disconnect */
+			if (src->state == TEST_PEER_STATE_DISCONNECTED) {
+				/* Check failed if send after source disconnect */
 				CU_ASSERT_EQUAL(res, -ENOTCONN);
+			} else if (dst->state == TEST_PEER_STATE_DISCONNECTED) {
+				/* Check send after destination disconnect not yet seen by the source.
+				   May return a broken pipe if the kernel has seen the disconnection. */
+				CU_ASSERT(res == 0 || res == -EPIPE);
 			} else {
 				tdata->datasent += strlen(msg);
 				CU_ASSERT_EQUAL(res, 0);
@@ -244,8 +269,8 @@ static int send_msg(struct test_data *tdata, struct test_peer *src,
 			CU_ASSERT_EQUAL(res, 0);
 			res = pomp_ctx_send_msg_to(src->ctx, pmsg, dst->addr,
 					dst->addrlen);
-			if (tdata->isdisconnecting && src == &tdata->cli) {
-				/* Check failed if send after client disconnect */
+			if (src->state == TEST_PEER_STATE_DISCONNECTED) {
+				/* Check failed if send after source disconnect */
 				CU_ASSERT_EQUAL(res, -ENOTCONN);
 			} else {
 				CU_ASSERT_EQUAL(res, 0);
@@ -261,8 +286,8 @@ static int send_msg(struct test_data *tdata, struct test_peer *src,
 
 			res = pomp_ctx_send_raw_buf_to(src->ctx, buf, dst->addr,
 					dst->addrlen);
-			if (tdata->isdisconnecting && src == &tdata->cli) {
-				/* Check failed if send after client disconnect */
+			if (src->state == TEST_PEER_STATE_DISCONNECTED) {
+				/* Check failed if send after source disconnect */
 				CU_ASSERT_EQUAL(res, -ENOTCONN);
 			} else {
 				tdata->datasent += strlen(msg);
@@ -512,6 +537,7 @@ static void test_ctx(const struct sockaddr *addr1, uint32_t addrlen1,
 		/* Start as server 1st context */
 		res = pomp_ctx_listen(data.srv.ctx, addr1, addrlen1);
 		CU_ASSERT_EQUAL(res, 0);
+		data.srv.state = TEST_PEER_STATE_CONNECTING;
 
 		/* Invalid start server (busy) */
 		res = pomp_ctx_listen(data.srv.ctx, addr1, addrlen1);
@@ -526,6 +552,7 @@ static void test_ctx(const struct sockaddr *addr1, uint32_t addrlen1,
 		/* Bind 1st context */
 		res = pomp_ctx_bind(data.srv.ctx, addr1, addrlen1);
 		CU_ASSERT_EQUAL(res, 0);
+		data.srv.state = TEST_PEER_STATE_CONNECTED;
 
 		/* Invalid bind (busy) */
 		res = pomp_ctx_bind(data.srv.ctx, addr1, addrlen1);
@@ -542,6 +569,7 @@ static void test_ctx(const struct sockaddr *addr1, uint32_t addrlen1,
 		/* Start as client 2nd context */
 		res = pomp_ctx_connect(data.cli.ctx, addr2, addrlen2);
 		CU_ASSERT_EQUAL(res, 0);
+		data.cli.state = TEST_PEER_STATE_CONNECTING;
 
 		/* Invalid start client (busy) */
 		res = pomp_ctx_connect(data.cli.ctx, addr2, addrlen2);
@@ -556,6 +584,7 @@ static void test_ctx(const struct sockaddr *addr1, uint32_t addrlen1,
 		/* Bind 2nd context */
 		res = pomp_ctx_bind(data.cli.ctx, addr2, addrlen2);
 		CU_ASSERT_EQUAL(res, 0);
+		data.cli.state = TEST_PEER_STATE_CONNECTED;
 
 		/* Invalid bind (busy) */
 		res = pomp_ctx_bind(data.cli.ctx, addr2, addrlen2);

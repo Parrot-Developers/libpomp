@@ -575,13 +575,10 @@ static int client_start(struct pomp_ctx *ctx)
 		goto error;
 
 	/* Connect to address */
-	if (connect(ctx->u.client.fd, ctx->addr, ctx->addrlen) == 0) {
-		/* Success, complete connection */
-		return client_complete_conn(ctx);
-	}
+	res = connect(ctx->u.client.fd, ctx->addr, ctx->addrlen);
 
-	/* If not pending, try again later */
-	if (!POMP_CONNECT_IN_PROGRESS(errno)) {
+	/* If error and not pending, try again later */
+	if (res != 0 && !POMP_CONNECT_IN_PROGRESS(errno)) {
 		if (POMP_SHOULD_LOG_CONNECT_ERROR(errno))
 			POMP_LOG_FD_ERRNO("connect", ctx->u.client.fd);
 		/* Close socket and try again later */
@@ -594,7 +591,8 @@ static int client_start(struct pomp_ctx *ctx)
 		return 0;
 	}
 
-
+	/* Notification will be done later when the socket is writable
+	 * (even if it succeeded now, notify asynchronously) */
 	return 0;
 
 	/* Cleanup in case of error */
