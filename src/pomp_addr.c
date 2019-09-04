@@ -197,7 +197,8 @@ int pomp_addr_format(char *buf, uint32_t buflen, const struct sockaddr *addr,
  */
 int pomp_addr_is_unix(const struct sockaddr *addr, uint32_t addrlen)
 {
-	if (addr == NULL || addrlen < sizeof(struct sockaddr))
+	if (addr == NULL || addrlen < (offsetof(struct sockaddr, sa_family) +
+				       sizeof(addr->sa_family)))
 		return 0;
 	return addr->sa_family == AF_UNIX;
 }
