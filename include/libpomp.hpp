@@ -537,6 +537,11 @@ public:
 		return mLoop;
 	}
 
+	/** Get internal pomp_loop (explicit getter) */
+	inline struct pomp_loop *get() const {
+		return mLoop;
+	}
+
 #ifdef POMP_CXX11
 	/** Handler wrapper that can take a std::function */
 	class HandlerFunc : public Handler {
