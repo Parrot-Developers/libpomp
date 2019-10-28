@@ -156,18 +156,20 @@ static int pomp_loop_do_wakeup(struct pomp_loop *loop)
  */
 static int pomp_loop_idle_flush(struct pomp_loop *loop)
 {
-	struct pomp_idle_entry *entry = NULL;
+	struct pomp_idle_entry *entry, *next_entry;
 	POMP_RETURN_ERR_IF_FAILED(loop != NULL, -EINVAL);
 
 	/* Call all idles */
-	entry = list_pop(&loop->idle_entries, struct pomp_idle_entry, node);
+	entry = loop->idle_entries;
 	while (entry != NULL) {
+		next_entry = entry->next;
 		(*entry->cb)(entry->userdata);
 		free(entry);
 
-		entry = list_pop(&loop->idle_entries, struct pomp_idle_entry,
-				node);
+		entry = next_entry;
 	}
+
+	loop->idle_entries = NULL;
 
 	return 0;
 }
@@ -261,14 +263,15 @@ static void pomp_idle_evt_cb(struct pomp_evt *evt, void *userdata)
 	struct pomp_idle_entry *entry;
 	POMP_RETURN_IF_FAILED(loop != NULL, -EINVAL);
 
-	entry = list_pop(&loop->idle_entries, struct pomp_idle_entry, node);
+	entry = loop->idle_entries;
 	if (entry == NULL)
 		return;
 
+	loop->idle_entries = entry->next;
 	(*entry->cb)(entry->userdata);
 	free(entry);
 
-	if (!list_is_empty(&loop->idle_entries))
+	if (loop->idle_entries != NULL)
 		pomp_evt_signal(loop->idle_evt);
 }
 
@@ -291,7 +294,7 @@ struct pomp_loop *pomp_loop_new(void)
 		return NULL;
 	}
 
-	list_init(&loop->idle_entries);
+	loop->idle_entries = NULL;
 	loop->idle_evt = pomp_evt_new();
 	if (loop->idle_evt == NULL)
 		goto error;
@@ -534,7 +537,8 @@ int pomp_loop_idle_add(struct pomp_loop *loop, pomp_idle_cb_t cb,
 	newentry->cb = cb;
 	newentry->userdata = userdata;
 
-	list_push(&loop->idle_entries, &newentry->node);
+	newentry->next = loop->idle_entries;
+	loop->idle_entries = newentry;
 
 	/* Force loop wake up */
 	res = pomp_evt_signal(loop->idle_evt);
@@ -545,7 +549,7 @@ int pomp_loop_idle_add(struct pomp_loop *loop, pomp_idle_cb_t cb,
 
 	return 0;
 error:
-	list_del(&newentry->node);
+	loop->idle_entries = newentry->next;
 	free(newentry);
 	return res;
 }
@@ -556,20 +560,23 @@ error:
 int pomp_loop_idle_remove(struct pomp_loop *loop, pomp_idle_cb_t cb,
 		void *userdata)
 {
-	struct pomp_idle_entry *entry = NULL;
-	struct pomp_idle_entry *entrytmp = NULL;
+	struct pomp_idle_entry *entry, **p_entry;
 	POMP_RETURN_ERR_IF_FAILED(loop != NULL, -EINVAL);
 
-	/* Walk entries to remove all entries corresponding. */
-	list_walk_entry_forward_safe(&loop->idle_entries,
-				     entry, entrytmp, node) {
+	/* Walk entries to remove all corresponding ones. */
+	p_entry = &loop->idle_entries;
+	entry = *p_entry;
+	while (entry != NULL) {
 		if (entry->cb == cb && entry->userdata == userdata) {
-			list_del(&entry->node);
+			*p_entry = entry->next;
 			free(entry);
+		} else {
+			p_entry = &entry->next;
 		}
+		entry = *p_entry;
 	}
 
-	if (list_is_empty(&loop->idle_entries))
+	if (loop->idle_entries == NULL)
 		pomp_evt_clear(loop->idle_evt);
 
 	return 0;
