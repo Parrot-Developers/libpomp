@@ -189,7 +189,10 @@ static int pomp_loop_win32_do_wait_and_process(struct pomp_loop *loop,
 	DWORD waitres = 0;
 	struct pomp_fd *pfd = NULL;
 	WSANETWORKEVENTS events;
-	uint32_t revents = 0;
+	/* VLA containing a copy of the pfd's. */
+	struct pomp_fd selected_pfds[loop->pfdcount];
+	int nb_pfds = 0;
+	int i;
 
 	/* Wait for an event in the loop (ready event is auto reset) */
 	waitres = WaitForSingleObject(loop->wakeup.hevt,
@@ -211,30 +214,29 @@ static int pomp_loop_win32_do_wait_and_process(struct pomp_loop *loop,
 		goto out;
 	}
 
-	for (;;) {
-		/* Find a ready fd */
-		for (pfd = loop->pfds; pfd != NULL; pfd = pfd->next) {
-			if (!pfd->nofd) {
-				memset(&events, 0, sizeof(events));
-				WSAEnumNetworkEvents(pfd->fd, NULL, &events);
-				if (events.lNetworkEvents != 0) {
-					pfd->revents = fd_events_from_wsa(
-							events.lNetworkEvents);
-					break;
-				}
-			} else if (pfd->revents != 0) {
-				break;
+	/* Select and copy activated pfd's */
+	for (pfd = loop->pfds; pfd != NULL; pfd = pfd->next) {
+		if (!pfd->nofd) {
+			memset(&events, 0, sizeof(events));
+			WSAEnumNetworkEvents(pfd->fd, NULL, &events);
+			if (events.lNetworkEvents != 0) {
+				selected_pfds[nb_pfds] = *pfd;
+				selected_pfds[nb_pfds].revents = fd_events_from_wsa(
+						events.lNetworkEvents);
+				nb_pfds++;
+				pfd->revents = 0;
 			}
+		} else if (pfd->revents != 0) {
+			selected_pfds[nb_pfds] = *pfd;
+			nb_pfds++;
+			pfd->revents = 0;
 		}
+	}
 
-		if (pfd == NULL)
-			break;
-
-		/* Save and clear revents before calling callback (pfd might be
-		 * destroyed during the call */
-		revents = pfd->revents;
-		pfd->revents = 0;
-		(*pfd->cb)(pfd->fd, revents, pfd->userdata);
+	/* Call user callback for each pfd (original pfd list can safely updated) */
+	for (i = 0; i < nb_pfds; i++) {
+		pfd = &selected_pfds[i];
+		(*pfd->cb)(pfd->fd, pfd->revents, pfd->userdata);
 		res = 0;
 	}
 
