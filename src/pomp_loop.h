@@ -65,6 +65,8 @@ struct pomp_loop {
 	struct pomp_evt		*idle_evt;	/**<  */
 	int			is_destroying;	/**< Destruction Flag */
 
+	pthread_mutex_t		lock;
+
 #ifdef POMP_HAVE_LOOP_POLL
 	struct pollfd		*pollfds;	/**< Array of pollfd */
 	uint32_t		pollfdsize;	/**< Allocate size of pollfds */

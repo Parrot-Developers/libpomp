@@ -41,11 +41,13 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <stddef.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <time.h>
 #include <signal.h>
 #include <inttypes.h>
+#include <pthread.h>
 
 #ifndef _MSC_VER
 #  include <unistd.h>

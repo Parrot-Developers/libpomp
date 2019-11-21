@@ -159,6 +159,8 @@ static int pomp_loop_idle_flush(struct pomp_loop *loop)
 	struct pomp_idle_entry *entry;
 	POMP_RETURN_ERR_IF_FAILED(loop != NULL, -EINVAL);
 
+	pthread_mutex_lock(&loop->lock);
+
 	/* While there are still entries in the idle-list */
 	while (loop->idle_entries != NULL) {
 		/* Take the first element */
@@ -168,10 +170,16 @@ static int pomp_loop_idle_flush(struct pomp_loop *loop)
 			loop->idle_entries = NULL;
 		else
 			loop->idle_entries->next = entry->next;
+
+		pthread_mutex_unlock(&loop->lock);
 		(*entry->cb)(entry->userdata);
 		free(entry);
+		pthread_mutex_lock(&loop->lock);
+
 	/* If entry was the last element, stop the loop */
 	}
+
+	pthread_mutex_unlock(&loop->lock);
 
 	return 0;
 }
@@ -265,8 +273,12 @@ static void pomp_idle_evt_cb(struct pomp_evt *evt, void *userdata)
 	struct pomp_idle_entry *entry;
 	POMP_RETURN_IF_FAILED(loop != NULL, -EINVAL);
 
-	if (loop->idle_entries == NULL)
+
+	pthread_mutex_lock(&loop->lock);
+	if (loop->idle_entries == NULL) {
+		pthread_mutex_unlock(&loop->lock);
 		return;
+	}
 
 	/* Point to first entry */
 	entry = loop->idle_entries->next;
@@ -277,12 +289,15 @@ static void pomp_idle_evt_cb(struct pomp_evt *evt, void *userdata)
 	else
 		loop->idle_entries->next = entry->next;
 
+	pthread_mutex_unlock(&loop->lock);
 	(*entry->cb)(entry->userdata);
-
 	free(entry);
+	pthread_mutex_lock(&loop->lock);
 
 	if (loop->idle_entries != NULL)
 		pomp_evt_signal(loop->idle_evt);
+
+	pthread_mutex_unlock(&loop->lock);
 }
 
 /*
@@ -304,6 +319,7 @@ struct pomp_loop *pomp_loop_new(void)
 		return NULL;
 	}
 
+	pthread_mutex_init(&loop->lock, NULL);
 	loop->idle_entries = NULL;
 	loop->idle_evt = pomp_evt_new();
 	if (loop->idle_evt == NULL)
@@ -348,6 +364,7 @@ int pomp_loop_destroy(struct pomp_loop *loop)
 		}
 		return -EBUSY;
 	}
+	pthread_mutex_destroy(&loop->lock);
 
 	/* Implementation specific */
 	res = pomp_loop_do_destroy(loop);
@@ -547,6 +564,8 @@ int pomp_loop_idle_add(struct pomp_loop *loop, pomp_idle_cb_t cb,
 	newentry->cb = cb;
 	newentry->userdata = userdata;
 
+	pthread_mutex_lock(&loop->lock);
+
 	/* Put at the back of the list */
 	rear_entry = loop->idle_entries;
 	loop->idle_entries = newentry;
@@ -558,21 +577,14 @@ int pomp_loop_idle_add(struct pomp_loop *loop, pomp_idle_cb_t cb,
 		rear_entry->next = newentry;
 	}
 
+	pthread_mutex_unlock(&loop->lock);
+
 	/* Force loop wake up */
 	res = pomp_evt_signal(loop->idle_evt);
-	if (res < 0) {
+	if (res < 0)
 		POMP_LOGE("pomp_evt_signal err=%d(%s)", -res, strerror(-res));
-		goto error;
-	}
 
 	return 0;
-error:
-	/* Restore previous rear entry */
-	loop->idle_entries = rear_entry;
-	if (rear_entry != NULL)
-		rear_entry->next = newentry->next;
-	free(newentry);
-	return res;
 }
 
 /*
@@ -583,6 +595,8 @@ int pomp_loop_idle_remove(struct pomp_loop *loop, pomp_idle_cb_t cb,
 {
 	struct pomp_idle_entry *entry = NULL, *prev_entry = NULL;
 	POMP_RETURN_ERR_IF_FAILED(loop != NULL, -EINVAL);
+
+	pthread_mutex_lock(&loop->lock);
 
 	/* Walk entries to remove all corresponding ones. */
 	prev_entry = loop->idle_entries;
@@ -607,6 +621,8 @@ int pomp_loop_idle_remove(struct pomp_loop *loop, pomp_idle_cb_t cb,
 
 	if (loop->idle_entries == NULL)
 		pomp_evt_clear(loop->idle_evt);
+
+	pthread_mutex_unlock(&loop->lock);
 
 	return 0;
 }

@@ -1101,6 +1101,9 @@ POMP_API int pomp_loop_wakeup(struct pomp_loop *loop);
  *
  * @remarks: this function is useful to register cleanup functions when called
  * by an fd event callback for example.
+ * @remarks: this function is safe to call from another thread that the one
+ * associated normally with the loop. However caller must ensure that the
+ * given loop will be valid for the complete duration of the call.
  */
 POMP_API int pomp_loop_idle_add(struct pomp_loop *loop, pomp_idle_cb_t cb,
 		void *userdata);
@@ -1114,6 +1117,9 @@ POMP_API int pomp_loop_idle_add(struct pomp_loop *loop, pomp_idle_cb_t cb,
  *
  * @remarks: if nothing match the given criteria, no error is returned.
  * @remarks: if several match the given criteria, all are removed.
+ * @remarks: this function is safe to call from another thread that the one
+ * associated normally with the loop. However caller must ensure that the
+ * given loop will be valid for the complete duration of the call.
  */
 POMP_API int pomp_loop_idle_remove(struct pomp_loop *loop, pomp_idle_cb_t cb,
 		void *userdata);
