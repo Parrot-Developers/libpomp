@@ -156,17 +156,21 @@ static int pomp_loop_do_wakeup(struct pomp_loop *loop)
  */
 static int pomp_loop_idle_flush(struct pomp_loop *loop)
 {
-	struct pomp_idle_entry *entry = NULL;
+	struct pomp_idle_entry *entry;
 	POMP_RETURN_ERR_IF_FAILED(loop != NULL, -EINVAL);
 
-	/* Call all idles */
-	entry = list_pop(&loop->idle_entries, struct pomp_idle_entry, node);
-	while (entry != NULL) {
+	/* While there are still entries in the idle-list */
+	while (loop->idle_entries != NULL) {
+		/* Take the first element */
+		entry = loop->idle_entries->next;
+		/* Was it also the last element? */
+		if (entry == loop->idle_entries)
+			loop->idle_entries = NULL;
+		else
+			loop->idle_entries->next = entry->next;
 		(*entry->cb)(entry->userdata);
 		free(entry);
-
-		entry = list_pop(&loop->idle_entries, struct pomp_idle_entry,
-				node);
+	/* If entry was the last element, stop the loop */
 	}
 
 	return 0;
@@ -261,14 +265,23 @@ static void pomp_idle_evt_cb(struct pomp_evt *evt, void *userdata)
 	struct pomp_idle_entry *entry;
 	POMP_RETURN_IF_FAILED(loop != NULL, -EINVAL);
 
-	entry = list_pop(&loop->idle_entries, struct pomp_idle_entry, node);
-	if (entry == NULL)
+	if (loop->idle_entries == NULL)
 		return;
 
+	/* Point to first entry */
+	entry = loop->idle_entries->next;
+
+	/* Remove the first entry */
+	if (entry == loop->idle_entries)
+		loop->idle_entries = NULL;
+	else
+		loop->idle_entries->next = entry->next;
+
 	(*entry->cb)(entry->userdata);
+
 	free(entry);
 
-	if (!list_is_empty(&loop->idle_entries))
+	if (loop->idle_entries != NULL)
 		pomp_evt_signal(loop->idle_evt);
 }
 
@@ -291,7 +304,7 @@ struct pomp_loop *pomp_loop_new(void)
 		return NULL;
 	}
 
-	list_init(&loop->idle_entries);
+	loop->idle_entries = NULL;
 	loop->idle_evt = pomp_evt_new();
 	if (loop->idle_evt == NULL)
 		goto error;
@@ -521,7 +534,7 @@ int pomp_loop_idle_add(struct pomp_loop *loop, pomp_idle_cb_t cb,
 		void *userdata)
 {
 	int res;
-	struct pomp_idle_entry *newentry = NULL;
+	struct pomp_idle_entry *newentry = NULL, *rear_entry = NULL;
 	POMP_RETURN_ERR_IF_FAILED(loop != NULL, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(cb != NULL, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(!loop->is_destroying, -EPERM);
@@ -530,11 +543,20 @@ int pomp_loop_idle_add(struct pomp_loop *loop, pomp_idle_cb_t cb,
 	newentry = calloc(1, sizeof(*newentry));
 	if (newentry == NULL)
 		return -ENOMEM;
-	/* Initialize  entry */
+	/* Initialize entry */
 	newentry->cb = cb;
 	newentry->userdata = userdata;
 
-	list_push(&loop->idle_entries, &newentry->node);
+	/* Put at the back of the list */
+	rear_entry = loop->idle_entries;
+	loop->idle_entries = newentry;
+	/* Make sure next pointer of the last entry targets the first one */
+	if (rear_entry == NULL) {
+		newentry->next = newentry;
+	} else {
+		newentry->next = rear_entry->next;
+		rear_entry->next = newentry;
+	}
 
 	/* Force loop wake up */
 	res = pomp_evt_signal(loop->idle_evt);
@@ -545,7 +567,10 @@ int pomp_loop_idle_add(struct pomp_loop *loop, pomp_idle_cb_t cb,
 
 	return 0;
 error:
-	list_del(&newentry->node);
+	/* Restore previous rear entry */
+	loop->idle_entries = rear_entry;
+	if (rear_entry != NULL)
+		rear_entry->next = newentry->next;
 	free(newentry);
 	return res;
 }
@@ -556,20 +581,31 @@ error:
 int pomp_loop_idle_remove(struct pomp_loop *loop, pomp_idle_cb_t cb,
 		void *userdata)
 {
-	struct pomp_idle_entry *entry = NULL;
-	struct pomp_idle_entry *entrytmp = NULL;
+	struct pomp_idle_entry *entry = NULL, *prev_entry = NULL;
 	POMP_RETURN_ERR_IF_FAILED(loop != NULL, -EINVAL);
 
-	/* Walk entries to remove all entries corresponding. */
-	list_walk_entry_forward_safe(&loop->idle_entries,
-				     entry, entrytmp, node) {
+	/* Walk entries to remove all corresponding ones. */
+	prev_entry = loop->idle_entries;
+	while (loop->idle_entries != entry) {
+		entry = prev_entry->next;
 		if (entry->cb == cb && entry->userdata == userdata) {
-			list_del(&entry->node);
+			/* Unlink entry from list */
+			prev_entry->next = entry->next;
 			free(entry);
+			/* Was it the last entry? */
+			if (loop->idle_entries == entry) {
+				/* Only entry remaining in the list? */
+				if (prev_entry == entry)
+					loop->idle_entries = entry = NULL;
+				else
+					loop->idle_entries = entry = prev_entry;
+			}
+		} else {
+			prev_entry = entry;
 		}
 	}
 
-	if (list_is_empty(&loop->idle_entries))
+	if (loop->idle_entries == NULL)
 		pomp_evt_clear(loop->idle_evt);
 
 	return 0;
