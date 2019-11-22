@@ -119,8 +119,6 @@
 #  define POMP_TIMER_POSIX_SIGNO	SIGRTMIN
 #endif /* POMP_TIMER_POSIX_SIGNO */
 
-#include <futils/list.h>
-
 #include "libpomp.h"
 
 #include "pomp_log.h"
