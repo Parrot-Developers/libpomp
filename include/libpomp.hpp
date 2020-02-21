@@ -457,12 +457,6 @@ private:
 		handler->processFd(_fd, _revents);
 	}
 
-	/** Internal constructor. */
-	inline Loop(struct pomp_loop *loop) {
-		mLoop = loop;
-		mOwner = false;
-	}
-
 public:
 	enum {
 		EVENT_IN = POMP_FD_EVENT_IN,
@@ -485,6 +479,11 @@ public:
 	inline Loop() {
 		mLoop = pomp_loop_new();
 		mOwner = true;
+	}
+
+	inline Loop(struct pomp_loop *loop) {
+		mLoop = loop;
+		mOwner = false;
 	}
 
 	/** Destructor. */
