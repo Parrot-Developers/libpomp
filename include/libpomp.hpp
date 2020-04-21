@@ -832,8 +832,18 @@ public:
 	}
 
 	/** Start a server. */
-	inline int listen(const Address & address) {
+	inline int listen(const Address &address) {
 		return listen(address.addr(), address.len());
+	}
+
+	/** Start a server with unix socket address access mode. */
+	inline int listen(const struct sockaddr *addr, uint32_t addrlen, uint32_t mode) {
+		return pomp_ctx_listen_with_access_mode(mCtx, addr, addrlen, mode);
+	}
+
+	/** Start a server with unix socket address access mode. */
+	inline int listen(const Address &address, uint32_t mode) {
+		return listen(address.addr(), address.len(), mode);
 	}
 
 	/** Start a client. */
@@ -842,7 +852,7 @@ public:
 	}
 
 	/** Start a client. */
-	inline int connect(const Address & address) {
+	inline int connect(const Address &address) {
 		return connect(address.addr(), address.len());
 	}
 

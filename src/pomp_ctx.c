@@ -100,6 +100,9 @@ struct pomp_ctx {
 	/** 0 for normal context, 1, for raw context */
 	int			israw;
 
+	/** Mode to set the unix socket (0 to use default value baed on umask */
+	uint32_t		mode;
+
 	/** Function to call for raw data reception in raw mode */
 	pomp_ctx_raw_cb_t	rawcb;
 
@@ -392,6 +395,19 @@ static int server_start(struct pomp_ctx *ctx)
 			goto error;
 		return 0;
 	}
+
+	/* Change access mode for non abstract unix socket */
+#ifndef _WIN32
+	if (ctx->addr->sa_family == AF_UNIX
+			&& POMP_GET_UNIX_PATH(ctx->addr)[0] != '\0'
+			&& ctx->mode != 0) {
+		if (chmod(POMP_GET_UNIX_PATH(ctx->addr), ctx->mode) < 0) {
+			res = -errno;
+			POMP_LOG_ERRNO("chmod");
+			goto error;
+		}
+	}
+#endif /* !_WIN32 */
 
 	/* Get local address information */
 	ctx->u.server.local_addrlen = sizeof(ctx->u.server.local_addr);
@@ -1006,6 +1022,19 @@ static int pomp_ctx_start(struct pomp_ctx *ctx, enum pomp_ctx_type type,
 int pomp_ctx_listen(struct pomp_ctx *ctx,
 		const struct sockaddr *addr, uint32_t addrlen)
 {
+	POMP_RETURN_ERR_IF_FAILED(ctx != NULL, -EINVAL);
+	ctx->mode = 0;
+	return pomp_ctx_start(ctx, POMP_CTX_TYPE_SERVER, addr, addrlen);
+}
+
+/*
+ * See documentation in public header.
+ */
+int pomp_ctx_listen_with_access_mode(struct pomp_ctx *ctx,
+		const struct sockaddr *addr, uint32_t addrlen, uint32_t mode)
+{
+	POMP_RETURN_ERR_IF_FAILED(ctx != NULL, -EINVAL);
+	ctx->mode = mode;
 	return pomp_ctx_start(ctx, POMP_CTX_TYPE_SERVER, addr, addrlen);
 }
 

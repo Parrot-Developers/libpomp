@@ -336,6 +336,20 @@ POMP_API int pomp_ctx_listen(struct pomp_ctx *ctx,
 		const struct sockaddr *addr, uint32_t addrlen);
 
 /**
+ * Start a server, but changing the access mode for unix socket address.
+ * @param ctx : context.
+ * @param addr : local address to listen on.
+ * @param addrlen : local address size.
+ * @param mode : acces mode to set (see CHMOD(2)). if 0 is given this effect is
+ * the same as simply calling pomp_ctx_listen, it will use default access mode
+ * depending on current value of UMASK(2).
+ * @return 0 in case of success, negative errno value in case of error.
+ * @remarks the 'mode' argument is ignored for non unix socket address.
+ */
+POMP_API int pomp_ctx_listen_with_access_mode(struct pomp_ctx *ctx,
+		const struct sockaddr *addr, uint32_t addrlen, uint32_t mode);
+
+/**
  * Start a client.
  * If connection can not be completed immediately, it will try again later
  * automatically. Call pomp_ctx_stop to disconnect and stop everything.

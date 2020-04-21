@@ -48,6 +48,7 @@
 #include <signal.h>
 #include <inttypes.h>
 #include <pthread.h>
+#include <sys/stat.h>
 
 #ifndef _MSC_VER
 #  include <unistd.h>
