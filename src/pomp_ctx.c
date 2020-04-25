@@ -506,8 +506,11 @@ static int client_complete_conn(struct pomp_ctx *ctx)
 	/* Reconnect in case of error */
 	if (sockerr != 0) {
 		if (POMP_SHOULD_LOG_CONNECT_ERROR(sockerr)) {
-			POMP_LOGE("connect(async)(fd=%d) err=%d(%s)",
-					ctx->u.client.fd,
+			char buf[128] = "";
+			pomp_addr_format(buf, sizeof(buf),
+					ctx->addr, ctx->addrlen);
+			POMP_LOGE("connect(async)(fd=%d)(addr=%s) err=%d(%s)",
+					ctx->u.client.fd, buf,
 					sockerr, strerror(sockerr));
 		}
 		goto reconnect;
@@ -595,8 +598,15 @@ static int client_start(struct pomp_ctx *ctx)
 
 	/* If error and not pending, try again later */
 	if (res != 0 && !POMP_CONNECT_IN_PROGRESS(errno)) {
-		if (POMP_SHOULD_LOG_CONNECT_ERROR(errno))
-			POMP_LOG_FD_ERRNO("connect", ctx->u.client.fd);
+		if (POMP_SHOULD_LOG_CONNECT_ERROR(errno)) {
+			char buf[128] = "";
+			res = -errno;
+			pomp_addr_format(buf, sizeof(buf),
+					ctx->addr, ctx->addrlen);
+			POMP_LOGE("connect(fd=%d)(addr=%s) err=%d(%s)",
+					ctx->u.client.fd, buf,
+					-res, strerror(-res));
+		}
 		/* Close socket and try again later */
 		pomp_loop_remove(ctx->loop, ctx->u.client.fd);
 		close(ctx->u.client.fd);
