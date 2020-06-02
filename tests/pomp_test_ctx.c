@@ -57,10 +57,51 @@ struct test_data {
 	uint32_t  datasent;
 	uint32_t  sendcount;
 	int       isdgram;
+	int       isipv6;
 	int       israw;
 	struct test_peer srv;
 	struct test_peer cli;
 };
+
+static inline bool is_localhost_ipv6(const struct sockaddr_in6 *addr_in6)
+{
+	bool ret = false;
+	int rc;
+	struct sockaddr_in6 addr;
+	uint32_t addrlen;
+
+	rc = pomp_addr_parse("inet6:::1:0", (struct sockaddr *)&addr, &addrlen);
+	if (rc < 0)
+		goto out;
+
+	ret = (memcmp(&addr.sin6_addr, &addr_in6->sin6_addr,
+		sizeof(struct in6_addr)) == 0);
+out:
+	return ret;
+}
+
+/** */
+static void check_local_address(struct test_data *data, struct pomp_conn *conn)
+{
+	const struct sockaddr *addr = NULL;
+	const struct sockaddr_in *addr_in;
+	const struct sockaddr_in6 *addr_in6;
+	uint32_t addrlen = 0;
+
+	addr = pomp_conn_get_local_addr(conn, &addrlen);
+	CU_ASSERT_TRUE(addr != NULL);
+	if (data->isipv6) {
+		CU_ASSERT_EQUAL(addr->sa_family, AF_INET6);
+		CU_ASSERT_EQUAL(addrlen, sizeof(*addr_in6));
+		addr_in6 = (const struct sockaddr_in6 *)addr;
+		CU_ASSERT_EQUAL(is_localhost_ipv6(addr_in6), true);
+	} else {
+		CU_ASSERT_EQUAL(addr->sa_family, AF_INET);
+		CU_ASSERT_EQUAL(addrlen, sizeof(*addr_in));
+		addr_in = (const struct sockaddr_in *)addr;
+		CU_ASSERT_EQUAL(addr_in->sin_addr.s_addr, htonl(INADDR_LOOPBACK));
+	}
+}
 
 /** */
 static void test_event_cb_t(struct pomp_ctx *ctx, enum pomp_event event,
@@ -77,6 +118,10 @@ static void test_event_cb_t(struct pomp_ctx *ctx, enum pomp_event event,
 	int isunix = 0;
 	struct test_peer *peer = (ctx == data->cli.ctx) ? &data->cli :
 							  &data->srv;
+
+	if (data->isdgram) {
+		check_local_address(data, conn);
+	}
 
 	/* Check that event callback is not called before the pomp_ctx_connect return */
 	CU_ASSERT_NOT_EQUAL(peer->state, TEST_PEER_STATE_IDLE);
@@ -220,9 +265,26 @@ static void test_ctx_socket_cb(struct pomp_ctx *ctx,
 		void *userdata)
 {
 	const char *str = NULL;
+	struct test_data *data = userdata;
+	int ip_pktinfo = 1;
+	int ret;
 
 	str = pomp_socket_kind_str(kind);
 	CU_ASSERT_PTR_NOT_NULL(str);
+
+	if (!data->isdgram)
+		return;
+
+	if (data->isipv6) {
+		ret = setsockopt(fd, IPPROTO_IPV6, IPV6_RECVPKTINFO,
+			&ip_pktinfo, sizeof(ip_pktinfo));
+		CU_ASSERT_EQUAL(ret, 0);
+	} else {
+		ret = setsockopt(fd, IPPROTO_IP, IP_PKTINFO,
+			&ip_pktinfo, sizeof(ip_pktinfo));
+		CU_ASSERT_EQUAL(ret, 0);
+	}
+
 }
 
 /** */
@@ -461,7 +523,8 @@ static void run_ctx(struct pomp_ctx *ctx1, struct pomp_ctx *ctx2, int timeout)
 /** */
 static void test_ctx(const struct sockaddr *addr1, uint32_t addrlen1,
 		const struct sockaddr *addr2, uint32_t addrlen2,
-		int isdgram, int israw, int withsockcb, int withsendcb)
+		int isdgram, int israw, int isipv6, int withsockcb,
+		int withsendcb)
 {
 	int res = 0;
 	struct test_data data;
@@ -475,6 +538,7 @@ static void test_ctx(const struct sockaddr *addr1, uint32_t addrlen1,
 	memset(&data, 0, sizeof(data));
 	data.isdgram = isdgram;
 	data.israw = israw;
+	data.isipv6 = isipv6;
 	data.srv.addr = addr1;
 	data.srv.addrlen = addrlen1;
 	data.cli.addr = addr2;
@@ -947,11 +1011,11 @@ static void test_ctx_inet_tcp(int israw, int withsockcb, int withsendcb)
 
 	test_ctx((const struct sockaddr *)&addr_in, sizeof(addr_in),
 			(const struct sockaddr *)&addr_in, sizeof(addr_in),
-			0, israw, withsockcb, withsendcb);
+			0, israw, 0, withsockcb, withsendcb);
 }
 
 /** */
-static void test_ctx_normal_inet_tcp()
+static void test_ctx_normal_inet_tcp(void)
 {
 	test_ctx_inet_tcp(0, 0, 0);
 	test_ctx_inet_tcp(0, 1, 0);
@@ -960,7 +1024,7 @@ static void test_ctx_normal_inet_tcp()
 }
 
 /** */
-static void test_ctx_raw_inet_tcp()
+static void test_ctx_raw_inet_tcp(void)
 {
 	test_ctx_inet_tcp(1, 0, 0);
 	test_ctx_inet_tcp(1, 1, 0);
@@ -969,42 +1033,106 @@ static void test_ctx_raw_inet_tcp()
 }
 
 /** */
-static void test_ctx_inet_udp(int israw, int withsockcb, int withsendcb)
+static void test_ctx_inet_udp(int israw, int withsockcb, int withsendcb, int isipv6, int addrAny)
 {
-	struct sockaddr_in addr_in1;
-	struct sockaddr_in addr_in2;
+	struct sockaddr addr_in1;
+	struct sockaddr addr_in2;
+	const char *addr1_udp_v4_any = "inet:0.0.0.0:5656";
+	const char *addr1_udp_v4 =     "inet:127.0.0.1:5656";
+	const char *addr2_udp_v4_any = "inet:0.0.0.0:5657";
+	const char *addr2_udp_v4 =     "inet:127.0.0.1:5657";
+	const char *addr1_udp_v6_any = "inet6:::0:5656";
+	const char *addr1_udp_v6 =     "inet6:::1:5656";
+	const char *addr2_udp_v6_any = "inet6:::0:5657";
+	const char *addr2_udp_v6 =     "inet6:::1:5657";
+	const char *addr1_str = NULL;
+	const char *addr2_str = NULL;
+	uint32_t addrlen1;
+	uint32_t addrlen2;
+	int ret;
+
+	/* addr_any only if socket cb is used */
+	if (addrAny && !withsockcb) {
+		CU_ASSERT_EQUAL(0, -1);
+	}
 
 	memset(&addr_in1, 0, sizeof(addr_in1));
-	addr_in1.sin_family = AF_INET;
-	addr_in1.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-	addr_in1.sin_port = htons(5656);
-
 	memset(&addr_in2, 0, sizeof(addr_in2));
-	addr_in2.sin_family = AF_INET;
-	addr_in2.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-	addr_in2.sin_port = htons(5657);
 
-	test_ctx((const struct sockaddr *)&addr_in1, sizeof(addr_in1),
-			(const struct sockaddr *)&addr_in2, sizeof(addr_in2),
-			1, israw, withsockcb, withsendcb);
+	if (isipv6) {
+		if (addrAny)
+			addr1_str = addr1_udp_v6_any;
+		else
+			addr1_str = addr1_udp_v6;
+		if (addrAny)
+			addr2_str = addr2_udp_v6_any;
+		else
+			addr2_str = addr2_udp_v6;
+	} else {
+		if (addrAny)
+			addr1_str = addr1_udp_v4_any;
+		else
+			addr1_str = addr1_udp_v4;
+		if (addrAny)
+			addr2_str = addr2_udp_v4_any;
+		else
+			addr2_str = addr2_udp_v4;
+	}
+
+	CU_ASSERT_NOT_EQUAL(addr1_str, NULL);
+	CU_ASSERT_NOT_EQUAL(addr2_str, NULL);
+
+	addrlen1 = sizeof(addr_in1);
+	ret = pomp_addr_parse(addr1_str,
+			(struct sockaddr *)&addr_in1,
+			&addrlen1);
+	CU_ASSERT_EQUAL(ret, 0);
+
+	addrlen2 = sizeof(addr_in2);
+	ret = pomp_addr_parse(addr2_str,
+			(struct sockaddr *)&addr_in2,
+			&addrlen2);
+	CU_ASSERT_EQUAL(ret, 0);
+
+	test_ctx(&addr_in1, sizeof(addr_in1),
+		 &addr_in2, sizeof(addr_in2),
+		 1, israw, isipv6, withsockcb, withsendcb);
 }
 
 /** */
-static void test_ctx_normal_inet_udp()
+static void test_ctx_normal_inet_udp(void)
 {
-	test_ctx_inet_udp(0, 0, 0);
-	test_ctx_inet_udp(0, 1, 0);
-	test_ctx_inet_udp(0, 0, 1);
-	test_ctx_inet_udp(0, 1, 1);
+	test_ctx_inet_udp(0, 0, 0, 0, 0);
+	test_ctx_inet_udp(0, 1, 0, 0, 0);
+	test_ctx_inet_udp(0, 0, 1, 0, 0);
+	test_ctx_inet_udp(0, 1, 1, 0, 0);
+
+	test_ctx_inet_udp(0, 1, 0, 0, 1);
+	test_ctx_inet_udp(0, 1, 1, 0, 1);
 }
 
 /** */
-static void test_ctx_raw_inet_udp()
+static void test_ctx_normal_inet_udp_v6(void)
 {
-	test_ctx_inet_udp(1, 0, 0);
-	test_ctx_inet_udp(1, 1, 0);
-	test_ctx_inet_udp(1, 0, 1);
-	test_ctx_inet_udp(1, 1, 1);
+	test_ctx_inet_udp(0, 0, 0, 0, 0);
+	test_ctx_inet_udp(0, 1, 0, 0, 0);
+	test_ctx_inet_udp(0, 0, 1, 0, 0);
+	test_ctx_inet_udp(0, 1, 1, 0, 0);
+
+	test_ctx_inet_udp(0, 1, 0, 0, 1);
+	test_ctx_inet_udp(0, 1, 1, 0, 1);
+}
+
+/** */
+static void test_ctx_raw_inet_udp(void)
+{
+	test_ctx_inet_udp(1, 0, 0, 0, 0);
+	test_ctx_inet_udp(1, 1, 0, 0, 0);
+	test_ctx_inet_udp(1, 0, 1, 0, 0);
+	test_ctx_inet_udp(1, 1, 1, 0, 0);
+
+	test_ctx_inet_udp(1, 1, 0, 0, 1);
+	test_ctx_inet_udp(1, 1, 1, 0, 1);
 }
 
 #ifndef _WIN32
@@ -1020,11 +1148,11 @@ static void test_ctx_unix(int israw, int withsockcb, int withsendcb)
 
 	test_ctx((const struct sockaddr *)&addr_un, sizeof(addr_un),
 			(const struct sockaddr *)&addr_un, sizeof(addr_un),
-			0, israw, withsockcb, withsendcb);
+			0, israw, 0, withsockcb, withsendcb);
 }
 
 /** */
-static void test_ctx_normal_unix()
+static void test_ctx_normal_unix(void)
 {
 	test_ctx_unix(0, 0, 0);
 	test_ctx_unix(0, 1, 0);
@@ -1033,7 +1161,7 @@ static void test_ctx_normal_unix()
 }
 
 /** */
-static void test_ctx_raw_unix()
+static void test_ctx_raw_unix(void)
 {
 	test_ctx_unix(1, 0, 0);
 	test_ctx_unix(1, 1, 0);
@@ -1206,6 +1334,7 @@ static CU_TestInfo s_ctx_tests[] = {
 	{(char *)"ctx_normal_inet_tcp", &test_ctx_normal_inet_tcp},
 	{(char *)"ctx_raw_inet_tcp", &test_ctx_raw_inet_tcp},
 	{(char *)"ctx_normal_inet_udp", &test_ctx_normal_inet_udp},
+	{(char *)"ctx_normal_inet_udp6", &test_ctx_normal_inet_udp_v6},
 	{(char *)"ctx_raw_inet_udp", &test_ctx_raw_inet_udp},
 #ifndef _WIN32
 	{(char *)"ctx_normal_unix", &test_ctx_normal_unix},

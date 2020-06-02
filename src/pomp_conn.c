@@ -114,6 +114,9 @@ struct pomp_conn {
 	/** Local address size */
 	socklen_t		local_addrlen;
 
+	/** Temporary Local address */
+	struct sockaddr_storage	tmp_local_addr;
+
 	/** Remote peer address */
 	struct sockaddr_storage	peer_addr;
 
@@ -244,7 +247,7 @@ static int pomp_io_buffer_write_dgram(struct pomp_io_buffer *iobuf,
  * @return number of bytes written in case of success, negative errno value in
  * case of error. -EAGAIN is returned if write can not be completed immediately.
  */
-static int pomp_io_buffer_write_with_fds(struct pomp_io_buffer *iobuf,
+static int pomp_io_buffer_write_with_cmsg(struct pomp_io_buffer *iobuf,
 		struct pomp_conn *conn)
 {
 #ifdef SCM_RIGHTS
@@ -322,7 +325,7 @@ static int pomp_io_buffer_write(struct pomp_io_buffer *iobuf,
 	if (conn->isdgram)
 		res = pomp_io_buffer_write_dgram(iobuf, conn);
 	else if (iobuf->off == 0 && iobuf->buf->fdcount > 0)
-		res = pomp_io_buffer_write_with_fds(iobuf, conn);
+		res = pomp_io_buffer_write_with_cmsg(iobuf, conn);
 	else
 		res = pomp_io_buffer_write_normal(iobuf, conn);
 	if (res < 0)
@@ -540,7 +543,7 @@ static int pomp_conn_process_read_dgram(struct pomp_conn *conn)
 	return (int)readlen;
 }
 
-static int pomp_conn_process_read_with_fds(struct pomp_conn *conn)
+static int pomp_conn_process_read_with_cmsg(struct pomp_conn *conn)
 {
 #ifdef SCM_RIGHTS
 	int res = 0;
@@ -557,6 +560,8 @@ static int pomp_conn_process_read_with_fds(struct pomp_conn *conn)
 	/* Setup the data part of the socket message */
 	iov.iov_base = conn->readbuf->data;
 	iov.iov_len = conn->readbuf->capacity;
+	msg.msg_name = &conn->peer_addr;
+	msg.msg_namelen = sizeof(conn->peer_addr);
 	msg.msg_iov = &iov;
 	msg.msg_iovlen = 1;
 
@@ -577,6 +582,7 @@ static int pomp_conn_process_read_with_fds(struct pomp_conn *conn)
 			POMP_LOG_FD_ERRNO("recvmsg", conn->fd);
 		return res;
 	}
+	conn->peer_addrlen = msg.msg_namelen;
 	if (readlen == 0)
 		return 0;
 
@@ -584,6 +590,30 @@ static int pomp_conn_process_read_with_fds(struct pomp_conn *conn)
 	for (cmsg = CMSG_FIRSTHDR(&msg);
 			cmsg != NULL;
 			cmsg = CMSG_NXTHDR(&msg, cmsg)) {
+#if defined(IPPROTO_IP) && defined(IP_PKTINFO)
+		if (cmsg->cmsg_level == IPPROTO_IP &&
+		    cmsg->cmsg_type == IP_PKTINFO) {
+			struct sockaddr_in *ip_addr;
+			struct in_pktinfo *ip_pkt;
+			ip_pkt = (struct in_pktinfo *)CMSG_DATA(cmsg);
+
+			ip_addr = (struct sockaddr_in *)&conn->tmp_local_addr;
+			ip_addr->sin_addr = ip_pkt->ipi_addr;
+			continue;
+		}
+#endif
+#if defined(IPPROTO_IPV6) && defined(IPV6_PKTINFO)
+		if (cmsg->cmsg_level == IPPROTO_IPV6 &&
+		    cmsg->cmsg_type == IPV6_PKTINFO) {
+			struct sockaddr_in6 *ip_addr;
+			struct in6_pktinfo *ip_pkt;
+			ip_pkt = (struct in6_pktinfo *)CMSG_DATA(cmsg);
+
+			ip_addr = (struct sockaddr_in6 *)&conn->tmp_local_addr;
+			ip_addr->sin6_addr = ip_pkt->ipi6_addr;
+			continue;
+		}
+#endif
 		if (cmsg->cmsg_level != SOL_SOCKET)
 			continue;
 		if (cmsg->cmsg_type != SCM_RIGHTS)
@@ -638,10 +668,15 @@ static void pomp_conn_process_read(struct pomp_conn *conn)
 			break;
 
 		/* Read data */
+#ifndef _WIN32
+		if (conn->isdgram || POMP_CONN_IS_LOCAL(conn))
+			res = pomp_conn_process_read_with_cmsg(conn);
+#else
 		if (conn->isdgram)
 			res = pomp_conn_process_read_dgram(conn);
 		else if (POMP_CONN_IS_LOCAL(conn))
-			res = pomp_conn_process_read_with_fds(conn);
+			res = pomp_conn_process_read_with_cmsg(conn);
+#endif
 		else
 			res = pomp_conn_process_read_normal(conn);
 
@@ -656,9 +691,11 @@ static void pomp_conn_process_read(struct pomp_conn *conn)
 		}
 	} while (res > 0 && !conn->read_suspended);
 
-	/* Always reset peer address after reading message on dgram sockets */
+	/* Reset peer/local addresses after reading message on dgram sockets */
 	if (conn->isdgram) {
 		memset(&conn->peer_addr, 0, sizeof(conn->peer_addr));
+		memcpy(&conn->tmp_local_addr, &conn->local_addr,
+			conn->local_addrlen);
 		conn->peer_addrlen = 0;
 	}
 }
@@ -948,6 +985,7 @@ struct pomp_conn *pomp_conn_new(struct pomp_ctx *ctx,
 		POMP_LOG_FD_ERRNO("getsockname", fd);
 		conn->local_addrlen = 0;
 	}
+	memcpy(&conn->tmp_local_addr, &conn->local_addr, conn->local_addrlen);
 
 	/* Get peer address information */
 	if (!isdgram) {
@@ -1116,7 +1154,7 @@ const struct sockaddr *pomp_conn_get_local_addr(struct pomp_conn *conn,
 	POMP_RETURN_VAL_IF_FAILED(conn != NULL, -EINVAL, NULL);
 	POMP_RETURN_VAL_IF_FAILED(addrlen != NULL, -EINVAL, NULL);
 	*addrlen = conn->local_addrlen;
-	return (const struct sockaddr *)&conn->local_addr;
+	return (const struct sockaddr *)&conn->tmp_local_addr;
 }
 
 /*
