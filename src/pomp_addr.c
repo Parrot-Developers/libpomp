@@ -202,3 +202,30 @@ int pomp_addr_is_unix(const struct sockaddr *addr, uint32_t addrlen)
 		return 0;
 	return addr->sa_family == AF_UNIX;
 }
+
+/*
+ * See documentation in public header.
+ */
+int pomp_addr_get_real_addr(const char *buf, char **dst)
+{
+	int res;
+	const char *root = NULL;
+
+	POMP_RETURN_ERR_IF_FAILED(buf != NULL, -EINVAL);
+	POMP_RETURN_ERR_IF_FAILED(dst != NULL, -EINVAL);
+
+	root = getenv("PRODUCT_ROOT_CFG");
+	if (root == NULL || strncmp(buf, "unix:", 5) != 0 || buf[5] == '@') {
+		*dst = strdup(buf);
+		if (*dst == NULL)
+			return -ENOMEM;
+		goto out;
+	}
+
+	res = asprintf(dst, "unix:%s%s", root, buf + 5);
+	if (res < 0)
+		return -ENOMEM;
+
+out:
+	return 0;
+}

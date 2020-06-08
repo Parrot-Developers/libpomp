@@ -1290,6 +1290,18 @@ POMP_API int pomp_addr_format(char *buf, uint32_t buflen,
  */
 POMP_API int pomp_addr_is_unix(const struct sockaddr *addr, uint32_t addrlen);
 
+/**
+ * Prepend the product root path to a unix local address with file system name.
+ * @param buf: input string.
+ * @param dst: destination buffer, which will be allocated to a suitable size
+ * dynamically. Must be freed with free(), after usage.
+ * @return 0 in case of success, negative errno value in case of error.
+ *
+ * Format of string is:
+ * - unix:<pathname>: unix local address with file system name.
+ */
+POMP_API int pomp_addr_get_real_addr(const char *buf, char **dst);
+
 /*
  * Advanced API.
  *

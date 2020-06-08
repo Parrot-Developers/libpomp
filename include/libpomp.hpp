@@ -712,6 +712,16 @@ public:
 	bool isValid() const { return mValid; }
 	const sockaddr * addr() const { return &mAddress.sa; }
 	uint32_t len() const { return mAddressLength; }
+	inline static int getRealAddr(const char * str, std::string &dst)
+	{
+		char *s = NULL;
+		int res = pomp_addr_get_real_addr(str, &s);
+		if (res == 0) {
+			dst.assign(s);
+			free(s);
+		}
+		return res;
+	}
 #ifdef POMP_CXX11
 	explicit operator bool () const { return isValid(); }
 #endif
