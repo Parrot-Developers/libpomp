@@ -111,7 +111,7 @@ public:
 	/** Destructor. */
 	inline ~Message() {
 		if (mMsg != NULL)
-			pomp_msg_destroy(mMsg);
+			(void)pomp_msg_destroy(mMsg);
 	}
 
 	/** Get message Id. */
@@ -489,7 +489,7 @@ public:
 	/** Destructor. */
 	inline ~Loop() {
 		if (mOwner)
-			pomp_loop_destroy(mLoop);
+			(void)pomp_loop_destroy(mLoop);
 	}
 
 	/** Register a new fd in loop. */
@@ -585,7 +585,7 @@ public:
 
 	/** Destructor */
 	inline ~Event() {
-		pomp_evt_destroy(mEvt);
+		(void)pomp_evt_destroy(mEvt);
 	}
 
 	inline int signal() {
@@ -658,7 +658,7 @@ public:
 
 	/** Destructor. */
 	inline ~Timer() {
-		pomp_timer_destroy(mTimer);
+		(void)pomp_timer_destroy(mTimer);
 	}
 
 	inline int set(uint32_t delay, uint32_t period = 0) {
@@ -831,7 +831,7 @@ public:
 
 	/** Destructor */
 	inline ~Context() {
-		pomp_ctx_destroy(mCtx);
+		(void)pomp_ctx_destroy(mCtx);
 		if (mLoop != NULL && !mExtLoop)
 			delete mLoop;
 	}
