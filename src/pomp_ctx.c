@@ -1073,7 +1073,7 @@ int pomp_ctx_stop(struct pomp_ctx *ctx)
 {
 	POMP_RETURN_ERR_IF_FAILED(ctx != NULL, -EINVAL);
 
-	if (ctx->addr == NULL)
+	if (ctx->addr == NULL || ctx->stopping)
 		return 0;
 
 	/* Stop server/client/dgram */
