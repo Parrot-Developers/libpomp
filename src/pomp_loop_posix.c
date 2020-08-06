@@ -187,6 +187,7 @@ static int pomp_loop_poll_do_wait_and_process(struct pomp_loop *loop,
 	struct pollfd *pollfds = NULL;
 	uint32_t revents = 0;
 	uint32_t pfdcount = 0;
+	unsigned int pfdi;
 
 	/* Remember number of fds now because it can change during callback
 	 * processing */
@@ -209,14 +210,16 @@ static int pomp_loop_poll_do_wait_and_process(struct pomp_loop *loop,
 	loop->pollfds[0].revents = 0;
 
 	/* Registered fds */
-	for (pfd = loop->pfds, i = 1; pfd != NULL; pfd = pfd->next, i++) {
-		if (i >= pfdcount) {
-			POMP_LOGE("Internal fd list corruption");
-			break;
+	for (pfdi = 0, i = 1; pfdi < POMP_LOOP_PFDS_LEN; pfdi++) {
+		for (pfd = loop->pfds[pfdi]; pfd != NULL; pfd = pfd->next, i++) {
+			if (i >= pfdcount) {
+				POMP_LOGE("Internal fd list corruption");
+				break;
+			}
+			loop->pollfds[i].fd = pfd->fd;
+			loop->pollfds[i].events = fd_events_to_poll(pfd->events);
+			loop->pollfds[i].revents = 0;
 		}
-		loop->pollfds[i].fd = pfd->fd;
-		loop->pollfds[i].events = fd_events_to_poll(pfd->events);
-		loop->pollfds[i].revents = 0;
 	}
 
 	/* Wait for poll events */

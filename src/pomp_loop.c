@@ -185,6 +185,21 @@ static int pomp_loop_idle_flush(struct pomp_loop *loop)
 }
 
 /**
+ * Return hash table index for given file descriptor
+ * @param fd : fd to hash
+ * @return an index in loop->pfds[]
+ */
+static inline unsigned int pomp_loop_index_fd(intptr_t fd)
+{
+	uintptr_t x = fd;
+
+	x *= UINT32_C(0xefec2401);
+	x ^= x >> 4;
+
+	return x % POMP_LOOP_PFDS_LEN;
+}
+
+/**
  * Find a registered fd in loop.
  * @param loop : loop.
  * @param fd : fd to search.
@@ -193,7 +208,9 @@ static int pomp_loop_idle_flush(struct pomp_loop *loop)
 struct pomp_fd *pomp_loop_find_pfd(struct pomp_loop *loop, intptr_t fd)
 {
 	struct pomp_fd *pfd = NULL;
-	for (pfd = loop->pfds; pfd != NULL; pfd = pfd->next) {
+	unsigned int pfdi = pomp_loop_index_fd(fd);
+
+	for (pfd = loop->pfds[pfdi]; pfd != NULL; pfd = pfd->next) {
 		if (pfd->fd == fd)
 			return pfd;
 	}
@@ -213,6 +230,7 @@ struct pomp_fd *pomp_loop_add_pfd(struct pomp_loop *loop, intptr_t fd,
 		uint32_t events, pomp_fd_event_cb_t cb, void *userdata)
 {
 	struct pomp_fd *pfd = NULL;
+	unsigned int pfdi;
 	POMP_RETURN_VAL_IF_FAILED(loop != NULL, -EINVAL, NULL);
 
 	/* Allocate our own structure */
@@ -228,8 +246,9 @@ struct pomp_fd *pomp_loop_add_pfd(struct pomp_loop *loop, intptr_t fd,
 	pfd->next = NULL;
 
 	/* Add in our own list */
-	pfd->next = loop->pfds;
-	loop->pfds = pfd;
+	pfdi = pomp_loop_index_fd(fd);
+	pfd->next = loop->pfds[pfdi];
+	loop->pfds[pfdi] = pfd;
 	loop->pfdcount++;
 
 	return pfd;
@@ -244,16 +263,19 @@ struct pomp_fd *pomp_loop_add_pfd(struct pomp_loop *loop, intptr_t fd,
 int pomp_loop_remove_pfd(struct pomp_loop *loop, struct pomp_fd *pfd)
 {
 	struct pomp_fd *prev = NULL;
+	unsigned int pfdi;
 	POMP_RETURN_ERR_IF_FAILED(loop != NULL, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(pfd != NULL, -EINVAL);
 
-	if (loop->pfds == pfd) {
+	pfdi = pomp_loop_index_fd(pfd->fd);
+
+	if (loop->pfds[pfdi] == pfd) {
 		/* This was the first in the list */
-		loop->pfds = pfd->next;
+		loop->pfds[pfdi] = pfd->next;
 		loop->pfdcount--;
 		return 0;
 	} else {
-		for (prev = loop->pfds; prev != NULL; prev = prev->next) {
+		for (prev = loop->pfds[pfdi]; prev != NULL; prev = prev->next) {
 			if (prev->next == pfd) {
 				/* Update link */
 				prev->next = pfd->next;
@@ -344,6 +366,7 @@ int pomp_loop_destroy(struct pomp_loop *loop)
 {
 	int res = 0;
 	struct pomp_fd *pfd = NULL;
+	unsigned int pfdi;
 	POMP_RETURN_ERR_IF_FAILED(loop != NULL, -EINVAL);
 
 	/* Set destruction flag */
@@ -357,13 +380,16 @@ int pomp_loop_destroy(struct pomp_loop *loop)
 	/* Detach the event */
 	pomp_evt_detach_from_loop(loop->idle_evt, loop);
 
-	if (loop->pfds) {
-		for (pfd = loop->pfds; pfd != NULL; pfd = pfd->next) {
+	for (pfdi = 0; pfdi < POMP_LOOP_PFDS_LEN; pfdi++) {
+		for (pfd = loop->pfds[pfdi]; pfd != NULL; pfd = pfd->next) {
 			POMP_LOGE("fd=%" PRIiPTR ", cb=%p still in loop",
 					pfd->fd, pfd->cb);
+			res = -EBUSY;
 		}
-		return -EBUSY;
 	}
+	if (res < 0)
+		return res;
+
 	pthread_mutex_destroy(&loop->lock);
 
 	/* Implementation specific */

@@ -56,9 +56,13 @@ struct pomp_fd {
 #endif /* POMP_HAVE_LOOP_WIN32 */
 };
 
+/** Hash table length, number of bucket/slot */
+#define POMP_LOOP_PFDS_LEN 128
+
 /** Loop structure */
 struct pomp_loop {
-	struct pomp_fd		*pfds;		/**< List of registered fds */
+	/** Array of list of registered fds */
+	struct pomp_fd		*pfds[POMP_LOOP_PFDS_LEN];
 	uint32_t		pfdcount;	/**< Number of registered fds */
 
 	struct pomp_idle_entry	*idle_entries;	/**< Last entry in the list */

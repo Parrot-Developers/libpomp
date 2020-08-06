@@ -188,6 +188,7 @@ static int pomp_loop_win32_do_wait_and_process(struct pomp_loop *loop,
 	int res = 0;
 	DWORD waitres = 0;
 	struct pomp_fd *pfd = NULL;
+	unsigned int pfdi;
 	WSANETWORKEVENTS events;
 	uint32_t revents = 0;
 
@@ -213,20 +214,23 @@ static int pomp_loop_win32_do_wait_and_process(struct pomp_loop *loop,
 
 	for (;;) {
 		/* Find a ready fd */
-		for (pfd = loop->pfds; pfd != NULL; pfd = pfd->next) {
-			if (!pfd->nofd) {
-				memset(&events, 0, sizeof(events));
-				WSAEnumNetworkEvents(pfd->fd, NULL, &events);
-				if (events.lNetworkEvents != 0) {
-					pfd->revents = fd_events_from_wsa(
-							events.lNetworkEvents);
-					break;
+		for (pfdi = 0; pfdi < POMP_LOOP_PFDS_LEN; pfdi++) {
+			for (pfd = loop->pfds[pfdi]; pfd != NULL; pfd = pfd->next) {
+				if (!pfd->nofd) {
+					memset(&events, 0, sizeof(events));
+					WSAEnumNetworkEvents(pfd->fd, NULL, &events);
+					if (events.lNetworkEvents != 0) {
+						pfd->revents = fd_events_from_wsa(
+								  events.lNetworkEvents);
+						goto found;
+					}
+				} else if (pfd->revents != 0) {
+					goto found;
 				}
-			} else if (pfd->revents != 0) {
-				break;
 			}
 		}
 
+found:
 		if (pfd == NULL)
 			break;
 
