@@ -102,7 +102,9 @@ static int pomp_loop_epoll_ctl(struct pomp_loop *loop, int op,
 	event.data.fd = pfd->fd;
 	if (epoll_ctl(loop->efd, op, pfd->fd, &event) < 0) {
 		res = -errno;
-		POMP_LOG_ERRNO("epoll_ctl");
+		POMP_LOG_FD_ERRNO("epoll_ctl", event.data.fd);
+		POMP_LOGE("epoll_ctl op=%d cb=%p userdata=%p",
+				op, pfd->cb, pfd->userdata);
 	}
 	return res;
 }
@@ -164,7 +166,7 @@ static int pomp_loop_epoll_do_new(struct pomp_loop *loop)
 	event.data.fd = loop->wakeup.fd;
 	if (epoll_ctl(loop->efd, EPOLL_CTL_ADD, loop->wakeup.fd, &event) < 0) {
 		res = -errno;
-		POMP_LOG_ERRNO("epoll_ctl");
+		POMP_LOG_FD_ERRNO("epoll_ctl add", loop->wakeup.fd);
 		goto error;
 	}
 
