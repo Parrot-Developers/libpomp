@@ -102,6 +102,7 @@ int pomp_addr_parse(const char *buf, struct sockaddr *addr, uint32_t *addrlen)
 {
 	int res = -EINVAL;
 	struct sockaddr_un *addr_un = NULL;
+	size_t path_len;
 
 	POMP_RETURN_ERR_IF_FAILED(buf != NULL, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(addr != NULL, -EINVAL);
@@ -121,10 +122,13 @@ int pomp_addr_parse(const char *buf, struct sockaddr *addr, uint32_t *addrlen)
 		/* Unix address */
 		if (*addrlen < sizeof(struct sockaddr_un))
 			goto out;
+		path_len = strlen(buf + 5) + 1;
+		if (sizeof(addr_un->sun_path) < path_len)
+			goto out;
 		addr_un = (struct sockaddr_un *)addr;
 		memset(addr_un, 0, sizeof(*addr_un));
 		addr_un->sun_family = AF_UNIX;
-		strncpy(addr_un->sun_path, buf + 5, sizeof(addr_un->sun_path));
+		memcpy(addr_un->sun_path, buf + 5, path_len);
 		if (buf[5] == '@')
 			addr_un->sun_path[0] = '\0';
 		*addrlen = (uint32_t)sizeof(*addr_un);
