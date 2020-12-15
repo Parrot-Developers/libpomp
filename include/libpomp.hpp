@@ -532,7 +532,7 @@ public:
 		return pomp_loop_wakeup(mLoop);
 	}
 
-	/** Get internal pomp_loop */
+	/** Get internal pomp_loop (cast operator) */
 	inline operator struct pomp_loop *() {
 		return mLoop;
 	}
