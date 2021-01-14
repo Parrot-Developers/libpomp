@@ -731,7 +731,7 @@ POMP_API void pomp_buffer_unref(struct pomp_buffer *buf);
  * @param buf : buffer.
  * @return 1 if the buffer is shared (ref count greater than 1), 0 otherwise.
  */
-POMP_API int pomp_buffer_is_shared(struct pomp_buffer *buf);
+POMP_API int pomp_buffer_is_shared(const struct pomp_buffer *buf);
 
 /**
  * Set the capacity of the buffer.
@@ -773,7 +773,7 @@ POMP_API int pomp_buffer_set_len(struct pomp_buffer *buf, size_t len);
  * @return 0 in case of success, negative errno value in case of error.
  * -EPERM is returned if the buffer is shared.
  */
-POMP_API int pomp_buffer_get_data(struct pomp_buffer *buf,
+POMP_API int pomp_buffer_get_data(const struct pomp_buffer *buf,
 		void **data, size_t *len, size_t *capacity);
 
 /**
@@ -784,7 +784,7 @@ POMP_API int pomp_buffer_get_data(struct pomp_buffer *buf,
  * @param capacity : capacity of buffer (optional can be NULL).
  * @return 0 in case of success, negative errno value in case of error.
  */
-POMP_API int pomp_buffer_get_cdata(struct pomp_buffer *buf,
+POMP_API int pomp_buffer_get_cdata(const struct pomp_buffer *buf,
 		const void **cdata, size_t *len, size_t *size);
 
 /**

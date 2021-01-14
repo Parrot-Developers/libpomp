@@ -279,7 +279,7 @@ void pomp_buffer_unref(struct pomp_buffer *buf)
 /*
  * See documentation in public header.
  */
-int pomp_buffer_is_shared(struct pomp_buffer *buf)
+int pomp_buffer_is_shared(const struct pomp_buffer *buf)
 {
 	return buf != NULL && buf->refcount > 1;
 }
@@ -318,7 +318,7 @@ int pomp_buffer_set_len(struct pomp_buffer *buf, size_t len)
 /*
  * See documentation in public header.
  */
-int pomp_buffer_get_data(struct pomp_buffer *buf,
+int pomp_buffer_get_data(const struct pomp_buffer *buf,
 		void **data, size_t *len, size_t *capacity)
 {
 	POMP_RETURN_ERR_IF_FAILED(buf != NULL, -EINVAL);
@@ -335,7 +335,7 @@ int pomp_buffer_get_data(struct pomp_buffer *buf,
 /*
  * See documentation in public header.
  */
-int pomp_buffer_get_cdata(struct pomp_buffer *buf,
+int pomp_buffer_get_cdata(const struct pomp_buffer *buf,
 		const void **cdata, size_t *len, size_t *capacity)
 {
 	POMP_RETURN_ERR_IF_FAILED(buf != NULL, -EINVAL);
@@ -545,7 +545,7 @@ int pomp_buffer_readb(const struct pomp_buffer *buf, size_t *pos, uint8_t *b)
  * @param fd : file descriptor to read.
  * @return 0 in case of success, negative errno value in case of error.
  */
-int pomp_buffer_read_fd(struct pomp_buffer *buf, size_t *pos, int *fd)
+int pomp_buffer_read_fd(const struct pomp_buffer *buf, size_t *pos, int *fd)
 {
 	int res = 0;
 	uint32_t i = 0;

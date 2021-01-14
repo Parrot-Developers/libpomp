@@ -77,6 +77,6 @@ int pomp_buffer_write_fd(struct pomp_buffer *buf, size_t *pos, int fd);
 
 int pomp_buffer_readb(const struct pomp_buffer *buf, size_t *pos, uint8_t *b);
 
-int pomp_buffer_read_fd(struct pomp_buffer *buf, size_t *pos, int *fd);
+int pomp_buffer_read_fd(const struct pomp_buffer *buf, size_t *pos, int *fd);
 
 #endif /* !_POMP_BUFFER_H_ */
