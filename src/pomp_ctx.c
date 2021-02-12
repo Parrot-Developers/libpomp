@@ -329,9 +329,37 @@ error:
 static void server_cb(int fd, uint32_t revents, void *userdata)
 {
 	struct pomp_ctx *ctx = userdata;
+	int res;
+	int error = 0;
+	socklen_t errorlen = sizeof(error);
+
+	if (!revents)
+		POMP_LOGE("unexpected non event(fd=%d)", ctx->u.server.fd);
+
+	if (revents & POMP_FD_EVENT_HUP)
+		POMP_LOGE("unexpected hup event(fd=%d)", ctx->u.server.fd);
+
+	if (revents & POMP_FD_EVENT_ERR) {
+		res = getsockopt(ctx->u.server.fd,
+				 SOL_SOCKET, SO_ERROR,
+				 &error, &errorlen);
+		if (res < 0)
+			POMP_LOG_FD_ERRNO("getsockopt", ctx->u.server.fd);
+		else if (errorlen != (socklen_t)sizeof(error))
+			POMP_LOGE("error event(fd=%d) err=?(?)",
+				  ctx->u.server.fd);
+		else
+			POMP_LOGE("error event(fd=%d) err=%d(%s)",
+				  ctx->u.server.fd,
+				  error, strerror(error));
+	}
+
+	if (revents & POMP_FD_EVENT_OUT)
+		POMP_LOGE("unexpected write event(fd=%d)", ctx->u.server.fd);
 
 	/* Handle incoming connection */
-	server_accept_conn(ctx);
+	if (revents & POMP_FD_EVENT_IN)
+		server_accept_conn(ctx);
 }
 
 /**
