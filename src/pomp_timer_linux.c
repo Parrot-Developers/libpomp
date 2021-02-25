@@ -53,6 +53,37 @@ static void pomp_timer_fd_cb(int fd, uint32_t revents, void *userdata)
 		res = read(timer->tfd, &val, sizeof(val));
 	} while (res < 0 && errno == EINTR);
 
+	if (res < 0) {
+		if (errno == EAGAIN)
+			POMP_LOGI("timer %p(fd=%d): err=%d(%s), ignored",
+				  timer, timer->tfd, errno, strerror(errno));
+		else
+			POMP_LOGE("timer %p(fd=%d): err=%d(%s)",
+				  timer, timer->tfd, errno, strerror(errno));
+		return;
+	}
+
+	if (!res) {
+		POMP_LOGE("timer %p(fd=%d): invalid read, EOF",
+			  timer, timer->tfd);
+		return;
+	}
+
+	if ((size_t)res != sizeof(val)) {
+		POMP_LOGE("timer %p(fd=%d): invalid read, %zu/%zu",
+			  timer, timer->tfd, (size_t)res, sizeof(val));
+		return;
+	}
+
+	if (!val) {
+		POMP_LOGE("timer %p(fd=%d): no events !",
+			  timer, timer->tfd);
+		return;
+	}
+
+	if (val > 1)
+		POMP_LOGW("timer %p: missed %" PRId64 " events",
+				timer, (int64_t)val - 1);
 	/* Notify callback */
 	(*timer->cb)(timer, timer->userdata);
 }
