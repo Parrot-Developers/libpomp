@@ -259,20 +259,41 @@ out:
 /**
  * Accept a new connection in a server context.
  * The user will be notified and the connection fd will be monitored for io.
+ * @param server_fd : file descriptor accepting connection
  * @param ctx : context.
  * @return 0 in case of success, negative errno value in case of error.
  */
-static int server_accept_conn(struct pomp_ctx *ctx)
+static int server_accept_conn(int server_fd, struct pomp_ctx *ctx)
 {
 	int res = 0;
 	int fd = -1;
 	struct pomp_conn *conn = NULL;
 
 	/* Accept connection */
-	fd = accept(ctx->u.server.fd, NULL, NULL);
+	fd = accept(server_fd, NULL, NULL);
 	if (fd < 0) {
 		res = -errno;
-		POMP_LOG_FD_ERRNO("accept", ctx->u.server.fd);
+		POMP_LOG_FD_ERRNO("accept", server_fd);
+		goto error;
+	}
+
+	if (ctx->type != POMP_CTX_TYPE_SERVER) {
+		res = 0;
+		POMP_LOGE("Invalid server context");
+		goto error;
+	}
+
+	/* Discard connection on closed ctx */
+	if (ctx->u.server.fd == -1) {
+		res = 0;
+		POMP_LOGI("Server context closed");
+		goto error;
+	}
+
+	if (ctx->u.server.fd != server_fd) {
+		res = 0;
+		POMP_LOGE("Mismatch server context fd (%d != %d)",
+			  ctx->u.server.fd, server_fd);
 		goto error;
 	}
 
@@ -334,32 +355,32 @@ static void server_cb(int fd, uint32_t revents, void *userdata)
 	socklen_t errorlen = sizeof(error);
 
 	if (!revents)
-		POMP_LOGE("unexpected non event(fd=%d)", ctx->u.server.fd);
+		POMP_LOGE("unexpected non event(fd=%d)", fd);
 
 	if (revents & POMP_FD_EVENT_HUP)
-		POMP_LOGE("unexpected hup event(fd=%d)", ctx->u.server.fd);
+		POMP_LOGE("unexpected hup event(fd=%d)", fd);
 
 	if (revents & POMP_FD_EVENT_ERR) {
-		res = getsockopt(ctx->u.server.fd,
+		res = getsockopt(fd,
 				 SOL_SOCKET, SO_ERROR,
 				 &error, &errorlen);
 		if (res < 0)
-			POMP_LOG_FD_ERRNO("getsockopt", ctx->u.server.fd);
+			POMP_LOG_FD_ERRNO("getsockopt", fd);
 		else if (errorlen != (socklen_t)sizeof(error))
 			POMP_LOGE("error event(fd=%d) err=?(?)",
-				  ctx->u.server.fd);
+				  fd);
 		else
 			POMP_LOGE("error event(fd=%d) err=%d(%s)",
-				  ctx->u.server.fd,
+				  fd,
 				  error, strerror(error));
 	}
 
 	if (revents & POMP_FD_EVENT_OUT)
-		POMP_LOGE("unexpected write event(fd=%d)", ctx->u.server.fd);
+		POMP_LOGE("unexpected write event(fd=%d)", fd);
 
 	/* Handle incoming connection */
 	if (revents & POMP_FD_EVENT_IN)
-		server_accept_conn(ctx);
+		server_accept_conn(fd, ctx);
 }
 
 /**
@@ -511,23 +532,40 @@ static int server_stop(struct pomp_ctx *ctx)
  * Complete the client connection with the server.
  * If connection is successful, user will be notified and the connection fd will
  * be monitored for io. Otherwise reconnection will be scheduled.
+ * @param client_fd : file descriptor requesting connection
  * @param ctx : context.
  * @return 0 in case of success, negative errno value in case of error.
  */
-static int client_complete_conn(struct pomp_ctx *ctx)
+static int client_complete_conn(int client_fd, struct pomp_ctx *ctx)
 {
 	int sockerr = 0;
 	socklen_t sockerrlen = 0;
 	struct pomp_conn *conn = NULL;
 
 	/* Remove fd from loop now so it can be added by connection object */
-	pomp_loop_remove(ctx->loop, ctx->u.client.fd);
+	pomp_loop_remove(ctx->loop, client_fd);
+
+	if (ctx->type != POMP_CTX_TYPE_CLIENT) {
+		POMP_LOGE("Invalid client context");
+		goto error;
+	}
+
+	if (ctx->u.client.fd == -1) {
+		POMP_LOGI("Client context closed");
+		goto error;
+	}
+
+	if (ctx->u.client.fd != client_fd) {
+		POMP_LOGE("Mismatch client context fd (%d != %d)",
+			  ctx->u.client.fd, client_fd);
+		goto error;
+	}
 
 	/* Get connection result */
 	sockerrlen = sizeof(sockerr);
-	if (getsockopt(ctx->u.client.fd, SOL_SOCKET, SO_ERROR,
+	if (getsockopt(client_fd, SOL_SOCKET, SO_ERROR,
 			(char *)&sockerr, &sockerrlen) < 0) {
-		POMP_LOG_FD_ERRNO("getsockopt.SO_ERROR", ctx->u.client.fd);
+		POMP_LOG_FD_ERRNO("getsockopt.SO_ERROR", client_fd);
 		goto reconnect;
 	}
 
@@ -538,7 +576,7 @@ static int client_complete_conn(struct pomp_ctx *ctx)
 			pomp_addr_format(buf, sizeof(buf),
 					ctx->addr, ctx->addrlen);
 			POMP_LOGE("connect(async)(fd=%d)(addr=%s) err=%d(%s)",
-					ctx->u.client.fd, buf,
+					client_fd, buf,
 					sockerr, strerror(sockerr));
 		}
 		goto reconnect;
@@ -546,10 +584,10 @@ static int client_complete_conn(struct pomp_ctx *ctx)
 
 	/* Enable keep alive for TCP/IP sockets */
 	if (POMP_IS_INET(ctx->addr->sa_family))
-		fd_socket_setup_keepalive(ctx, ctx->u.client.fd);
+		fd_socket_setup_keepalive(ctx, client_fd);
 
 	/* Allocate connection structure */
-	conn = pomp_conn_new(ctx, ctx->loop, ctx->u.client.fd, 0, ctx->israw);
+	conn = pomp_conn_new(ctx, ctx->loop, client_fd, 0, ctx->israw);
 	if (conn == NULL)
 		goto reconnect;
 
@@ -564,11 +602,16 @@ static int client_complete_conn(struct pomp_ctx *ctx)
 	/* Cleanup and reconnect in case of error */
 reconnect:
 	/* fd already removed from loop */
-	close(ctx->u.client.fd);
+	close(client_fd);
 	ctx->u.client.fd = -1;
 
 	/* Try a reconnection */
 	return pomp_timer_set(ctx->timer, POMP_CLIENT_RECONNECT_DELAY);
+
+error:
+	/* fd already removed from loop */
+	close(client_fd);
+	return 0;
 }
 
 /**
@@ -582,7 +625,7 @@ static void client_cb(int fd, uint32_t revents, void *userdata)
 	struct pomp_ctx *ctx = userdata;
 
 	/* Handle connection completion */
-	client_complete_conn(ctx);
+	client_complete_conn(fd, ctx);
 }
 
 /**
