@@ -39,6 +39,7 @@
 struct pomp_idle_entry {
 	pomp_idle_cb_t		cb;		/**< Registered callback */
 	void			*userdata;	/**< Callback user data */
+	void			*cookie;	/**< Entry cookie */
 	struct pomp_list_node	node;		/**< Entry in list */
 };
 

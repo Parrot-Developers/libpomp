@@ -1109,9 +1109,7 @@ POMP_API int pomp_loop_wakeup(struct pomp_loop *loop);
  * @param loop : loop.
  * @param cb : callback to call.
  * @param userdata : user data for callback.
- * @return 0 in case of success, negative errno value in case of error. In
- * particular it is an error to register an idle function while currently
- * registered function are being called (-EPERM will be returned).
+ * @return 0 in case of success, negative errno value in case of error.
  *
  * @remarks: this function is useful to register cleanup functions when called
  * by an fd event callback for example.
@@ -1121,6 +1119,21 @@ POMP_API int pomp_loop_wakeup(struct pomp_loop *loop);
  */
 POMP_API int pomp_loop_idle_add(struct pomp_loop *loop, pomp_idle_cb_t cb,
 		void *userdata);
+
+/**
+ * Similar to pomp_loop_idle_add but associate a cookie with the idle entry
+ * that can be used with pomp_loop_idle_remove_by_cookie or
+ * pomp_loop_idle_flush_by_cookie.
+ * @param loop : loop.
+ * @param cb : callback to call.
+ * @param userdata : user data for callback.
+ * @param cookie : cookie to better identify the idle entry.
+ * @return 0 in case of success, negative errno value in case of error.
+ */
+POMP_API int pomp_loop_idle_add_with_cookie(struct pomp_loop *loop,
+		pomp_idle_cb_t cb,
+		void *userdata,
+		void *cookie);
 
 /**
  * Unregister a function registered with pomp_loop_idle_add.
@@ -1137,6 +1150,33 @@ POMP_API int pomp_loop_idle_add(struct pomp_loop *loop, pomp_idle_cb_t cb,
  */
 POMP_API int pomp_loop_idle_remove(struct pomp_loop *loop, pomp_idle_cb_t cb,
 		void *userdata);
+
+/**
+ * Similar to pomp_loop_idle_remove but remove all idle functions registered
+ * with the given cookie.
+ * @param loop : loop.
+ * @param cookie : cookie given in pomp_loop_idle_add_with_cookie.
+ * @return 0 in case of success, negative errno value in case of error.
+ */
+POMP_API int pomp_loop_idle_remove_by_cookie(struct pomp_loop *loop,
+		void *cookie);
+
+/**
+ * Flush idle entries. Calls all pending idles.
+ *
+ * @param loop : loop.
+ * @return 0 in case of success, negative errno value in case of error.
+ */
+POMP_API int pomp_loop_idle_flush(struct pomp_loop *loop);
+
+/**
+ * Similar to pomp_loop_idle_flush but with a filter on the cookie.
+ * @param loop : loop.
+ * @param cookie : cookie given in pomp_loop_idle_add.
+ * @return 0 in case of success, negative errno value in case of error.
+ */
+POMP_API int pomp_loop_idle_flush_by_cookie(struct pomp_loop *loop,
+		void *cookie);
 
 /*
  * Event API.

@@ -453,11 +453,23 @@ static void idle_cb(void *userdata)
 	}
 }
 
+static __attribute__((noinline)) void idle_cb1(void *userdata)
+{
+	idle_cb(userdata);
+}
+
+static __attribute__((noinline)) void idle_cb2(void *userdata)
+{
+	idle_cb(userdata);
+}
+
 /** */
 static void test_loop_idle(void)
 {
 	int res = 0;
 	struct idle_data data = {NULL, 0, 0, 0, 0};
+	struct idle_data data1 = {NULL, 0, 0, 0, 0};
+	struct idle_data data2 = {NULL, 0, 0, 0, 0};
 
 	/* Create loop */
 	data.loop = pomp_loop_new();
@@ -529,12 +541,136 @@ static void test_loop_idle(void)
 	res = pomp_loop_wait_and_process(data.loop, 0);
 	CU_ASSERT_EQUAL(res, -ETIMEDOUT);
 
+	data1 = data;
+	data2 = data;
+
+	data1.n = 0;
+	data1.recursion_cnt = 0;
+	data1.recursion_rm_cnt = 0;
+	data2.n = 0;
+	data2.recursion_cnt = 0;
+	data2.recursion_rm_cnt = 0;
+	res = pomp_loop_idle_add(data.loop, &idle_cb1, &data1);
+	CU_ASSERT_EQUAL(res, 0);
+	res = pomp_loop_idle_add(data.loop, &idle_cb2, &data2);
+	CU_ASSERT_EQUAL(res, 0);
+	res = pomp_loop_wait_and_process(data.loop, 0);
+	CU_ASSERT_EQUAL(res, 0);
+	res = pomp_loop_wait_and_process(data.loop, 0);
+	CU_ASSERT_EQUAL(res, 0);
+	CU_ASSERT_EQUAL(data1.n, 1);
+	CU_ASSERT_EQUAL(data2.n, 1);
+
+	/* Check pomp_loop_idle_add_with_cookie */
+	data1.n = 0;
+	data1.recursion_cnt = 0;
+	data1.recursion_rm_cnt = 0;
+	data2.n = 0;
+	data2.recursion_cnt = 0;
+	data2.recursion_rm_cnt = 0;
+	res = pomp_loop_idle_add_with_cookie(data.loop, &idle_cb1, &data1, &data1.n);
+	CU_ASSERT_EQUAL(res, 0);
+	res = pomp_loop_idle_add_with_cookie(data.loop, &idle_cb2, &data2, &data2.n);
+	CU_ASSERT_EQUAL(res, 0);
+	res = pomp_loop_wait_and_process(data.loop, 0);
+	CU_ASSERT_EQUAL(res, 0);
+	CU_ASSERT_EQUAL(data1.n, 1);
+	CU_ASSERT_EQUAL(data2.n, 0);
+	res = pomp_loop_wait_and_process(data.loop, 0);
+	CU_ASSERT_EQUAL(res, 0);
+	CU_ASSERT_EQUAL(data1.n, 1);
+	CU_ASSERT_EQUAL(data2.n, 1);
+	res = pomp_loop_wait_and_process(data.loop, 0);
+	CU_ASSERT_EQUAL(res, -ETIMEDOUT);
+	CU_ASSERT_EQUAL(data1.n, 1);
+	CU_ASSERT_EQUAL(data2.n, 1);
+
+	/* Check pomp_loop_idle_remove_by_cookie */
+	data1.n = 0;
+	data1.recursion_cnt = 0;
+	data1.recursion_rm_cnt = 0;
+	data2.n = 0;
+	data2.recursion_cnt = 0;
+	data2.recursion_rm_cnt = 0;
+	res = pomp_loop_idle_add_with_cookie(data.loop, &idle_cb1, &data1, &data1.n);
+	CU_ASSERT_EQUAL(res, 0);
+	res = pomp_loop_idle_add_with_cookie(data.loop, &idle_cb2, &data2, &data2.n);
+	CU_ASSERT_EQUAL(res, 0);
+	res = pomp_loop_idle_remove_by_cookie(data.loop, &data1.n);
+	CU_ASSERT_EQUAL(res, 0);
+	res = pomp_loop_wait_and_process(data.loop, 0);
+	CU_ASSERT_EQUAL(res, 0);
+	CU_ASSERT_EQUAL(data1.n, 0);
+	CU_ASSERT_EQUAL(data2.n, 1);
+	res = pomp_loop_idle_remove_by_cookie(data.loop, &data2.n);
+	CU_ASSERT_EQUAL(res, 0);
+	res = pomp_loop_wait_and_process(data.loop, 0);
+	CU_ASSERT_EQUAL(res, -ETIMEDOUT);
+	CU_ASSERT_EQUAL(data1.n, 0);
+	CU_ASSERT_EQUAL(data2.n, 1);
+
+	/* Check pomp_loop_idle_flush */
+	data1.n = 0;
+	data1.recursion_cnt = 0;
+	data1.recursion_rm_cnt = 0;
+	data2.n = 0;
+	data2.recursion_cnt = 0;
+	data2.recursion_rm_cnt = 0;
+	res = pomp_loop_idle_add(data.loop, &idle_cb1, &data1);
+	CU_ASSERT_EQUAL(res, 0);
+	res = pomp_loop_idle_add(data.loop, &idle_cb2, &data2);
+	CU_ASSERT_EQUAL(res, 0);
+	res = pomp_loop_idle_flush(data.loop);
+	CU_ASSERT_EQUAL(res, 0);
+	CU_ASSERT_EQUAL(data1.n, 1);
+	CU_ASSERT_EQUAL(data2.n, 1);
+	res = pomp_loop_wait_and_process(data.loop, 0);
+	CU_ASSERT_EQUAL(res, -ETIMEDOUT);
+
+	/* Check pomp_loop_idle_flush_by_cookie */
+	data1.n = 0;
+	data1.recursion_cnt = 0;
+	data1.recursion_rm_cnt = 0;
+	data2.n = 0;
+	data2.recursion_cnt = 0;
+	data2.recursion_rm_cnt = 0;
+	res = pomp_loop_idle_add_with_cookie(data.loop, &idle_cb1, &data1, &data1.n);
+	CU_ASSERT_EQUAL(res, 0);
+	res = pomp_loop_idle_add_with_cookie(data.loop, &idle_cb2, &data2, &data2.n);
+	CU_ASSERT_EQUAL(res, 0);
+	res = pomp_loop_idle_flush_by_cookie(data.loop, &data1.n);
+	CU_ASSERT_EQUAL(res, 0);
+	CU_ASSERT_EQUAL(data1.n, 1);
+	CU_ASSERT_EQUAL(data2.n, 0);
+	res = pomp_loop_idle_remove_by_cookie(data.loop, &data2.n);
+	CU_ASSERT_EQUAL(res, 0);
+	res = pomp_loop_wait_and_process(data.loop, 0);
+	CU_ASSERT_EQUAL(res, -ETIMEDOUT);
+	CU_ASSERT_EQUAL(data1.n, 1);
+	CU_ASSERT_EQUAL(data2.n, 0);
+
 	/* Check invalid parameters */
 	res = pomp_loop_idle_add(NULL, &idle_cb, &data);
 	CU_ASSERT_EQUAL(res, -EINVAL);
 	res = pomp_loop_idle_add(data.loop, NULL, &data);
 	CU_ASSERT_EQUAL(res, -EINVAL);
+	res = pomp_loop_idle_add_with_cookie(NULL, &idle_cb, &data, &data.n);
+	CU_ASSERT_EQUAL(res, -EINVAL);
+	res = pomp_loop_idle_add_with_cookie(data.loop, NULL, &data, &data.n);
+	CU_ASSERT_EQUAL(res, -EINVAL);
+	res = pomp_loop_idle_add_with_cookie(data.loop, &idle_cb, &data, NULL);
+	CU_ASSERT_EQUAL(res, -EINVAL);
 	res = pomp_loop_idle_remove(NULL, &idle_cb, &data);
+	CU_ASSERT_EQUAL(res, -EINVAL);
+	res = pomp_loop_idle_remove_by_cookie(NULL, &data.n);
+	CU_ASSERT_EQUAL(res, -EINVAL);
+	res = pomp_loop_idle_remove_by_cookie(data.loop, NULL);
+	CU_ASSERT_EQUAL(res, -EINVAL);
+	res = pomp_loop_idle_flush(NULL);
+	CU_ASSERT_EQUAL(res, -EINVAL);
+	res = pomp_loop_idle_flush_by_cookie(NULL, &data.n);
+	CU_ASSERT_EQUAL(res, -EINVAL);
+	res = pomp_loop_idle_flush_by_cookie(data.loop, NULL);
 	CU_ASSERT_EQUAL(res, -EINVAL);
 
 	/* Check register function is called by the destroy of the loop.

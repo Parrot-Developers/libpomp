@@ -148,40 +148,6 @@ static int pomp_loop_do_wakeup(struct pomp_loop *loop)
 }
 
 /**
- * Flush idle entries.
- * Calls all pending idles.
- *
- * @param loop : loop.
- * @return 0 in case of success, negative errno value in case of error.
- */
-static int pomp_loop_idle_flush(struct pomp_loop *loop)
-{
-	struct pomp_list_node *node = NULL;
-	struct pomp_idle_entry *entry = NULL;
-	POMP_RETURN_ERR_IF_FAILED(loop != NULL, -EINVAL);
-
-	pthread_mutex_lock(&loop->lock);
-
-	/* While there are still entries in the idle-list */
-	while (!pomp_list_is_empty(&loop->idle_entries)) {
-		/* Remove the first entry */
-		node = pomp_list_first(&loop->idle_entries);
-		entry = pomp_list_entry(node, struct pomp_idle_entry, node);
-		pomp_list_remove(node);
-
-		/* Call callback outside lock */
-		pthread_mutex_unlock(&loop->lock);
-		(*entry->cb)(entry->userdata);
-		free(entry);
-		pthread_mutex_lock(&loop->lock);
-	}
-
-	pthread_mutex_unlock(&loop->lock);
-
-	return 0;
-}
-
-/**
  * Return hash table index for given file descriptor
  * @param fd : fd to hash
  * @return an index in loop->pfds[]
@@ -292,7 +258,6 @@ static void pomp_idle_evt_cb(struct pomp_evt *evt, void *userdata)
 	struct pomp_list_node *node = NULL;
 	struct pomp_idle_entry *entry = NULL;
 	POMP_RETURN_IF_FAILED(loop != NULL, -EINVAL);
-
 
 	pthread_mutex_lock(&loop->lock);
 	if (pomp_list_is_empty(&loop->idle_entries)) {
@@ -584,6 +549,44 @@ int pomp_loop_idle_add(struct pomp_loop *loop, pomp_idle_cb_t cb,
 	/* Initialize entry */
 	entry->cb = cb;
 	entry->userdata = userdata;
+	entry->cookie = NULL;
+
+	pthread_mutex_lock(&loop->lock);
+
+	/* Put at the back of the list */
+	pomp_list_add_tail(&loop->idle_entries, &entry->node);
+
+	pthread_mutex_unlock(&loop->lock);
+
+	/* Force loop wake up */
+	res = pomp_evt_signal(loop->idle_evt);
+	if (res < 0)
+		POMP_LOGE("pomp_evt_signal err=%d(%s)", -res, strerror(-res));
+
+	return 0;
+}
+
+/*
+ * See documentation in public header.
+ */
+int pomp_loop_idle_add_with_cookie(struct pomp_loop *loop, pomp_idle_cb_t cb,
+		void *userdata, void *cookie)
+{
+	int res;
+	struct pomp_idle_entry *entry = NULL;
+	POMP_RETURN_ERR_IF_FAILED(loop != NULL, -EINVAL);
+	POMP_RETURN_ERR_IF_FAILED(cb != NULL, -EINVAL);
+	POMP_RETURN_ERR_IF_FAILED(cookie != NULL, -EINVAL);
+	POMP_RETURN_ERR_IF_FAILED(!loop->is_destroying, -EPERM);
+
+	/* Allocate entry */
+	entry = calloc(1, sizeof(*entry));
+	if (entry == NULL)
+		return -ENOMEM;
+	/* Initialize entry */
+	entry->cb = cb;
+	entry->userdata = userdata;
+	entry->cookie = cookie;
 
 	pthread_mutex_lock(&loop->lock);
 
@@ -618,6 +621,108 @@ int pomp_loop_idle_remove(struct pomp_loop *loop, pomp_idle_cb_t cb,
 		if (entry->cb == cb && entry->userdata == userdata) {
 			pomp_list_remove(node);
 			free(entry);
+		}
+	}
+
+	if (pomp_list_is_empty(&loop->idle_entries))
+		pomp_evt_clear(loop->idle_evt);
+
+	pthread_mutex_unlock(&loop->lock);
+
+	return 0;
+}
+
+/*
+ * See documentation in public header.
+ */
+int pomp_loop_idle_remove_by_cookie(struct pomp_loop *loop, void *cookie)
+{
+	struct pomp_list_node *node = NULL, *tmp = NULL;
+	struct pomp_idle_entry *entry = NULL;
+	POMP_RETURN_ERR_IF_FAILED(loop != NULL, -EINVAL);
+	POMP_RETURN_ERR_IF_FAILED(cookie != NULL, -EINVAL);
+
+	pthread_mutex_lock(&loop->lock);
+
+	/* Walk entries to remove all corresponding ones. */
+	pomp_list_walk_forward_safe(&loop->idle_entries, node, tmp) {
+		entry = pomp_list_entry(node, struct pomp_idle_entry, node);
+		if (entry->cookie == cookie) {
+			pomp_list_remove(node);
+			free(entry);
+		}
+	}
+
+	if (pomp_list_is_empty(&loop->idle_entries))
+		pomp_evt_clear(loop->idle_evt);
+
+	pthread_mutex_unlock(&loop->lock);
+
+	return 0;
+}
+
+/*
+ * See documentation in public header.
+ */
+int pomp_loop_idle_flush(struct pomp_loop *loop)
+{
+	struct pomp_list_node *node = NULL;
+	struct pomp_idle_entry *entry = NULL;
+	POMP_RETURN_ERR_IF_FAILED(loop != NULL, -EINVAL);
+
+	pthread_mutex_lock(&loop->lock);
+
+	/* While there are still entries in the idle-list */
+	while (!pomp_list_is_empty(&loop->idle_entries)) {
+		/* Remove the first entry */
+		node = pomp_list_first(&loop->idle_entries);
+		entry = pomp_list_entry(node, struct pomp_idle_entry, node);
+		pomp_list_remove(node);
+
+		/* Call callback outside lock */
+		pthread_mutex_unlock(&loop->lock);
+		(*entry->cb)(entry->userdata);
+		free(entry);
+		pthread_mutex_lock(&loop->lock);
+	}
+
+	pomp_evt_clear(loop->idle_evt);
+
+	pthread_mutex_unlock(&loop->lock);
+
+	return 0;
+}
+
+/*
+ * See documentation in public header.
+ */
+int pomp_loop_idle_flush_by_cookie(struct pomp_loop *loop,
+		void *cookie)
+{
+	struct pomp_list_node *node = NULL, *tmp = NULL;
+	struct pomp_idle_entry *entry = NULL;
+	POMP_RETURN_ERR_IF_FAILED(loop != NULL, -EINVAL);
+	POMP_RETURN_ERR_IF_FAILED(cookie != NULL, -EINVAL);
+
+	pthread_mutex_lock(&loop->lock);
+
+	/* Walk entries to remove all corresponding ones. */
+again:
+	pomp_list_walk_forward_safe(&loop->idle_entries, node, tmp) {
+		entry = pomp_list_entry(node, struct pomp_idle_entry, node);
+		if (entry->cookie == cookie) {
+			pomp_list_remove(node);
+
+			/* Call callback outside lock */
+			pthread_mutex_unlock(&loop->lock);
+			(*entry->cb)(entry->userdata);
+			free(entry);
+			pthread_mutex_lock(&loop->lock);
+
+			/* As soon as a callback is called outside lock, we need
+			 * to start again the walk from the start in case the
+			 * list was modified */
+			goto again;
 		}
 	}
 
