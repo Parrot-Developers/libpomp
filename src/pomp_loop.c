@@ -156,27 +156,24 @@ static int pomp_loop_do_wakeup(struct pomp_loop *loop)
  */
 static int pomp_loop_idle_flush(struct pomp_loop *loop)
 {
-	struct pomp_idle_entry *entry;
+	struct pomp_list_node *node = NULL;
+	struct pomp_idle_entry *entry = NULL;
 	POMP_RETURN_ERR_IF_FAILED(loop != NULL, -EINVAL);
 
 	pthread_mutex_lock(&loop->lock);
 
 	/* While there are still entries in the idle-list */
-	while (loop->idle_entries != NULL) {
-		/* Take the first element */
-		entry = loop->idle_entries->next;
-		/* Was it also the last element? */
-		if (entry == loop->idle_entries)
-			loop->idle_entries = NULL;
-		else
-			loop->idle_entries->next = entry->next;
+	while (!pomp_list_is_empty(&loop->idle_entries)) {
+		/* Remove the first entry */
+		node = pomp_list_first(&loop->idle_entries);
+		entry = pomp_list_entry(node, struct pomp_idle_entry, node);
+		pomp_list_remove(node);
 
+		/* Call callback outside lock */
 		pthread_mutex_unlock(&loop->lock);
 		(*entry->cb)(entry->userdata);
 		free(entry);
 		pthread_mutex_lock(&loop->lock);
-
-	/* If entry was the last element, stop the loop */
 	}
 
 	pthread_mutex_unlock(&loop->lock);
@@ -292,31 +289,29 @@ int pomp_loop_remove_pfd(struct pomp_loop *loop, struct pomp_fd *pfd)
 static void pomp_idle_evt_cb(struct pomp_evt *evt, void *userdata)
 {
 	struct pomp_loop *loop = userdata;
-	struct pomp_idle_entry *entry;
+	struct pomp_list_node *node = NULL;
+	struct pomp_idle_entry *entry = NULL;
 	POMP_RETURN_IF_FAILED(loop != NULL, -EINVAL);
 
 
 	pthread_mutex_lock(&loop->lock);
-	if (loop->idle_entries == NULL) {
+	if (pomp_list_is_empty(&loop->idle_entries)) {
 		pthread_mutex_unlock(&loop->lock);
 		return;
 	}
 
-	/* Point to first entry */
-	entry = loop->idle_entries->next;
-
 	/* Remove the first entry */
-	if (entry == loop->idle_entries)
-		loop->idle_entries = NULL;
-	else
-		loop->idle_entries->next = entry->next;
+	node = pomp_list_first(&loop->idle_entries);
+	entry = pomp_list_entry(node, struct pomp_idle_entry, node);
+	pomp_list_remove(node);
 
+	/* Call callback outside lock */
 	pthread_mutex_unlock(&loop->lock);
 	(*entry->cb)(entry->userdata);
 	free(entry);
 	pthread_mutex_lock(&loop->lock);
 
-	if (loop->idle_entries != NULL)
+	if (!pomp_list_is_empty(&loop->idle_entries))
 		pomp_evt_signal(loop->idle_evt);
 
 	pthread_mutex_unlock(&loop->lock);
@@ -342,7 +337,7 @@ struct pomp_loop *pomp_loop_new(void)
 	}
 
 	pthread_mutex_init(&loop->lock, NULL);
-	loop->idle_entries = NULL;
+	pomp_list_init(&loop->idle_entries);
 	loop->idle_evt = pomp_evt_new();
 	if (loop->idle_evt == NULL)
 		goto error;
@@ -577,31 +572,23 @@ int pomp_loop_idle_add(struct pomp_loop *loop, pomp_idle_cb_t cb,
 		void *userdata)
 {
 	int res;
-	struct pomp_idle_entry *newentry = NULL, *rear_entry = NULL;
+	struct pomp_idle_entry *entry = NULL;
 	POMP_RETURN_ERR_IF_FAILED(loop != NULL, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(cb != NULL, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(!loop->is_destroying, -EPERM);
 
 	/* Allocate entry */
-	newentry = calloc(1, sizeof(*newentry));
-	if (newentry == NULL)
+	entry = calloc(1, sizeof(*entry));
+	if (entry == NULL)
 		return -ENOMEM;
 	/* Initialize entry */
-	newentry->cb = cb;
-	newentry->userdata = userdata;
+	entry->cb = cb;
+	entry->userdata = userdata;
 
 	pthread_mutex_lock(&loop->lock);
 
 	/* Put at the back of the list */
-	rear_entry = loop->idle_entries;
-	loop->idle_entries = newentry;
-	/* Make sure next pointer of the last entry targets the first one */
-	if (rear_entry == NULL) {
-		newentry->next = newentry;
-	} else {
-		newentry->next = rear_entry->next;
-		rear_entry->next = newentry;
-	}
+	pomp_list_add_tail(&loop->idle_entries, &entry->node);
 
 	pthread_mutex_unlock(&loop->lock);
 
@@ -619,33 +606,22 @@ int pomp_loop_idle_add(struct pomp_loop *loop, pomp_idle_cb_t cb,
 int pomp_loop_idle_remove(struct pomp_loop *loop, pomp_idle_cb_t cb,
 		void *userdata)
 {
-	struct pomp_idle_entry *entry = NULL, *prev_entry = NULL;
+	struct pomp_list_node *node = NULL, *tmp = NULL;
+	struct pomp_idle_entry *entry = NULL;
 	POMP_RETURN_ERR_IF_FAILED(loop != NULL, -EINVAL);
 
 	pthread_mutex_lock(&loop->lock);
 
 	/* Walk entries to remove all corresponding ones. */
-	prev_entry = loop->idle_entries;
-	while (loop->idle_entries != entry) {
-		entry = prev_entry->next;
+	pomp_list_walk_forward_safe(&loop->idle_entries, node, tmp) {
+		entry = pomp_list_entry(node, struct pomp_idle_entry, node);
 		if (entry->cb == cb && entry->userdata == userdata) {
-			/* Unlink entry from list */
-			prev_entry->next = entry->next;
+			pomp_list_remove(node);
 			free(entry);
-			/* Was it the last entry? */
-			if (loop->idle_entries == entry) {
-				/* Only entry remaining in the list? */
-				if (prev_entry == entry)
-					loop->idle_entries = entry = NULL;
-				else
-					loop->idle_entries = entry = prev_entry;
-			}
-		} else {
-			prev_entry = entry;
 		}
 	}
 
-	if (loop->idle_entries == NULL)
+	if (pomp_list_is_empty(&loop->idle_entries))
 		pomp_evt_clear(loop->idle_evt);
 
 	pthread_mutex_unlock(&loop->lock);

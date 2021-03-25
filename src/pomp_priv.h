@@ -126,6 +126,7 @@
 
 #include "pomp_log.h"
 #include "pomp_buffer.h"
+#include "pomp_list.h"
 #include "pomp_evt.h"
 #include "pomp_timer.h"
 #include "pomp_loop.h"

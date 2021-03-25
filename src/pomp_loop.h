@@ -39,7 +39,7 @@
 struct pomp_idle_entry {
 	pomp_idle_cb_t		cb;		/**< Registered callback */
 	void			*userdata;	/**< Callback user data */
-	struct pomp_idle_entry	*next;		/**< Next idle entry */
+	struct pomp_list_node	node;		/**< Entry in list */
 };
 
 /** Fd structure */
@@ -65,7 +65,7 @@ struct pomp_loop {
 	struct pomp_fd		*pfds[POMP_LOOP_PFDS_LEN];
 	uint32_t		pfdcount;	/**< Number of registered fds */
 
-	struct pomp_idle_entry	*idle_entries;	/**< Last entry in the list */
+	struct pomp_list_node	idle_entries;	/**< Idle entries */
 	struct pomp_evt		*idle_evt;	/**<  */
 	int			is_destroying;	/**< Destruction Flag */
 
