@@ -673,17 +673,19 @@ static void test_loop_idle(void)
 	res = pomp_loop_idle_flush_by_cookie(data.loop, NULL);
 	CU_ASSERT_EQUAL(res, -EINVAL);
 
-	/* Check register function is called by the destroy of the loop.
-	   Check idle add in destroying loop return -EPERM */
+	/* Idle cb not called during destroy, and EBUSY returned */
 	data.n = 0;
-	data.isdestroying = 1;
-	data.recursion_cnt = 1;
+	data.recursion_cnt = 0;
+	data.recursion_rm_cnt = 0;
 	res = pomp_loop_idle_add(data.loop, &idle_cb, &data);
 	CU_ASSERT_EQUAL(res, 0);
-	/* Destroy loop */
+	res = pomp_loop_destroy(data.loop);
+	CU_ASSERT_EQUAL(res, -EBUSY);
+	CU_ASSERT_EQUAL(data.n, 0);
+	res = pomp_loop_idle_remove(data.loop, &idle_cb, &data);
+	CU_ASSERT_EQUAL(res, 0);
 	res = pomp_loop_destroy(data.loop);
 	CU_ASSERT_EQUAL(res, 0);
-	CU_ASSERT_EQUAL(data.n, 1);
 }
 
 /** */

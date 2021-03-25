@@ -325,20 +325,29 @@ error:
 int pomp_loop_destroy(struct pomp_loop *loop)
 {
 	int res = 0;
+	struct pomp_list_node *node = NULL;
+	struct pomp_idle_entry *entry = NULL;
 	struct pomp_fd *pfd = NULL;
 	unsigned int pfdi;
 	POMP_RETURN_ERR_IF_FAILED(loop != NULL, -EINVAL);
 
+	/* Detach the event for idle entries */
+	if (!loop->is_destroying)
+		pomp_evt_detach_from_loop(loop->idle_evt, loop);
+
 	/* Set destruction flag */
 	loop->is_destroying = 1;
 
-	/* Call idle entries */
-	res = pomp_loop_idle_flush(loop);
-	if (res < 0)
-		return res;
-
-	/* Detach the event */
-	pomp_evt_detach_from_loop(loop->idle_evt, loop);
+	/* Check for remaining idle entries. calling flush here is not safe
+	 * associated callbacks and userdata may have been destroyed already
+	 * pomp_loop_idle_flush should be called explicitely before when safe.
+	 */
+	pomp_list_walk_forward(&loop->idle_entries, node) {
+		entry = pomp_list_entry(node, struct pomp_idle_entry, node);
+		POMP_LOGE("idle entry cb=%p userdata=%p still in the loop",
+				entry->cb, entry->userdata);
+		res = -EBUSY;
+	}
 
 	for (pfdi = 0; pfdi < POMP_LOOP_PFDS_LEN; pfdi++) {
 		for (pfd = loop->pfds[pfdi]; pfd != NULL; pfd = pfd->next) {
@@ -347,6 +356,7 @@ int pomp_loop_destroy(struct pomp_loop *loop)
 			res = -EBUSY;
 		}
 	}
+
 	if (res < 0)
 		return res;
 
