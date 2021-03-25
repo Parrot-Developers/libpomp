@@ -71,6 +71,7 @@ struct pomp_loop {
 	int			is_destroying;	/**< Destruction Flag */
 
 	pthread_mutex_t		lock;
+	struct pomp_watchdog	watchdog;	/**< Watchdog */
 
 #ifdef POMP_HAVE_LOOP_POLL
 	struct pollfd		*pollfds;	/**< Array of pollfd */

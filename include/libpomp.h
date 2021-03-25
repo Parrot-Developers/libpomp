@@ -245,6 +245,13 @@ typedef void (*pomp_timer_cb_t) (struct pomp_timer *timer, void *userdata);
  */
 typedef void (*pomp_idle_cb_t)(void *userdata);
 
+/**
+ * Watchdog callback
+ * @param loop: associated loop.
+ * @param userdata : callback user data.
+ */
+typedef void (*pomp_watchdog_cb_t)(struct pomp_loop *loop, void *userdata);
+
 /*
  * Context API.
  */
@@ -1177,6 +1184,34 @@ POMP_API int pomp_loop_idle_flush(struct pomp_loop *loop);
  */
 POMP_API int pomp_loop_idle_flush_by_cookie(struct pomp_loop *loop,
 		void *cookie);
+
+/**
+ * Enable watchdog on the loop. If the dispatch of the events on the loop takes
+ * longer than the given delay, the given function will be called
+ * (in an internal thread) to notify that processing is stuck.
+ * @param loop : loop.
+ * @param delay : maximum time (in ms allowed for the processing of events)
+ * @param cb :  function to call when the processing took too long.
+ * @param userdata : user data for the callback.
+ * @return 0 in case of success, negative errno value in case of error.
+ *
+ * @remarks: the function is called in the context of an internal thread and
+ * should therefore nor call other functions of the library. The intent is to
+ * provide a way to log something or kill the offending process.
+ * @remarks: it should be called only once before caling once of the 'process'
+ * functions.
+ */
+POMP_API int pomp_loop_watchdog_enable(struct pomp_loop *loop,
+		uint32_t delay,
+		pomp_watchdog_cb_t cb,
+		void *userdata);
+
+/**
+ * Disable the watchdog on the loop.
+ * @param loop : loop.
+ * @return 0 in case of success, negative errno value in case of error.
+ */
+POMP_API int pomp_loop_watchdog_disable(struct pomp_loop *loop);
 
 /*
  * Event API.

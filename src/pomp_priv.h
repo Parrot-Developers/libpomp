@@ -122,6 +122,10 @@
 #  define POMP_TIMER_POSIX_SIGNO	SIGRTMIN
 #endif /* POMP_TIMER_POSIX_SIGNO */
 
+#ifdef __linux__
+#  define POMP_HAVE_WATCHDOG
+#endif /* __linux__ */
+
 #include "libpomp.h"
 
 #include "pomp_log.h"
@@ -129,6 +133,7 @@
 #include "pomp_list.h"
 #include "pomp_evt.h"
 #include "pomp_timer.h"
+#include "pomp_watchdog.h"
 #include "pomp_loop.h"
 #include "pomp_prot.h"
 

@@ -38,7 +38,8 @@ LOCAL_SRC_FILES := \
 	src/pomp_loop.c \
 	src/pomp_msg.c \
 	src/pomp_prot.c \
-	src/pomp_timer.c
+	src/pomp_timer.c \
+	src/pomp_watchdog.c \
 
 ifeq ("$(TARGET_OS)","windows")
   LOCAL_LDLIBS += -lws2_32

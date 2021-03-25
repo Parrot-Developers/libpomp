@@ -688,6 +688,87 @@ static void test_loop_idle(void)
 	CU_ASSERT_EQUAL(res, 0);
 }
 
+#ifdef POMP_HAVE_WATCHDOG
+
+/** */
+struct watchdog_data {
+	struct pomp_loop  *loop;
+	int               sleep_value;
+	int               expired;
+};
+
+static void watchdog_cb(struct pomp_loop *loop, void *userdata)
+{
+	struct watchdog_data *data = userdata;
+	data->expired++;
+}
+
+static void watchdog_evt_cb(struct pomp_evt *evt, void *userdata)
+{
+	struct watchdog_data *data = userdata;
+	if (data->sleep_value > 0)
+		usleep(data->sleep_value * 1000);
+}
+
+/** */
+static void test_loop_watchdog(void)
+{
+	int res = 0;
+	struct watchdog_data data = {NULL, 0, 0};
+	struct pomp_evt *evt = NULL;
+
+	/* Create loop and event */
+	data.loop = pomp_loop_new();
+	CU_ASSERT_PTR_NOT_NULL_FATAL(data.loop);
+	evt = pomp_evt_new();
+	CU_ASSERT_PTR_NOT_NULL_FATAL(evt);
+	res = pomp_evt_attach_to_loop(evt, data.loop, &watchdog_evt_cb, &data);
+	CU_ASSERT_EQUAL(res, 0);
+	res = pomp_loop_watchdog_enable(data.loop, 500, &watchdog_cb, &data);
+	CU_ASSERT_EQUAL(res, 0);
+
+	/* Normal processing time */
+	data.sleep_value = 100;
+	data.expired = 0;
+	res = pomp_evt_signal(evt);
+	CU_ASSERT_EQUAL(res, 0);
+	res = pomp_loop_wait_and_process(data.loop, -1);
+	CU_ASSERT_EQUAL(res, 0);
+	CU_ASSERT_EQUAL(data.expired, 0);
+
+	/* Excessive processing time (watchdog should trigger only once) */
+	data.sleep_value = 1500;
+	data.expired = 0;
+	res = pomp_evt_signal(evt);
+	CU_ASSERT_EQUAL(res, 0);
+	res = pomp_loop_wait_and_process(data.loop, -1);
+	CU_ASSERT_EQUAL(res, 0);
+	CU_ASSERT_EQUAL(data.expired, 1);
+
+	/* Disable watchdog */
+	res = pomp_loop_watchdog_disable(data.loop);
+	CU_ASSERT_EQUAL(res, 0);
+
+	/* Excessive processing time (watchdog should not trigger) */
+	data.sleep_value = 1500;
+	data.expired = 0;
+	res = pomp_evt_signal(evt);
+	CU_ASSERT_EQUAL(res, 0);
+	res = pomp_loop_wait_and_process(data.loop, -1);
+	CU_ASSERT_EQUAL(res, 0);
+	CU_ASSERT_EQUAL(data.expired, 0);
+
+	/* Cleanup */
+	res = pomp_evt_detach_from_loop(evt, data.loop);
+	CU_ASSERT_EQUAL(res, 0);
+	res = pomp_evt_destroy(evt);
+	CU_ASSERT_EQUAL(res, 0);
+	res = pomp_loop_destroy(data.loop);
+	CU_ASSERT_EQUAL(res, 0);
+}
+
+#endif /* POMP_HAVE_WATCHDOG */
+
 /** */
 #ifdef POMP_HAVE_LOOP_EPOLL
 static void test_loop_epoll(void)
@@ -697,6 +778,9 @@ static void test_loop_epoll(void)
 	test_loop(1);
 	test_loop_wakeup();
 	test_loop_idle();
+#ifdef POMP_HAVE_WATCHDOG
+	test_loop_watchdog();
+#endif /* POMP_HAVE_WATCHDOG */
 	pomp_loop_set_ops(loop_ops);
 }
 #endif /* POMP_HAVE_LOOP_EPOLL */
@@ -710,6 +794,9 @@ static void test_loop_poll(void)
 	test_loop(0);
 	test_loop_wakeup();
 	test_loop_idle();
+#ifdef POMP_HAVE_WATCHDOG
+	test_loop_watchdog();
+#endif /* POMP_HAVE_WATCHDOG */
 	pomp_loop_set_ops(loop_ops);
 }
 #endif /* POMP_HAVE_LOOP_POLL */
@@ -723,6 +810,9 @@ static void test_loop_win32(void)
 	test_loop();
 	test_loop_wakeup();
 	test_loop_idle();
+#ifdef POMP_HAVE_WATCHDOG
+	test_loop_watchdog();
+#endif /* POMP_HAVE_WATCHDOG */
 	pomp_loop_set_ops(loop_ops);
 }
 #endif /* POMP_HAVE_LOOP_WIN32 */

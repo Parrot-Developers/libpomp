@@ -267,6 +267,8 @@ static int pomp_loop_epoll_do_wait_and_process(struct pomp_loop *loop,
 		return res;
 	}
 
+	pomp_watchdog_enter(&loop->watchdog);
+
 	/* Process events */
 	nevents = (uint32_t)res;
 	for (i = 0; i < nevents; i++) {
@@ -285,6 +287,8 @@ static int pomp_loop_epoll_do_wait_and_process(struct pomp_loop *loop,
 		if (pfd != NULL)
 			(*pfd->cb)(pfd->fd, revents, pfd->userdata);
 	}
+
+	pomp_watchdog_leave(&loop->watchdog);
 
 	return timeout == -1 ? 0 : (nevents > 0 ? 0 : -ETIMEDOUT);
 }

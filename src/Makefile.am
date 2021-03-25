@@ -26,6 +26,7 @@ libpomp_la_SOURCES = \
 	pomp_loop.c \
 	pomp_msg.c \
 	pomp_prot.c \
+	pomp_watchdog.c \
 	pomp_timer.c
 
 pkginclude_HEADERS = \

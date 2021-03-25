@@ -212,6 +212,8 @@ static int pomp_loop_win32_do_wait_and_process(struct pomp_loop *loop,
 		goto out;
 	}
 
+	pomp_watchdog_enter(&loop->watchdog);
+
 	for (;;) {
 		/* Find a ready fd */
 		for (pfdi = 0; pfdi < POMP_LOOP_PFDS_LEN; pfdi++) {
@@ -241,6 +243,8 @@ found:
 		(*pfd->cb)(pfd->fd, revents, pfd->userdata);
 		res = 0;
 	}
+
+	pomp_watchdog_leave(&loop->watchdog);
 
 out:
 	return res;

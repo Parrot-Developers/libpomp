@@ -301,6 +301,7 @@ struct pomp_loop *pomp_loop_new(void)
 		return NULL;
 	}
 
+	pomp_watchdog_init(&loop->watchdog);
 	pthread_mutex_init(&loop->lock, NULL);
 	pomp_list_init(&loop->idle_entries);
 	loop->idle_evt = pomp_evt_new();
@@ -361,6 +362,7 @@ int pomp_loop_destroy(struct pomp_loop *loop)
 		return res;
 
 	pthread_mutex_destroy(&loop->lock);
+	pomp_watchdog_clear(&loop->watchdog);
 
 	/* Implementation specific */
 	res = pomp_loop_do_destroy(loop);
@@ -742,6 +744,29 @@ again:
 	pthread_mutex_unlock(&loop->lock);
 
 	return 0;
+}
+
+/*
+ * See documentation in public header.
+ */
+int pomp_loop_watchdog_enable(struct pomp_loop *loop,
+		uint32_t delay,
+		pomp_watchdog_cb_t cb,
+		void *userdata)
+{
+	POMP_RETURN_ERR_IF_FAILED(loop != NULL, -EINVAL);
+	POMP_RETURN_ERR_IF_FAILED(delay > 0, -EINVAL);
+	POMP_RETURN_ERR_IF_FAILED(cb != NULL, -EINVAL);
+	return pomp_watchdog_start(&loop->watchdog, loop, delay, cb, userdata);
+}
+
+/*
+ * See documentation in public header.
+ */
+int pomp_loop_watchdog_disable(struct pomp_loop *loop)
+{
+	POMP_RETURN_ERR_IF_FAILED(loop != NULL, -EINVAL);
+	return pomp_watchdog_stop(&loop->watchdog);
 }
 
 /*
