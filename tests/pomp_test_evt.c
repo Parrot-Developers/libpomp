@@ -161,7 +161,7 @@ static void test_event(void)
 	res = pomp_evt_detach_from_loop(evt, loop);
 	CU_ASSERT_EQUAL(res, 0);
 
-	/* Detacth a non-attached event */
+	/* Detach a non-attached event */
 	res = pomp_evt_detach_from_loop(evt, loop);
 	CU_ASSERT_EQUAL(res, -ENOENT);
 

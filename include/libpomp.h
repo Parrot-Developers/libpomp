@@ -697,7 +697,7 @@ POMP_API struct pomp_buffer *pomp_buffer_new_copy(
  * Create a new buffer with content copied from given data. Internal length and
  * capacity will be set to given data length.
  * @param data : data to copy.
- * @param len : lebth to copy.
+ * @param len : length to copy.
  * @return new buffer with initial ref count at 1 and internal data copied from
  * given buffer or NULL in case of error.
  */
@@ -705,7 +705,7 @@ POMP_API struct pomp_buffer *pomp_buffer_new_with_data(
 		const void *data, size_t len);
 
 /**
- * Same as pomp_buffer_new but retreived internal data pointer at the same time.
+ * Same as pomp_buffer_new but retrieved internal data pointer at the same time.
  * @param capacity : initial capacity of the buffer.
  * @param data : data of buffer (optional can be NULL).
  * @return new buffer with initial ref count at 1 or NULL in case of error.
