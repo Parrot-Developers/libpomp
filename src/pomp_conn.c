@@ -387,8 +387,8 @@ static int pomp_conn_clear_rx_fds(struct pomp_conn *conn)
 			if (close(conn->fds[i]) < 0)
 				POMP_LOG_FD_ERRNO("close", conn->fds[i]);
 		}
-		free(conn->fds);
-		conn->fds = NULL;
+		/* Keep conn->fds and conn->fdmax around for next time */
+		conn->fdcount = 0;
 	}
 
 	return 0;
@@ -1062,6 +1062,9 @@ int pomp_conn_close(struct pomp_conn *conn)
 
 	/* Close remaining received file descriptors */
 	pomp_conn_clear_rx_fds(conn);
+	free(conn->fds);
+	conn->fds = NULL;
+	conn->fdmax = 0;
 
 	/* Properly shutdown the connection */
 	if (!conn->isdgram && !conn->is_shutdown
