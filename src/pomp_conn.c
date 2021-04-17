@@ -51,6 +51,8 @@
 #define POMP_CONN_IS_LOCAL(_conn) \
 	((_conn)->local_addr.ss_family == AF_UNIX)
 
+#define POMP_CONN_RX_FDS_MAX_COUNT	POMP_BUFFER_MAX_FD_COUNT
+
 /** IO buffer for asynchronous write operations */
 struct pomp_io_buffer {
 	size_t			len;	/**< Buffer size */
@@ -68,6 +70,11 @@ struct idle_sendcb_data {
 	struct pomp_buffer		*buf;	/**< buffer sent */
 	uint32_t			status;	/**< send status */
 	struct idle_sendcb_data		*next;	/**< next data in chain */
+};
+
+struct pomp_conn_rx_fds {
+	int			table[POMP_CONN_RX_FDS_MAX_COUNT];
+	size_t			count;
 };
 
 /** Connection structure */
@@ -123,14 +130,35 @@ struct pomp_conn {
 	/** Remote peer credential for local sockets */
 	struct pomp_cred	peer_cred;
 
-	/** Received file descriptors on local unix socket connection */
-	int			*fds;
+	/* See this link for a discussion about how ancillary data are managed
+	 * https://unix.stackexchange.com/questions/185011/what-happens-with-unix-stream-ancillary-data-on-partial-reads
+	 *
+	 * Our read buffer size is currently 4096, the folowing test case need
+	 * to be handled:
+	 *
+	 * msg1 [~4000 bytes] (no ancillary data)
+	 * msg2 [~1000 bytes] (2 file descriptors)
+	 * msg3 [~1000 bytes] (2 file descriptors)
+	 * msg4 [~2000 bytes] (no ancillary data)
+	 * msg5 [~1000 bytes] (3 file descriptors)
+	 *
+	 * recv1: [4096 bytes]  (msg1 + partial msg2 with msg2's 2 fds)
+	 * recv2: [~1904 bytes] (remainder of msg2 + msg3 with msg3's 2 fds)
+	 * recv3: [~3000 bytes] (msg4 + msg5 with msg5's 3 fds)
+	 *
+	 * We thus need 2 set of fds:
+	 * - current to store msg2's fds while we are waiting for the end of its
+	 *   payload
+	 * - next to store msg3's fds.
+	 * We are guaranteed to have finished with msg2's fds before receiving
+	 * more fds.
+	 */
+	struct pomp_conn_rx_fds	rx_fds[2];
+	struct pomp_conn_rx_fds	*rx_fds_current;
+	struct pomp_conn_rx_fds	*rx_fds_next;
 
-	/** Number of file descriptors */
-	size_t			fdcount;
-
-	/** Maximum number of file descriptors in 'fds' array */
-	size_t			fdmax;
+	/* Indicate if current message actually needed some fds */
+	int			fd_needed;
 
 	/** Read suspended flag */
 	int			read_suspended;
@@ -333,65 +361,67 @@ static int pomp_io_buffer_write(struct pomp_io_buffer *iobuf,
 	return 0;
 }
 
-static int pomp_conn_add_rx_fd(struct pomp_conn *conn, int fd)
+static void pomp_conn_rx_fds_init(struct pomp_conn_rx_fds *rxfds)
 {
-	int *newfds = NULL;
-	size_t step = 0, i = 0;
+	size_t i = 0;
+	for (i = 0; i < POMP_CONN_RX_FDS_MAX_COUNT; i++)
+		rxfds->table[i] = -1;
+	rxfds->count = 0;
+}
 
-	/* Make sure array is big enough */
-	if (conn->fdcount >= conn->fdmax) {
-		/* Add 4 more entries in array */
-		step = 4;
-		newfds = realloc(conn->fds, (conn->fdmax + step) * sizeof(int));
-		if (newfds == NULL)
-			return -ENOMEM;
-		conn->fds = newfds;
+/*
+ * Close received file descriptors
+ */
+static void pomp_conn_rx_fds_clear(struct pomp_conn_rx_fds *rxfds)
+{
+	size_t i = 0;
+	for (i = 0; i < rxfds->count; i++) {
+		if (close(rxfds->table[i]) < 0)
+			POMP_LOG_FD_ERRNO("close", rxfds->table[i]);
+		rxfds->table[i] = -1;
+	}
+	rxfds->count = 0;
+}
 
-		/* Initialize new entries at -1 */
-		for (i = 0; i < step; i++)
-			conn->fds[conn->fdmax + i] = -1;
-		conn->fdmax += step;
+static int pomp_conn_rx_fds_add(struct pomp_conn_rx_fds *rxfds, int fd)
+{
+	if (rxfds->count >= POMP_CONN_RX_FDS_MAX_COUNT) {
+		POMP_LOGE("Too many rx fds");
+		return -ENOMEM;
 	}
 
 	/* Add at end of array */
-	conn->fds[conn->fdcount] = fd;
-	conn->fdcount++;
+	rxfds->table[rxfds->count] = fd;
+	rxfds->count++;
 	return 0;
 }
 
-static int pomp_conn_get_next_rx_fd(struct pomp_conn *conn)
+static int pomp_conn_rx_fds_get_next(struct pomp_conn_rx_fds *rxfds)
 {
 	int fd = 0;
 
-	/* Do we have some entries in the array */
-	if (conn->fdcount == 0) {
-		POMP_LOGE("Not enough file descriptors received");
+	/* Do we have some entries in the table */
+	if (rxfds->count == 0) {
+		POMP_LOGE("Not enough rx fds");
 		return -1;
 	}
 
 	/* Get first one, move others */
-	fd = conn->fds[0];
-	conn->fdcount--;
-	memmove(&conn->fds[0], &conn->fds[1], conn->fdcount * sizeof(int));
-	conn->fds[conn->fdcount] = -1;
+	fd = rxfds->table[0];
+	rxfds->count--;
+	memmove(&rxfds->table[0], &rxfds->table[1], rxfds->count * sizeof(int));
+	rxfds->table[rxfds->count] = -1;
 	return fd;
 }
 
-static int pomp_conn_clear_rx_fds(struct pomp_conn *conn)
+/*
+ * Swap current and next pointer. current shall be empty
+ */
+static void pomp_conn_swap_rx_fds(struct pomp_conn *conn)
 {
-	uint32_t i = 0;
-
-	/* Close received file descriptors */
-	if (conn->fds != NULL) {
-		for (i = 0; i < conn->fdcount; i++) {
-			if (close(conn->fds[i]) < 0)
-				POMP_LOG_FD_ERRNO("close", conn->fds[i]);
-		}
-		/* Keep conn->fds and conn->fdmax around for next time */
-		conn->fdcount = 0;
-	}
-
-	return 0;
+	struct pomp_conn_rx_fds *tmp = conn->rx_fds_current;
+	conn->rx_fds_current = conn->rx_fds_next;
+	conn->rx_fds_next = tmp;
 }
 
 static int pomp_conn_fixup_rx_fds_cb(struct pomp_decoder *dec, uint8_t type,
@@ -408,7 +438,8 @@ static int pomp_conn_fixup_rx_fds_cb(struct pomp_decoder *dec, uint8_t type,
 
 	/* Get next file descriptor in rx array, always register offset as
 	 * holding a file descriptor even if it is invalid */
-	fd = pomp_conn_get_next_rx_fd(conn);
+	conn->fd_needed = 1;
+	fd = pomp_conn_rx_fds_get_next(conn->rx_fds_current);
 	off = dec->pos - sizeof(int32_t);
 	res = pomp_buffer_register_fd(dec->msg->buf, off, fd);
 
@@ -427,19 +458,24 @@ static int pomp_conn_fixup_rx_fds(struct pomp_conn *conn,
 	int res = 0;
 	struct pomp_decoder dec = POMP_DECODER_INITIALIZER;
 
-	/* Walk message t find file descriptors */
+	/* Walk message to find file descriptors */
+	conn->fd_needed = 0;
 	(void)pomp_decoder_init(&dec, msg);
 	res = pomp_decoder_walk(&dec, &pomp_conn_fixup_rx_fds_cb, conn, 0);
 
-	/* At this point, if there is still some file descriptors in rx array
-	 * it means we received too much. They can not belong to another
-	 * message because recvmsg does NOT merge packets of different
-	 * messages */
-	if (conn->fdcount != 0) {
-		/* Close extra file descriptors here but keep message */
-		POMP_LOGE("Too many file descriptors received");
-		pomp_conn_clear_rx_fds(conn);
+	/* If message needed some fds:
+	 * - it should have use them all
+	 * - we need to swap curent and next tables
+	 */
+	if (conn->fd_needed) {
+		if (conn->rx_fds_current->count > 0) {
+			POMP_LOGE("Too many rx fds after fixup: %zu",
+					conn->rx_fds_current->count);
+		}
+		pomp_conn_rx_fds_clear(conn->rx_fds_current);
+		pomp_conn_swap_rx_fds(conn);
 	}
+	conn->fd_needed = 0;
 
 	/* Always clear decoder, even in case of error during decoding */
 	(void)pomp_decoder_clear(&dec);
@@ -458,6 +494,7 @@ static void pomp_conn_process_read_buf(struct pomp_conn *conn)
 	ssize_t usedlen = 0;
 	struct pomp_msg *msg = NULL;
 	const void *data = NULL;
+	int partial = 1;
 
 	/* No protocol decoding for raw context */
 	if (conn->israw) {
@@ -487,6 +524,18 @@ static void pomp_conn_process_read_buf(struct pomp_conn *conn)
 				pomp_ctx_notify_msg(conn->ctx, conn, msg);
 			pomp_prot_release_msg(conn->prot, msg);
 			msg = NULL;
+			partial = off < len;
+		}
+	}
+
+	/* If no more partial messages no more file descriptors should be
+	 * pending (either in current or next) */
+	if (!partial) {
+		while (conn->rx_fds_current->count > 0) {
+			POMP_LOGE("Discarding rx fds: %zu (no pending data)",
+					conn->rx_fds_current->count);
+			pomp_conn_rx_fds_clear(conn->rx_fds_current);
+			pomp_conn_swap_rx_fds(conn);
 		}
 	}
 }
@@ -551,6 +600,7 @@ static int pomp_conn_process_read_with_cmsg(struct pomp_conn *conn)
 	uint8_t cmsg_buf[CMSG_SPACE(POMP_BUFFER_MAX_FD_COUNT * sizeof(int))];
 	size_t i = 0, nfd = 0;
 	int *srcfds = 0;
+	int need_fd_discard = 0;
 
 	memset(&msg, 0, sizeof(msg));
 
@@ -582,6 +632,15 @@ static int pomp_conn_process_read_with_cmsg(struct pomp_conn *conn)
 	conn->peer_addrlen = msg.msg_namelen;
 	if (readlen == 0)
 		return 0;
+
+	/* If we already have both current and next table with fds, we will
+	 * need to discard fds if we received new ones.
+	 * This means that a received message had associated fds in its
+	 * ancillary data but actually no fd in the message description (not a
+	 * normal use case with properly formatted pomp messages).
+	 */
+	need_fd_discard = conn->rx_fds_current->count > 0 &&
+		conn->rx_fds_next->count > 0;
 
 	/* Process ancillary data */
 	for (cmsg = CMSG_FIRSTHDR(&msg);
@@ -616,19 +675,32 @@ static int pomp_conn_process_read_with_cmsg(struct pomp_conn *conn)
 		if (cmsg->cmsg_type != SCM_RIGHTS)
 			continue;
 
-		/* Add received file descriptors in our array */
+		/* Add received file descriptors in our array (in next) */
 		nfd = (cmsg->cmsg_len - CMSG_LEN(0)) / sizeof(int);
+		if (need_fd_discard && nfd > 0) {
+			POMP_LOGE("Discarding rx fds: %zu",
+					conn->rx_fds_current->count);
+			pomp_conn_rx_fds_clear(conn->rx_fds_current);
+			pomp_conn_swap_rx_fds(conn);
+			need_fd_discard = 0;
+		}
 		srcfds = (int *)CMSG_DATA(cmsg);
 		for (i = 0; i < nfd; i++) {
 			/* Only add if no previous errors */
-			if (res == 0)
-				res = pomp_conn_add_rx_fd(conn, srcfds[i]);
+			if (res == 0) {
+				res = pomp_conn_rx_fds_add(conn->rx_fds_next,
+						srcfds[i]);
+			}
 
 			/* Close if the fd was not registered */
 			if (res < 0)
 				close(srcfds[i]);
 		}
 	}
+
+	/* If current fd table was empty, swap next/current */
+	if (conn->rx_fds_current->count == 0)
+		pomp_conn_swap_rx_fds(conn);
 
 	/* Return number of bytes read or error */
 	return res < 0 ? res : (int)readlen;
@@ -961,6 +1033,8 @@ struct pomp_conn *pomp_conn_new(struct pomp_ctx *ctx,
 	conn->removeflag = 0;
 	conn->read_suspended = 0;
 	conn->readbuf = NULL;
+	conn->rx_fds_current = &conn->rx_fds[0];
+	conn->rx_fds_next = &conn->rx_fds[1];
 
 	/* Allocate protocol */
 	if (!israw) {
@@ -1061,10 +1135,8 @@ int pomp_conn_close(struct pomp_conn *conn)
 	POMP_RETURN_ERR_IF_FAILED(conn->fd >= 0, -EINVAL);
 
 	/* Close remaining received file descriptors */
-	pomp_conn_clear_rx_fds(conn);
-	free(conn->fds);
-	conn->fds = NULL;
-	conn->fdmax = 0;
+	pomp_conn_rx_fds_clear(conn->rx_fds_current);
+	pomp_conn_rx_fds_clear(conn->rx_fds_next);
 
 	/* Properly shutdown the connection */
 	if (!conn->isdgram && !conn->is_shutdown
