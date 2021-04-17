@@ -34,9 +34,6 @@
 
 #include "pomp_priv.h"
 
-/** Internal read buffer size */
-#define POMP_CONN_READ_SIZE	4096
-
 /**
  * Determine if a read/write error in non-blocking could not be completed.
  * POSIX.1-2001 allows either error to be returned for this case, and

@@ -150,6 +150,9 @@ extern "C" {
 /** Decoder structure initializer*/
 #define POMP_DECODER_INITIALIZER	{NULL, 0}
 
+/** Internal read buffer size */
+#define POMP_CONN_READ_SIZE	4096
+
 /** Message data */
 struct pomp_msg {
 	uint32_t		msgid;		/**< Id of message */

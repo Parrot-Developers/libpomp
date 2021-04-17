@@ -59,6 +59,7 @@
 struct test_data {
 	int	status;
 	int	stop;
+	int	flags;
 	pid_t	pid;
 };
 
@@ -185,6 +186,45 @@ static void fill_addr_unix(struct sockaddr *addr, uint32_t *addrlen)
 	*addrlen = sizeof(*addr_un);
 }
 
+static int write_with_extra_fds(struct pomp_conn *conn,
+		const void *buf, size_t len, int* fds, int nfds)
+{
+	struct iovec iov;
+	struct msghdr msg;
+	struct cmsghdr *cmsg = NULL;
+	uint8_t cmsg_buf[CMSG_SPACE(4 * sizeof(int))];
+	ssize_t writelen = 0;
+	int i = 0;
+
+	memset(&msg, 0, sizeof(msg));
+	memset(&cmsg_buf, 0, sizeof(cmsg_buf));
+
+	/* Setup the data part of the socket message */
+	iov.iov_base = (void *)buf;
+	iov.iov_len = len;
+	msg.msg_iov = &iov;
+	msg.msg_iovlen = 1;
+
+	/* Setup the control part of the socket message */
+	msg.msg_control = cmsg_buf;
+	msg.msg_controllen = CMSG_SPACE(nfds * sizeof(int));
+	cmsg = CMSG_FIRSTHDR(&msg);
+	cmsg->cmsg_level = SOL_SOCKET;
+	cmsg->cmsg_type = SCM_RIGHTS;
+	cmsg->cmsg_len = CMSG_LEN(nfds * sizeof(int));
+
+	/* Copy file descriptors */
+	for (i = 0; i < nfds; i++)
+		((int *)CMSG_DATA(cmsg))[i] = fds[i];
+
+	/* Write data ignoring interrupts */
+	do {
+		writelen = sendmsg(pomp_conn_get_fd(conn), &msg, 0);
+	} while (writelen < 0 && errno == EINTR);
+
+	return writelen == (ssize_t)len ? 0 : -EIO;
+}
+
 /** */
 static void test_fd_passing_server(struct pomp_ctx *ctx,
 		enum pomp_event event,
@@ -192,44 +232,168 @@ static void test_fd_passing_server(struct pomp_ctx *ctx,
 		const struct pomp_msg *msg,
 		void *userdata)
 {
-	static int fds[3][2] = {{-1, -1}, {-1, -1}, {-1, -1}};
+#define PIPE_COUNT 10
+	static int fds_msg0[3][2] = {{-1, -1}, {-1, -1}, {-1, -1}};
+	static int fds_msg2[2][2] = {{-1, -1}, {-1, -1}};
+	static int fds_msg3[2][2] = {{-1, -1}, {-1, -1}};
+	static int fds_msg5[3][2] = {{-1, -1}, {-1, -1}, {-1, -1}};
+	static int *fds[PIPE_COUNT] = {
+		fds_msg0[0], fds_msg0[1], fds_msg0[2],
+		fds_msg2[0], fds_msg2[1],
+		fds_msg3[0], fds_msg3[1],
+		fds_msg5[0], fds_msg5[1], fds_msg5[2],
+	};
+
+	static uint8_t dummy_buf[3 * POMP_CONN_READ_SIZE];
 	int res = 0;
 	struct test_data *data = userdata;
+	uint32_t bufsz = 0;
+	uint32_t i = 0;
+	size_t chunk_off = 0;
+	struct pomp_msg *msg2 = NULL;
 
 	TEST_IPC_LOG("%s : event=%d(%s) conn=%p msg=%p", __func__,
 			event, pomp_event_str(event), conn, msg);
 
 	switch (event) {
 	case POMP_EVENT_CONNECTED:
-		/* Create 3 pairs of pipes */
-		res = pipe(fds[0]); TEST_IPC_CHECK_EQUAL(data, res, 0);
-		res = pipe(fds[1]); TEST_IPC_CHECK_EQUAL(data, res, 0);
-		res = pipe(fds[2]); TEST_IPC_CHECK_EQUAL(data, res, 0);
-
-		/* Send read sides to client */
-		res = pomp_conn_send(conn, 1, "%s%x%s%x%s%x",
-				"pipe0", fds[0][0],
-				"pipe1", fds[1][0],
-				"pipe2", fds[2][0]);
-		TEST_IPC_CHECK_EQUAL(data, res, 0);
+		/* Create pairs of pipes */
+		for (i = 0; i < PIPE_COUNT; i++) {
+			res = pipe(fds[i]);
+			TEST_IPC_CHECK_EQUAL(data, res, 0);
+		}
 
 		/* write some data on pipes */
-		res = (int)write(fds[0][1], "pipe0", 5);
-		TEST_IPC_CHECK_EQUAL(data, res, 5);
-		res = (int)write(fds[1][1], "pipe1", 5);
-		TEST_IPC_CHECK_EQUAL(data, res, 5);
-		res = (int)write(fds[2][1], "pipe2", 5);
-		TEST_IPC_CHECK_EQUAL(data, res, 5);
+		for (i = 0; i < PIPE_COUNT; i++) {
+			char buf[32] = "";
+			snprintf(buf, sizeof(buf), "pipe%d", i);
+			res = (int)write(fds[i][1], buf, strlen(buf));
+			TEST_IPC_CHECK_EQUAL(data, res, (int)strlen(buf));
+		}
+
+		/* Send read sides to client */
+		res = pomp_conn_send(conn, 0, "%s%x%s%x%s%x",
+				"pipe0", fds_msg0[0][0],
+				"pipe1", fds_msg0[1][0],
+				"pipe2", fds_msg0[2][0]);
+		TEST_IPC_CHECK_EQUAL(data, res, 0);
+
+		/* Send a properly formatted message with 0 fd but with 1 fd in ancillary data */
+		msg2 = pomp_msg_new();
+		res = pomp_msg_write(msg2, 100, "%d", 100);
+		TEST_IPC_CHECK_EQUAL(data, res, 0);
+		res = write_with_extra_fds(conn,
+				msg2->buf->data, msg2->buf->len,
+				(int[1]){fds_msg0[0][0]}, 1);
+		TEST_IPC_CHECK_EQUAL(data, res, 0);
+		res = pomp_msg_destroy(msg2);
+		TEST_IPC_CHECK_EQUAL(data, res, 0);
+
+		/* Send a properly formatted message with 1 fd but with 2 fds in ancillary data */
+		msg2 = pomp_msg_new();
+		res = pomp_msg_write(msg2, 101, "%d%x", 101, fds_msg0[0][0]);
+		TEST_IPC_CHECK_EQUAL(data, res, 0);
+		res = write_with_extra_fds(conn,
+				msg2->buf->data, msg2->buf->len,
+				(int[2]){fds_msg0[0][0], fds_msg0[1][0]}, 2);
+		TEST_IPC_CHECK_EQUAL(data, res, 0);
+		res = pomp_msg_destroy(msg2);
+		TEST_IPC_CHECK_EQUAL(data, res, 0);
+
+		/* Send a properly formatted message with 2 fds but with 1 fd in ancillary data */
+		msg2 = pomp_msg_new();
+		res = pomp_msg_write(msg2, 102, "%d%x%x", 102, fds_msg0[0][0], fds_msg0[1][0]);
+		TEST_IPC_CHECK_EQUAL(data, res, 0);
+		res = write_with_extra_fds(conn,
+				msg2->buf->data, msg2->buf->len,
+				(int[1]){fds_msg0[0][0]}, 1);
+		TEST_IPC_CHECK_EQUAL(data, res, 0);
+		res = pomp_msg_destroy(msg2);
+		TEST_IPC_CHECK_EQUAL(data, res, 0);
+
+		/* Send a properly formatted message with 0 fd but with 1 fd in ancillary data of each chunk */
+		bufsz = 3 * POMP_CONN_READ_SIZE;
+		msg2 = pomp_msg_new();
+		res = pomp_msg_write(msg2, 103, "%p%u", dummy_buf, bufsz);
+		TEST_IPC_CHECK_EQUAL(data, res, 0);
+
+		chunk_off = 0;
+		while (chunk_off < msg2->buf->len) {
+			size_t chunk_len = POMP_CONN_READ_SIZE;
+			if (chunk_len > msg2->buf->len - chunk_off)
+				chunk_len = msg2->buf->len - chunk_off;
+			res = write_with_extra_fds(conn,
+					msg2->buf->data + chunk_off,
+					chunk_len,
+					(int[1]){fds_msg0[0][0]}, 1);
+			TEST_IPC_CHECK_EQUAL(data, res, 0);
+			chunk_off += chunk_len;
+		}
+
+		res = pomp_msg_destroy(msg2);
+		TEST_IPC_CHECK_EQUAL(data, res, 0);
+
+		/* Check merge/split of messages with and without ancillary data
+		 * described here:
+		 * https://unix.stackexchange.com/questions/185011/what-happens-with-unix-stream-ancillary-data-on-partial-reads
+		 *
+		 * Our read buffer size is 4096 in pomp_conn, sizes may need to
+		 * be adjusted in this test if changed
+		 *
+		 * msg1 [~4000 bytes] (no ancillary data)
+		 * msg2 [~1000 bytes] (2 file descriptors)
+		 * msg3 [~1000 bytes] (2 file descriptor)
+		 * msg4 [~2000 bytes] (no ancillary data)
+		 * msg5 [~1000 bytes] (3 file descriptors)
+		 *
+		 * recv1: [4096 bytes]  (msg1 + partial msg2 with msg2's 2 file descriptors)
+		 * recv2: [~1904 bytes] (remainder of msg2 + msg3 with msg3's 2 file descriptors)
+		 * recv3: [~3000 bytes] (msg4 + msg5 with msg5's 3 file descriptors)
+		 */
+		TEST_IPC_CHECK_EQUAL(data, POMP_CONN_READ_SIZE, 4096);
+
+		bufsz = POMP_CONN_READ_SIZE - 100;
+		res = pomp_conn_send(conn, 1, "%p%u",
+				dummy_buf, bufsz);
+		TEST_IPC_CHECK_EQUAL(data, res, 0);
+
+		bufsz = 1000;
+		res = pomp_conn_send(conn, 2, "%x%p%u%x",
+				fds_msg2[0][0],
+				dummy_buf, bufsz,
+				fds_msg2[1][0]);
+		TEST_IPC_CHECK_EQUAL(data, res, 0);
+
+		bufsz = 1000;
+		res = pomp_conn_send(conn, 3, "%x%p%u%x",
+				fds_msg3[0][0],
+				dummy_buf, bufsz,
+				fds_msg3[1][0]);
+		TEST_IPC_CHECK_EQUAL(data, res, 0);
+
+		bufsz = 2000;
+		res = pomp_conn_send(conn, 4, "%p%u",
+				dummy_buf, bufsz);
+		TEST_IPC_CHECK_EQUAL(data, res, 0);
+
+		bufsz = 1000;
+		res = pomp_conn_send(conn, 5, "%x%p%u%x%x",
+				fds_msg5[0][0],
+				dummy_buf, bufsz,
+				fds_msg5[1][0],
+				fds_msg5[2][0]);
+		TEST_IPC_CHECK_EQUAL(data, res, 0);
+
 		break;
 
 	case POMP_EVENT_DISCONNECTED:
 		/* Close all pipes */
-		res = close(fds[0][0]); TEST_IPC_CHECK_EQUAL(data, res, 0);
-		res = close(fds[0][1]); TEST_IPC_CHECK_EQUAL(data, res, 0);
-		res = close(fds[1][0]); TEST_IPC_CHECK_EQUAL(data, res, 0);
-		res = close(fds[1][1]); TEST_IPC_CHECK_EQUAL(data, res, 0);
-		res = close(fds[2][0]); TEST_IPC_CHECK_EQUAL(data, res, 0);
-		res = close(fds[2][1]); TEST_IPC_CHECK_EQUAL(data, res, 0);
+		for (i = 0; i < PIPE_COUNT; i++) {
+			res = close(fds[i][0]);
+			TEST_IPC_CHECK_EQUAL(data, res, 0);
+			res = close(fds[i][1]);
+			TEST_IPC_CHECK_EQUAL(data, res, 0);
+		}
 
 		data->stop = 1;
 		break;
@@ -253,6 +417,8 @@ static void test_fd_passing_client(struct pomp_ctx *ctx,
 	int fds[3] = {-1, -1, -1};
 	char *str0 = NULL, *str1 = NULL, *str2 = NULL;
 	char buf[32] = "";
+	void *pbuf = NULL;
+	uint32_t bufsz = 0;
 	struct test_data *data = userdata;
 
 	TEST_IPC_LOG("%s : event=%d(%s) conn=%p msg=%p", __func__,
@@ -263,11 +429,13 @@ static void test_fd_passing_client(struct pomp_ctx *ctx,
 		break;
 
 	case POMP_EVENT_DISCONNECTED:
+		if (data->flags != 0x3f)
+			data->status = -1;
 		data->stop = 1;
 		break;
 
 	case POMP_EVENT_MSG:
-		if (pomp_msg_get_id(msg) == 1) {
+		if (pomp_msg_get_id(msg) == 0) {
 			res = pomp_msg_read(msg, "%ms%x%ms%x%ms%x",
 					&str0, &fds[0],
 					&str1, &fds[1],
@@ -296,8 +464,86 @@ static void test_fd_passing_client(struct pomp_ctx *ctx,
 			free(str1);
 			free(str2);
 
-			pomp_conn_disconnect(conn);
+			data->flags |= 1 << pomp_msg_get_id(msg);
+		} else if (pomp_msg_get_id(msg) == 1) {
+			res = pomp_msg_read(msg, "%p%u", &pbuf, &bufsz);
+			TEST_IPC_CHECK_EQUAL(data, res, 0);
+			TEST_IPC_CHECK_EQUAL(data, bufsz, POMP_CONN_READ_SIZE - 100);
+
+			data->flags |= 1 << pomp_msg_get_id(msg);
+		} else if (pomp_msg_get_id(msg) == 2) {
+			res = pomp_msg_read(msg, "%x%p%u%x",
+					&fds[0],
+					&pbuf, &bufsz,
+					&fds[1]);
+			TEST_IPC_CHECK_EQUAL(data, res, 0);
+			TEST_IPC_CHECK_EQUAL(data, bufsz, 1000);
+
+			memset(buf, 0, sizeof(buf));
+			res = (int)read(fds[0], buf, sizeof(buf) - 1);
+			TEST_IPC_CHECK_EQUAL(data, res, 5);
+			TEST_IPC_CHECK_STRING_EQUAL(data, buf, "pipe3");
+
+			memset(buf, 0, sizeof(buf));
+			res = (int)read(fds[1], buf, sizeof(buf) - 1);
+			TEST_IPC_CHECK_EQUAL(data, res, 5);
+			TEST_IPC_CHECK_STRING_EQUAL(data, buf, "pipe4");
+
+			data->flags |= 1 << pomp_msg_get_id(msg);
+		} else if (pomp_msg_get_id(msg) == 3) {
+			res = pomp_msg_read(msg, "%x%p%u%x",
+					&fds[0],
+					&pbuf, &bufsz,
+					&fds[1]);
+			TEST_IPC_CHECK_EQUAL(data, res, 0);
+			TEST_IPC_CHECK_EQUAL(data, bufsz, 1000);
+
+			memset(buf, 0, sizeof(buf));
+			res = (int)read(fds[0], buf, sizeof(buf) - 1);
+			TEST_IPC_CHECK_EQUAL(data, res, 5);
+			TEST_IPC_CHECK_STRING_EQUAL(data, buf, "pipe5");
+
+			memset(buf, 0, sizeof(buf));
+			res = (int)read(fds[1], buf, sizeof(buf) - 1);
+			TEST_IPC_CHECK_EQUAL(data, res, 5);
+			TEST_IPC_CHECK_STRING_EQUAL(data, buf, "pipe6");
+
+			data->flags |= 1 << pomp_msg_get_id(msg);
+		} else if (pomp_msg_get_id(msg) == 4) {
+			res = pomp_msg_read(msg, "%p%u", &pbuf, &bufsz);
+			TEST_IPC_CHECK_EQUAL(data, res, 0);
+			TEST_IPC_CHECK_EQUAL(data, bufsz, 2000);
+
+			data->flags |= 1 << pomp_msg_get_id(msg);
+		} else if (pomp_msg_get_id(msg) == 5) {
+			res = pomp_msg_read(msg, "%x%p%u%x%x",
+					&fds[0],
+					&pbuf, &bufsz,
+					&fds[1],
+					&fds[2]);
+			TEST_IPC_CHECK_EQUAL(data, res, 0);
+			TEST_IPC_CHECK_EQUAL(data, bufsz, 1000);
+
+			memset(buf, 0, sizeof(buf));
+			res = (int)read(fds[0], buf, sizeof(buf) - 1);
+			TEST_IPC_CHECK_EQUAL(data, res, 5);
+			TEST_IPC_CHECK_STRING_EQUAL(data, buf, "pipe7");
+
+			memset(buf, 0, sizeof(buf));
+			res = (int)read(fds[1], buf, sizeof(buf) - 1);
+			TEST_IPC_CHECK_EQUAL(data, res, 5);
+			TEST_IPC_CHECK_STRING_EQUAL(data, buf, "pipe8");
+
+			memset(buf, 0, sizeof(buf));
+			res = (int)read(fds[2], buf, sizeof(buf) - 1);
+			TEST_IPC_CHECK_EQUAL(data, res, 5);
+			TEST_IPC_CHECK_STRING_EQUAL(data, buf, "pipe9");
+
+			data->flags |= 1 << pomp_msg_get_id(msg);
 		}
+
+		if (data->flags == 0x3f)
+			pomp_conn_disconnect(conn);
 
 		break;
 
@@ -331,14 +577,14 @@ static void test_fd_passing(void)
 #endif /* __GNUC__ */
 
 /** */
-static CU_TestInfo s_fd_passing_tests[] = {
+static CU_TestInfo s_ipc_tests[] = {
 	{(char *)"fd_passing", &test_fd_passing},
 	CU_TEST_INFO_NULL,
 };
 
 /** */
 /*extern*/ CU_SuiteInfo g_suites_ipc[] = {
-	{(char *)"fd_passing", NULL, NULL, s_fd_passing_tests},
+	{(char *)"ipc", NULL, NULL, s_ipc_tests},
 	CU_SUITE_INFO_NULL,
 };
 
