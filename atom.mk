@@ -109,8 +109,9 @@ LOCAL_MODULE := libpomp-py
 LOCAL_CATEGORY_PATH := libs
 LOCAL_DESCRIPTION := Python binding for libpomp
 
-LOCAL_CUSTOM_MACROS := \
-	pybinding-macro:libpomp,libpomp,$(LOCAL_PATH)/include/libpomp.h,$(TARGET_OUT_STAGING)/usr/lib/libpomp.so
+LOCAL_CUSTOM_MACROS := $\
+	pybinding-macro:libpomp,libpomp,$(LOCAL_PATH)/include/libpomp.h,$\
+		$(TARGET_OUT_STAGING)/$(TARGET_DEFAULT_LIB_DESTDIR)/libpomp.so
 
 include $(BUILD_CUSTOM)
 
