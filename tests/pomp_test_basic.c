@@ -1055,6 +1055,45 @@ static void test_msg_read_write(void)
 }
 
 /** */
+static void test_msg_read_write_trunc(void)
+{
+	int res = 0;
+	struct pomp_msg *msg = NULL;
+	struct test_data dout;
+
+	/* Allocation */
+	msg = pomp_msg_new();
+	CU_ASSERT_PTR_NOT_NULL_FATAL(msg);
+
+	/* Write */
+	res = pomp_msg_write(msg, TEST_MSGID,
+			"%hhd%hhu%hd%hu%d%u",
+			s_refdata.i8, s_refdata.u8,
+			s_refdata.i16, s_refdata.u16,
+			s_refdata.i32, s_refdata.u32);
+	CU_ASSERT_EQUAL(res, 0);
+
+	/* Read truncated message */
+	memset(&dout, 0, sizeof(dout));
+	res = pomp_msg_read(msg,
+			"%hhd%hhu%hd%hu",
+			&dout.i8, &dout.u8,
+			&dout.i16, &dout.u16);
+	CU_ASSERT_EQUAL_FATAL(res, 0);
+
+	/* Check */
+	CU_ASSERT_EQUAL(dout.i8, TEST_VAL_I8);
+	CU_ASSERT_EQUAL(dout.u8, TEST_VAL_U8);
+	CU_ASSERT_EQUAL(dout.i16, TEST_VAL_I16);
+	CU_ASSERT_EQUAL(dout.u16, TEST_VAL_U16);
+	free(dout.str);
+
+	/* Destroy */
+	res = pomp_msg_destroy(msg);
+	CU_ASSERT_EQUAL(res, 0);
+}
+
+/** */
 static void test_msg_read_write_no_payload(void)
 {
 	int res = 0;
@@ -2985,6 +3024,7 @@ static CU_TestInfo s_msg_tests[] = {
 	{(char *)"base", &test_msg_base},
 	{(char *)"advanced", &test_msg_advanced},
 	{(char *)"read_write", &test_msg_read_write},
+	{(char *)"read_write_trunc", &test_msg_read_write_trunc},
 	{(char *)"read_write_no_payload", &test_msg_read_write_no_payload},
 	{(char *)"write_argv", &test_msg_write_argv},
 	CU_TEST_INFO_NULL,

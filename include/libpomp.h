@@ -953,6 +953,9 @@ POMP_API int pomp_msg_write_argv(struct pomp_msg *msg, uint32_t msgid,
 
 /**
  * Read and decode a message.
+ * If the format is shorter (less arguments) than the message written, the last
+ * arguments written will be silently ignored and only the first arguments in
+ * the read format will be filled.
  * @param msg : message.
  * @param fmt : format string. Can be NULL if no arguments given.
  * @param ... : message arguments.
@@ -963,6 +966,9 @@ POMP_API int pomp_msg_read(const struct pomp_msg *msg,
 
 /**
  * Read and decode a message.
+ * If the format is shorter (less arguments) than the message written, the last
+ * arguments written will be silently ignored and only the first arguments in
+ * the read format will be filled.
  * @param msg : message.
  * @param fmt : format string. Can be NULL if no arguments given.
  * @param args : message arguments.
