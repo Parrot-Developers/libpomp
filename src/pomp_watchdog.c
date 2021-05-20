@@ -36,6 +36,18 @@
 
 #ifdef POMP_HAVE_WATCHDOG
 
+static int check_timeout(const struct timespec *timeout)
+{
+	struct timespec now;
+	int64_t delta_ns;
+	clock_gettime(CLOCK_MONOTONIC, &now);
+
+	/* Make sure that the timeout really expired */
+	delta_ns = (int64_t)(now.tv_sec - timeout->tv_sec) * 1000000000 +
+			(int64_t)(now.tv_nsec - timeout->tv_nsec);
+	return delta_ns >= 0;
+}
+
 static void get_absolute_timeout(uint32_t delay, struct timespec *timeout)
 {
 	clock_gettime(CLOCK_MONOTONIC, timeout);
@@ -51,7 +63,7 @@ static void get_absolute_timeout(uint32_t delay, struct timespec *timeout)
 
 static void notify_watchdog_expired(struct pomp_watchdog *watchdog)
 {
-	ULOGE("Watchdog on loop=%p expired", watchdog->loop);
+	POMP_LOGE("Watchdog on loop=%p expired", watchdog->loop);
 	(*watchdog->cb)(watchdog->loop, watchdog->userdata);
 }
 
@@ -79,7 +91,8 @@ static void *pomp_watchdog_thread_cb(void *userdata)
 			 * in the same critical block (counter) */
 			if (res == ETIMEDOUT &&
 					watchdog->monitoring &&
-					watchdog->counter == counter) {
+					watchdog->counter == counter &&
+					check_timeout(&timeout)) {
 				notify_watchdog_expired(watchdog);
 				watchdog->monitoring = 0;
 			}
