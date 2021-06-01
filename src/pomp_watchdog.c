@@ -116,8 +116,18 @@ int pomp_watchdog_start(struct pomp_watchdog *watchdog,
 	POMP_RETURN_ERR_IF_FAILED(loop != NULL, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(delay > 0, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(cb != NULL, -EINVAL);
+
+	if (watchdog->started) {
+		/* If already started, should be the same loop, update delay */
+		POMP_RETURN_ERR_IF_FAILED(watchdog->loop == loop, -EBUSY);
+		pthread_mutex_lock(&watchdog->mutex);
+		watchdog->delay = delay;
+		watchdog->cb = cb;
+		watchdog->userdata = userdata;
+		pthread_mutex_unlock(&watchdog->mutex);
+		return 0;
+	}
 	POMP_RETURN_ERR_IF_FAILED(watchdog->loop == NULL, -EBUSY);
-	POMP_RETURN_ERR_IF_FAILED(!watchdog->started, -EBUSY);
 
 	pthread_mutex_init(&watchdog->mutex, NULL);
 

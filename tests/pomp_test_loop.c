@@ -695,6 +695,7 @@ struct watchdog_data {
 	struct pomp_loop  *loop;
 	int               sleep_value;
 	int               expired;
+	int               reconfigure;
 };
 
 static void watchdog_cb(struct pomp_loop *loop, void *userdata)
@@ -705,16 +706,23 @@ static void watchdog_cb(struct pomp_loop *loop, void *userdata)
 
 static void watchdog_evt_cb(struct pomp_evt *evt, void *userdata)
 {
+	int res = 0;
 	struct watchdog_data *data = userdata;
 	if (data->sleep_value > 0)
 		usleep(data->sleep_value * 1000);
+
+	if (data->reconfigure > 0) {
+		res = pomp_loop_watchdog_enable(data->loop, data->reconfigure,
+				&watchdog_cb, data);
+		CU_ASSERT_EQUAL(res, 0);
+	}
 }
 
 /** */
 static void test_loop_watchdog(void)
 {
 	int res = 0;
-	struct watchdog_data data = {NULL, 0, 0};
+	struct watchdog_data data = {NULL, 0, 0, 0};
 	struct pomp_evt *evt = NULL;
 
 	/* Create loop and event */
@@ -757,6 +765,37 @@ static void test_loop_watchdog(void)
 	res = pomp_loop_wait_and_process(data.loop, -1);
 	CU_ASSERT_EQUAL(res, 0);
 	CU_ASSERT_EQUAL(data.expired, 0);
+
+	/* Configure the watchdog twice */
+	res = pomp_loop_watchdog_enable(data.loop, 500, &watchdog_cb, &data);
+	CU_ASSERT_EQUAL(res, 0);
+	res = pomp_loop_watchdog_enable(data.loop, 1500, &watchdog_cb, &data);
+	CU_ASSERT_EQUAL(res, 0);
+	data.sleep_value = 1000;
+	data.expired = 0;
+	res = pomp_evt_signal(evt);
+	CU_ASSERT_EQUAL(res, 0);
+	res = pomp_loop_wait_and_process(data.loop, -1);
+	CU_ASSERT_EQUAL(res, 0);
+	CU_ASSERT_EQUAL(data.expired, 0);
+
+	/* Reconfigure the watchdog inside the loop, will take effect at next processing */
+	res = pomp_loop_watchdog_enable(data.loop, 1500, &watchdog_cb, &data);
+	CU_ASSERT_EQUAL(res, 0);
+	data.sleep_value = 1000;
+	data.reconfigure = 500;
+	data.expired = 0;
+	res = pomp_evt_signal(evt);
+	CU_ASSERT_EQUAL(res, 0);
+	res = pomp_loop_wait_and_process(data.loop, -1);
+	CU_ASSERT_EQUAL(res, 0);
+	CU_ASSERT_EQUAL(data.expired, 0);
+	data.reconfigure = 0;
+	res = pomp_evt_signal(evt);
+	CU_ASSERT_EQUAL(res, 0);
+	res = pomp_loop_wait_and_process(data.loop, -1);
+	CU_ASSERT_EQUAL(res, 0);
+	CU_ASSERT_EQUAL(data.expired, 1);
 
 	/* Cleanup */
 	res = pomp_evt_detach_from_loop(evt, data.loop);
