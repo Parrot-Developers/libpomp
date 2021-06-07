@@ -104,13 +104,17 @@ static void test_event(void)
 	int res = 0;
 	struct test_data data;
 	struct pomp_loop *loop = NULL;
+	struct pomp_loop *loop_other = NULL;
 	struct pomp_evt *evt = NULL;
 
 	memset(&data, 0, sizeof(data));
 
-	/* Create loop */
+	/* Create loops */
 	loop = pomp_loop_new();
 	CU_ASSERT_PTR_NOT_NULL_FATAL(loop);
+
+	loop_other = pomp_loop_new();
+	CU_ASSERT_PTR_NOT_NULL_FATAL(loop_other);
 
 	/* Create event */
 	evt = pomp_evt_new();
@@ -134,7 +138,7 @@ static void test_event(void)
 	res = pomp_evt_is_attached(evt, NULL);
 	CU_ASSERT_EQUAL(res, 1);
 	/* Test is_attached to wrong loop, attached */
-	res = pomp_evt_is_attached(evt, (struct pomp_loop *)1);
+	res = pomp_evt_is_attached(evt, loop_other);
 	CU_ASSERT_EQUAL(res, 0);
 
 	/* Detach event from loop */
@@ -148,7 +152,7 @@ static void test_event(void)
 	res = pomp_evt_is_attached(evt, NULL);
 	CU_ASSERT_EQUAL(res, 0);
 	/* Test is_attached to wrong loop, detached */
-	res = pomp_evt_is_attached(evt, (struct pomp_loop *)1);
+	res = pomp_evt_is_attached(evt, loop_other);
 	CU_ASSERT_EQUAL(res, 0);
 
 	/* Invalid usage tests */
@@ -168,7 +172,7 @@ static void test_event(void)
 	/* Detach from the wrong loop */
 	res = pomp_evt_attach_to_loop(evt, loop, test_evt_cb, &data);
 	CU_ASSERT_EQUAL(res, 0);
-	res = pomp_evt_detach_from_loop(evt, (struct pomp_loop *)1);
+	res = pomp_evt_detach_from_loop(evt, loop_other);
 	CU_ASSERT_EQUAL(res, -EINVAL);
 	res = pomp_evt_detach_from_loop(evt, loop);
 	CU_ASSERT_EQUAL(res, 0);
@@ -217,7 +221,9 @@ static void test_event(void)
 	res = pomp_evt_destroy(evt);
 	CU_ASSERT_EQUAL(res, 0);
 
-	/* Destroy loop */
+	/* Destroy loops */
+	res = pomp_loop_destroy(loop_other);
+	CU_ASSERT_EQUAL(res, 0);
 	res = pomp_loop_destroy(loop);
 	CU_ASSERT_EQUAL(res, 0);
 }
