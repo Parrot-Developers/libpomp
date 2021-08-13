@@ -792,7 +792,7 @@ POMP_API int pomp_buffer_get_data(const struct pomp_buffer *buf,
  * @return 0 in case of success, negative errno value in case of error.
  */
 POMP_API int pomp_buffer_get_cdata(const struct pomp_buffer *buf,
-		const void **cdata, size_t *len, size_t *size);
+		const void **cdata, size_t *len, size_t *capacity);
 
 /**
  * Append data to the buffer.
