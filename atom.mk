@@ -132,7 +132,8 @@ LOCAL_SRC_FILES := \
 	tests/pomp_test_evt.c \
 	tests/pomp_test_loop.c \
 	tests/pomp_test_ipc.c \
-	tests/pomp_test_timer.c
+	tests/pomp_test_timer.c \
+	tests/pomp_test_nonregression.c
 
 LOCAL_LIBRARIES := libpomp libcunit
 LOCAL_CONDITIONAL_LIBRARIES := OPTIONAL:libulog

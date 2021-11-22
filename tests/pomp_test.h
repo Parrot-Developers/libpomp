@@ -71,5 +71,6 @@ extern CU_SuiteInfo g_suites_timer[];
 extern CU_SuiteInfo g_suites_ctx[];
 extern CU_SuiteInfo g_suites_evt[];
 extern CU_SuiteInfo g_suites_ipc[];
+extern CU_SuiteInfo g_suites_nonregression[];
 
 #endif /* !_POMP_TEST_H_ */

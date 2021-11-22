@@ -163,6 +163,7 @@ int main(int argc, char *argv[])
 #ifndef _WIN32
 	CU_register_suites(g_suites_ipc);
 #endif /* !_WIN32 */
+	CU_register_suites(g_suites_nonregression);
 
 	if (argc >= 2 && (strcmp(argv[1], "-h") == 0
 			|| strcmp(argv[1], "--help") == 0)) {
