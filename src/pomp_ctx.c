@@ -124,6 +124,9 @@ struct pomp_ctx {
 	/** Prevent event processing during stop and destroy */
 	int			stopping;
 
+	/** Prevent synchronous stop/destroy during notications */
+	int			notifying;
+
 	/** Keepalive settings */
 	struct {
 		int		enable;
@@ -1137,18 +1140,16 @@ int pomp_ctx_bind(struct pomp_ctx *ctx,
 	return pomp_ctx_start(ctx, POMP_CTX_TYPE_DGRAM, addr, addrlen);
 }
 
-/*
- * See documentation in public header.
+/**
+ * Asynchronous version of pomp_ctx_stop called when loop is idle to break
+ * recursion of stop.
+ * @param userdata : pomp context.
  */
-int pomp_ctx_stop(struct pomp_ctx *ctx)
+static void pomp_ctx_stop_idle(void *userdata)
 {
-	POMP_RETURN_ERR_IF_FAILED(ctx != NULL, -EINVAL);
-
-	if (ctx->addr == NULL || ctx->stopping)
-		return 0;
+	struct pomp_ctx *ctx = userdata;
 
 	/* Stop server/client/dgram */
-	ctx->stopping = 1;
 	switch (ctx->type) {
 	case POMP_CTX_TYPE_SERVER:
 		server_stop(ctx);
@@ -1168,7 +1169,27 @@ int pomp_ctx_stop(struct pomp_ctx *ctx)
 	free(ctx->addr);
 	ctx->addr = NULL;
 	ctx->stopping = 0;
-	return 0;
+}
+
+/*
+ * See documentation in public header.
+ */
+int pomp_ctx_stop(struct pomp_ctx *ctx)
+{
+	POMP_RETURN_ERR_IF_FAILED(ctx != NULL, -EINVAL);
+	if (ctx->addr == NULL || ctx->stopping)
+		return 0;
+
+	ctx->stopping = 1;
+
+	/* If currently notifying events/messages, do the stop in idle,
+	 * otherwise do it syncchronously */
+	if (ctx->notifying > 0) {
+		return pomp_loop_idle_add(ctx->loop, &pomp_ctx_stop_idle, ctx);
+	} else {
+		pomp_ctx_stop_idle(ctx);
+		return 0;
+	}
 }
 
 /*
@@ -1489,8 +1510,11 @@ int pomp_ctx_notify_event(struct pomp_ctx *ctx, enum pomp_event event,
 	POMP_RETURN_ERR_IF_FAILED(event != POMP_EVENT_MSG, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(conn != NULL, -EINVAL);
 
-	if (ctx->eventcb != NULL)
+	if (ctx->eventcb != NULL) {
+		ctx->notifying++;
 		(*ctx->eventcb)(ctx, event, conn, NULL, ctx->userdata);
+		ctx->notifying--;
+	}
 
 	return 0;
 }
@@ -1509,8 +1533,11 @@ int pomp_ctx_notify_msg(struct pomp_ctx *ctx, struct pomp_conn *conn,
 	POMP_RETURN_ERR_IF_FAILED(conn != NULL, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(msg != NULL, -EINVAL);
 
-	if (ctx->eventcb != NULL)
+	if (ctx->eventcb != NULL) {
+		ctx->notifying++;
 		(*ctx->eventcb)(ctx, POMP_EVENT_MSG, conn, msg, ctx->userdata);
+		ctx->notifying--;
+	}
 
 	return 0;
 }
@@ -1530,7 +1557,9 @@ int pomp_ctx_notify_raw_buf(struct pomp_ctx *ctx, struct pomp_conn *conn,
 	POMP_RETURN_ERR_IF_FAILED(conn != NULL, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(buf != NULL, -EINVAL);
 
+	ctx->notifying++;
 	(*ctx->rawcb)(ctx, conn, buf, ctx->userdata);
+	ctx->notifying--;
 	return 0;
 }
 
@@ -1549,8 +1578,11 @@ int pomp_ctx_notify_send(struct pomp_ctx *ctx, struct pomp_conn *conn,
 	POMP_RETURN_ERR_IF_FAILED(conn != NULL, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(buf != NULL, -EINVAL);
 
-	if (ctx->sendcb != NULL)
+	if (ctx->sendcb != NULL) {
+		ctx->notifying++;
 		(*ctx->sendcb)(ctx, conn, buf, status, NULL, ctx->userdata);
+		ctx->notifying--;
+	}
 	return 0;
 }
 
