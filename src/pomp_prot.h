@@ -120,20 +120,6 @@ extern "C" {
 /** Size of protocol header */
 #define POMP_PROT_HEADER_SIZE		12
 
-/* Forward declaration */
-struct pomp_prot;
-
-/* Protocol functions */
-
-struct pomp_prot *pomp_prot_new(void);
-
-int pomp_prot_destroy(struct pomp_prot *prot);
-
-ssize_t pomp_prot_decode_msg(struct pomp_prot *prot, const void *buf,
-		size_t len, struct pomp_msg **msg);
-
-int pomp_prot_release_msg(struct pomp_prot *prot, struct pomp_msg *msg);
-
 #ifdef __cplusplus
 }
 #endif /* __cplusplus */

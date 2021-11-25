@@ -1393,6 +1393,7 @@ POMP_API int pomp_addr_get_real_addr(const char *buf, char **dst);
 /* Forward declarations */
 struct pomp_encoder;
 struct pomp_decoder;
+struct pomp_prot;
 
 /*
  * message API (Advanced).
@@ -1818,6 +1819,49 @@ POMP_API int pomp_decoder_read_f64(struct pomp_decoder *dec, double *v);
  * you need to use it after the decoder or the message is released.
  */
 POMP_API int pomp_decoder_read_fd(struct pomp_decoder *dec, int *v);
+
+/*
+ * Protocol Parsing API (Advanced).
+ */
+
+/**
+ * Create a new protocol decoder object.
+ * @return protocol decoder object or NULL in case of error.
+ */
+POMP_API struct pomp_prot *pomp_prot_new(void);
+
+/**
+ * Destroy a protocol decoder object.
+ * @param prot : protocol decoder.
+ * @return 0 in case of success, negative errno value in case of error.
+ */
+POMP_API int pomp_prot_destroy(struct pomp_prot *prot);
+
+/**
+ * Try to decode a message with given input data.
+ * @param prot : protocol decoder.
+ * @param buf : input data.
+ * @param len : size of input data.
+ * @param msg : will receive decoded message. If more input data is required
+ * to decode the message, NULL will be returned. The message needs to be
+ * released either by calling 'pomp_msg_destroy' or 'pomp_prot_release_msg'.
+ * Calling 'pomp_prot_release_msg' allows reuse of allocated message structure.
+ * @return number of bytes processed. It can be less that input size in which
+ * case caller shall call again this function with remaining bytes.
+ */
+POMP_API int pomp_prot_decode_msg(struct pomp_prot *prot, const void *buf,
+		size_t len, struct pomp_msg **msg);
+
+/**
+ * Release a previously decoded message. This is to reuse message structure
+ * if possible and avoid some malloc/free at each decoded message. If there
+ * is already a internal message structure, it is simply destroyed.
+ * @param prot : protocol decoder.
+ * @param msg : message to release.
+ * @return 0 in case of success, negative errno value in case of error.
+ */
+POMP_API int pomp_prot_release_msg(struct pomp_prot *prot,
+		struct pomp_msg *msg);
 
 /*
  * Internal API.

@@ -285,7 +285,7 @@ int pomp_prot_destroy(struct pomp_prot *prot)
  * @return number of bytes processed. It can be less that input size in which
  * case caller shall call again this function with remaining bytes.
  */
-ssize_t pomp_prot_decode_msg(struct pomp_prot *prot, const void *buf,
+int pomp_prot_decode_msg(struct pomp_prot *prot, const void *buf,
 		size_t len, struct pomp_msg **msg)
 {
 	size_t off = 0;
@@ -297,6 +297,10 @@ ssize_t pomp_prot_decode_msg(struct pomp_prot *prot, const void *buf,
 	/* If idle, start a new parsing */
 	if (prot->state == POMP_PROT_STATE_IDLE)
 		prot->state = POMP_PROT_STATE_HEADER_MAGIC_0;
+
+	/* Don't return more than INT_MAX bytes */
+	if (len > INT_MAX)
+		len = INT_MAX;
 
 	/* Processing loop */
 	while (off < len && prot->state != POMP_PROT_STATE_IDLE) {
@@ -355,7 +359,7 @@ ssize_t pomp_prot_decode_msg(struct pomp_prot *prot, const void *buf,
 	}
 
 	/* Return number of bytes processed */
-	return (ssize_t)off;
+	return (int)off;
 }
 
 /**
