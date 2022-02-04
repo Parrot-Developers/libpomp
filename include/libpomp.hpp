@@ -423,6 +423,19 @@ public:
 		return pomp_conn_sendv(mConn, msgid, fmt, args);
 	}
 
+	/** Send a buffer to the peer of the raw connection. */
+	inline int send(const std::vector<uint8_t> &v) {
+		int res;
+		struct pomp_buffer *buf;
+		buf = pomp_buffer_new_with_data(v.data(), v.size());
+		if (buf != NULL) {
+			res = pomp_conn_send_raw_buf(mConn, buf);
+			pomp_buffer_unref(buf);
+			return res;
+		}
+		return -ENOMEM;
+	}
+
 #ifdef POMP_CXX11
 	/** Format and send a message to the peer of the connection. */
 	template<typename Fmt, typename... ArgsW>
@@ -751,6 +764,7 @@ public:
 	inline virtual void onConnected(Context *ctx, Connection *conn) { (void)ctx; (void)conn; }
 	inline virtual void onDisconnected(Context *ctx, Connection *conn) { (void)ctx; (void)conn; }
 	inline virtual void recvMessage(Context *ctx, Connection *conn, const Message &msg) { (void)ctx; (void)conn; (void)msg; }
+	inline virtual void recvRawBuffer(Context *ctx, Connection *conn, const std::vector<uint8_t> &v) { (void)ctx; (void)conn; (void)v; }
 };
 
 /**
@@ -818,6 +832,36 @@ private:
 		}
 	}
 
+	/** Internal raw callback */
+	inline static void rawCb(struct pomp_ctx *_ctx,
+			struct pomp_conn *_conn,
+			struct pomp_buffer *_buf,
+			void *_userdata) {
+		(void)_ctx;
+		std::vector<uint8_t> v;
+		const void *cdata = NULL;
+		size_t len;
+		size_t capacity;
+		int res;
+
+		/* Get our own object from user data */
+		Context *self = reinterpret_cast<Context *>(_userdata);
+
+		Connection *conn = NULL;
+		ConnectionArray::iterator it;
+		it = self->findConn(_conn);
+		if (it != self->mConnections.end())
+			conn = *it;
+
+		res = pomp_buffer_get_cdata(_buf, &cdata, &len, &capacity);
+		if (res == 0) {
+			const uint8_t *start = reinterpret_cast<const uint8_t *>(cdata);
+			const uint8_t *end = start + len;
+			v.assign(start, end);
+			self->mEventHandler->recvRawBuffer(self, conn, v);
+		}
+	}
+
 public:
 	/** Constructor. */
 	inline Context(EventHandler *eventHandler, Loop *loop = NULL) {
@@ -859,6 +903,11 @@ public:
 	/** Start a server with unix socket address access mode. */
 	inline int listen(const Address &address, uint32_t mode) {
 		return listen(address.addr(), address.len(), mode);
+	}
+
+	/** Mark the context as raw */
+	inline int setRaw() {
+		return pomp_ctx_set_raw(mCtx, &Context::rawCb);
 	}
 
 	/** Start a client. */
@@ -955,6 +1004,19 @@ public:
 	/** Format and send a message to all connections. */
 	inline int sendv(uint32_t msgid, const char *fmt, va_list args) {
 		return pomp_ctx_sendv(mCtx, msgid, fmt, args);
+	}
+
+	/** Send a buffer to all connections. */
+	inline int send(const std::vector<uint8_t> &v) {
+		int res;
+		struct pomp_buffer *buf;
+		buf = pomp_buffer_new_with_data(v.data(), v.size());
+		if (buf != NULL) {
+			res = pomp_ctx_send_raw_buf(mCtx, buf);
+			pomp_buffer_unref(buf);
+			return res;
+		}
+		return -ENOMEM;
 	}
 
 #ifdef POMP_CXX11
