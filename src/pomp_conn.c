@@ -100,6 +100,9 @@ struct pomp_conn {
 	/** Read buffer */
 	struct pomp_buffer	*readbuf;
 
+	/** Read buffer len */
+	size_t readbuf_len;
+
 	/** To chain connection structures in server context */
 	struct pomp_conn	*next;
 
@@ -633,6 +636,10 @@ static int pomp_conn_process_read_with_cmsg(struct pomp_conn *conn)
 	if (readlen == 0)
 		return 0;
 
+	/* TODO: add a check on msg.msg_flags for MSG_TRUNC if the buffer
+	 * capacity has been exeeded. In that case, the rest of the datagram
+	 * is lost. */
+
 	/* If we already have both current and next table with fds, we will
 	 * need to discard fds if we received new ones.
 	 * This means that a received message had associated fds in its
@@ -732,7 +739,7 @@ static void pomp_conn_process_read(struct pomp_conn *conn)
 
 		/* Allocate a new read buffer if needed */
 		if (conn->readbuf == NULL)
-			conn->readbuf = pomp_buffer_new(POMP_CONN_READ_SIZE);
+			conn->readbuf = pomp_buffer_new(conn->readbuf_len);
 		if (conn->readbuf == NULL)
 			break;
 
@@ -1006,7 +1013,8 @@ static void pomp_conn_cb(int fd, uint32_t revents, void *userdata)
  * @return connection object or NULL in case of error.
  */
 struct pomp_conn *pomp_conn_new(struct pomp_ctx *ctx,
-		struct pomp_loop *loop, int fd, int isdgram, int israw)
+		struct pomp_loop *loop, int fd, int isdgram, int israw,
+		size_t readbuf_len)
 {
 	int res = 0;
 	struct pomp_conn *conn = NULL;
@@ -1018,6 +1026,7 @@ struct pomp_conn *pomp_conn_new(struct pomp_ctx *ctx,
 	POMP_RETURN_VAL_IF_FAILED(ctx != NULL, -EINVAL, NULL);
 	POMP_RETURN_VAL_IF_FAILED(loop != NULL, -EINVAL, NULL);
 	POMP_RETURN_VAL_IF_FAILED(fd >= 0, -EINVAL, NULL);
+	POMP_RETURN_VAL_IF_FAILED(readbuf_len != 0, -EINVAL, NULL);
 
 	/* Allocate conn structure */
 	conn = calloc(1, sizeof(*conn));
@@ -1033,6 +1042,7 @@ struct pomp_conn *pomp_conn_new(struct pomp_ctx *ctx,
 	conn->removeflag = 0;
 	conn->read_suspended = 0;
 	conn->readbuf = NULL;
+	conn->readbuf_len = readbuf_len;
 	conn->rx_fds_current = &conn->rx_fds[0];
 	conn->rx_fds_next = &conn->rx_fds[1];
 
@@ -1465,4 +1475,24 @@ int pomp_conn_send_raw_buf_to(struct pomp_conn *conn,
 int pomp_conn_send_raw_buf(struct pomp_conn *conn, struct pomp_buffer *buf)
 {
 	return pomp_conn_send_buf_internal(conn, buf, NULL, 0);
+}
+
+/*
+ * See documentation in public header.
+ */
+int pomp_conn_set_read_buffer_len(struct pomp_conn *conn,
+		size_t len)
+{
+	POMP_RETURN_ERR_IF_FAILED(conn != NULL, -EINVAL);
+	POMP_RETURN_ERR_IF_FAILED(len != 0, -EINVAL);
+
+	/* If current read buffer has already been allocated, unref it so that
+	 * it will be reallocated with the correct length when needed. */
+	if (conn->readbuf != NULL) {
+		pomp_buffer_unref(conn->readbuf);
+		conn->readbuf = NULL;
+	}
+
+	conn->readbuf_len = len;
+	return 0;
 }

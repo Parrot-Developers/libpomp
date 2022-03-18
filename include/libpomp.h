@@ -566,6 +566,20 @@ POMP_API int pomp_ctx_send_raw_buf_to(struct pomp_ctx *ctx,
 		struct pomp_buffer *buf,
 		const struct sockaddr *addr, uint32_t addrlen);
 
+/**
+ * Set the context default read buffer length.
+ * For server and client contexts, this value can be overriden for each
+ * connection with pomp_conn_set_read_buffer_len.
+ * @note The default read buffer length is 4096 bytes.
+ * @note Read buffers of existing connections are not affected by this function,
+ * use pomp_conn_set_read_buffer_len() instead for them.
+ * @param ctx : context.
+ * @param len : the length in bytes of the read buffer.
+ * @return 0 in case of success, negative errno value in case of error.
+ */
+POMP_API int pomp_ctx_set_read_buffer_len(struct pomp_ctx *ctx,
+		size_t len);
+
 /*
  * Connection API.
  */
@@ -679,6 +693,15 @@ POMP_API int pomp_conn_sendv(struct pomp_conn *conn, uint32_t msgid,
  */
 POMP_API int pomp_conn_send_raw_buf(struct pomp_conn *conn,
 		struct pomp_buffer *buf);
+
+/**
+ * Set the connection read buffer length
+ * @param conn : connection.
+ * @param len : the length in bytes of the read buffer.
+ * @return 0 in case of success, negative errno value in case of error.
+ */
+POMP_API int pomp_conn_set_read_buffer_len(struct pomp_conn *conn,
+		size_t len);
 
 /*
  * Buffer API.

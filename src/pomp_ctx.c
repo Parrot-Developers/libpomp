@@ -127,6 +127,9 @@ struct pomp_ctx {
 	/** Prevent synchronous stop/destroy during notications */
 	int			notifying;
 
+	/** Default read buffer len */
+	size_t readbuf_len;
+
 	/** Keepalive settings */
 	struct {
 		int		enable;
@@ -321,7 +324,8 @@ static int server_accept_conn(int server_fd, struct pomp_ctx *ctx)
 		fd_socket_setup_keepalive(ctx, fd);
 
 	/* Allocate connection structure, transfer ownership of fd */
-	conn = pomp_conn_new(ctx, ctx->loop, fd, 0, ctx->israw);
+	conn = pomp_conn_new(ctx, ctx->loop, fd, 0, ctx->israw,
+		ctx->readbuf_len);
 	if (conn == NULL) {
 		res = -ENOMEM;
 		goto error;
@@ -590,7 +594,8 @@ static int client_complete_conn(int client_fd, struct pomp_ctx *ctx)
 		fd_socket_setup_keepalive(ctx, client_fd);
 
 	/* Allocate connection structure */
-	conn = pomp_conn_new(ctx, ctx->loop, client_fd, 0, ctx->israw);
+	conn = pomp_conn_new(ctx, ctx->loop, client_fd, 0, ctx->israw,
+		ctx->readbuf_len);
 	if (conn == NULL)
 		goto reconnect;
 
@@ -789,7 +794,8 @@ static int dgram_start(struct pomp_ctx *ctx)
 	}
 
 	/* Allocate connection structure */
-	conn = pomp_conn_new(ctx, ctx->loop, ctx->u.dgram.fd, 1, ctx->israw);
+	conn = pomp_conn_new(ctx, ctx->loop, ctx->u.dgram.fd, 1, ctx->israw,
+		ctx->readbuf_len);
 	if (conn == NULL)
 		goto reconnect;
 
@@ -959,6 +965,7 @@ struct pomp_ctx *pomp_ctx_new_with_loop(pomp_event_cb_t cb,
 	ctx->keepalive.idle = 5;
 	ctx->keepalive.interval = 1;
 	ctx->keepalive.count = 2;
+	ctx->readbuf_len = POMP_CONN_READ_SIZE;
 
 	/* Allocate timer */
 	ctx->timer = pomp_timer_new(ctx->loop, &timer_cb, ctx);
@@ -1417,6 +1424,18 @@ int pomp_ctx_send_raw_buf_to(struct pomp_ctx *ctx, struct pomp_buffer *buf,
 	POMP_RETURN_ERR_IF_FAILED(ctx->u.dgram.conn != NULL, -EINVAL);
 
 	return pomp_conn_send_raw_buf_to(ctx->u.dgram.conn, buf, addr, addrlen);
+}
+
+/*
+ * See documentation in public header.
+ */
+int pomp_ctx_set_read_buffer_len(struct pomp_ctx *ctx,
+		size_t len)
+{
+	POMP_RETURN_ERR_IF_FAILED(ctx != NULL, -EINVAL);
+	POMP_RETURN_ERR_IF_FAILED(len != 0, -EINVAL);
+	ctx->readbuf_len = len;
+	return 0;
 }
 
 /**

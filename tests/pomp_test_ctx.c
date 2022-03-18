@@ -612,6 +612,10 @@ static void test_ctx(const struct sockaddr *addr1, uint32_t addrlen1,
 		res = pomp_ctx_bind(data.srv.ctx, NULL, addrlen1);
 		CU_ASSERT_EQUAL(res, -EINVAL);
 
+		/* Configure 1st context read buffer length */
+		res = pomp_ctx_set_read_buffer_len(data.srv.ctx, 32);
+		CU_ASSERT_EQUAL(res, 0);
+
 		/* Bind 1st context */
 		res = pomp_ctx_bind(data.srv.ctx, addr1, addrlen1);
 		CU_ASSERT_EQUAL(res, 0);
@@ -644,6 +648,10 @@ static void test_ctx(const struct sockaddr *addr1, uint32_t addrlen1,
 		res = pomp_ctx_bind(data.cli.ctx, NULL, addrlen2);
 		CU_ASSERT_EQUAL(res, -EINVAL);
 
+		/* Configure 2nd context read buffer length */
+		res = pomp_ctx_set_read_buffer_len(data.cli.ctx, 32);
+		CU_ASSERT_EQUAL(res, 0);
+
 		/* Bind 2nd context */
 		res = pomp_ctx_bind(data.cli.ctx, addr2, addrlen2);
 		CU_ASSERT_EQUAL(res, 0);
@@ -661,6 +669,12 @@ static void test_ctx(const struct sockaddr *addr1, uint32_t addrlen1,
 	CU_ASSERT_EQUAL(res, -EINVAL);
 	res = pomp_ctx_set_raw(data.srv.ctx, &test_ctx_raw_cb);
 	CU_ASSERT_EQUAL(res, -EBUSY);
+
+	/* Invalid set read buffer length */
+	res = pomp_ctx_set_read_buffer_len(NULL, 4096);
+	CU_ASSERT_EQUAL(res, -EINVAL);
+	res = pomp_conn_set_read_buffer_len(NULL, 4096);
+	CU_ASSERT_EQUAL(res, -EINVAL);
 
 	/* Invalid set socket cb */
 	res = pomp_ctx_set_socket_cb(NULL, &test_ctx_socket_cb);
@@ -716,10 +730,14 @@ static void test_ctx(const struct sockaddr *addr1, uint32_t addrlen1,
 		/* Get remote connections */
 		conn = pomp_ctx_get_next_conn(data.srv.ctx, NULL);
 		CU_ASSERT_PTR_NOT_NULL(conn);
+		res = pomp_conn_set_read_buffer_len(conn, 8);
+		CU_ASSERT_EQUAL(res, 0);
 		conn = pomp_ctx_get_next_conn(data.srv.ctx, conn);
 		CU_ASSERT_PTR_NULL(conn);
 		conn = pomp_ctx_get_conn(data.cli.ctx);
 		CU_ASSERT_PTR_NOT_NULL(conn);
+		res = pomp_conn_set_read_buffer_len(conn, 8);
+		CU_ASSERT_EQUAL(res, 0);
 
 		/* Invalid get remote connections */
 		conn = pomp_ctx_get_next_conn(data.cli.ctx, NULL);
@@ -844,8 +862,11 @@ static void test_ctx(const struct sockaddr *addr1, uint32_t addrlen1,
 		if (withsendcb)
 			CU_ASSERT_EQUAL(data.sendcount, 4);
 	} else {
-		if (data.isdgram)
+		if (data.isdgram) {
 			CU_ASSERT_EQUAL(data.buf, 2);
+		} else {
+			CU_ASSERT_EQUAL(data.buf, 4);
+		}
 		CU_ASSERT_EQUAL(data.dataread, data.datasent);
 		if (withsendcb)
 			CU_ASSERT_EQUAL(data.sendcount, 2);

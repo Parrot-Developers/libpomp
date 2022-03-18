@@ -213,7 +213,8 @@ int pomp_ctx_sendcb_is_set(struct pomp_ctx *ctx);
 /* Connection functions not part of public API */
 
 struct pomp_conn *pomp_conn_new(struct pomp_ctx *ctx,
-		struct pomp_loop *loop, int fd, int isdgram, int israw);
+		struct pomp_loop *loop, int fd, int isdgram, int israw,
+		size_t readbuf_len);
 
 int pomp_conn_destroy(struct pomp_conn *conn);
 
