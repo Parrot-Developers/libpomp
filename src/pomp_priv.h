@@ -123,8 +123,12 @@
 #  define POMP_TIMER_POSIX_SIGNO	SIGRTMIN
 #endif /* POMP_TIMER_POSIX_SIGNO */
 
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__)
 #  define POMP_HAVE_WATCHDOG
+#endif /* __linux__ || __APPLE__ */
+
+#ifdef __linux__
+#  define POMP_HAVE_WATCHDOG_MONOTONIC
 #endif /* __linux__ */
 
 #include "libpomp.h"

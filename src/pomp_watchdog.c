@@ -132,7 +132,9 @@ int pomp_watchdog_start(struct pomp_watchdog *watchdog,
 	pthread_mutex_init(&watchdog->mutex, NULL);
 
 	pthread_condattr_init(&condattr);
+#ifdef POMP_HAVE_WATCHDOG_MONOTONIC
 	pthread_condattr_setclock(&condattr, CLOCK_MONOTONIC);
+#endif /* POMP_HAVE_WATCHDOG_MONOTONIC */
 	pthread_cond_init(&watchdog->cond, &condattr);
 	pthread_condattr_destroy(&condattr);
 
