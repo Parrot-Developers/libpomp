@@ -165,6 +165,13 @@ static inline int win32_setsockopt(int sockfd, int level, int optname,
 			(const char *)optval, optlen);
 }
 
+static inline int win32_getsockopt(int sockfd, int level, int optname,
+		void *optval, socklen_t *optlen)
+{
+	return getsockopt((SOCKET)sockfd, level, optname,
+			(char *)optval, optlen);
+}
+
 #undef close
 #undef read
 #undef recvfrom
@@ -172,6 +179,7 @@ static inline int win32_setsockopt(int sockfd, int level, int optname,
 #undef sendto
 #undef fcntl
 #undef setsockopt
+#undef getsockopt
 #undef errno
 
 #define close		win32_close
@@ -181,6 +189,7 @@ static inline int win32_setsockopt(int sockfd, int level, int optname,
 #define sendto		win32_sendto
 #define fcntl		win32_fcntl
 #define setsockopt	win32_setsockopt
+#define getsockopt	win32_getsockopt
 #define errno		((int)GetLastError())
 
 #ifdef __cplusplus
