@@ -22,6 +22,9 @@ set(LIB_SOURCES
 add_library(pomp ${LIB_SOURCES})
 
 option(BUILD_SHARED_LIBS "Build using shared libraries" ON)
+set_target_properties(pomp PROPERTIES
+                    POSITION_INDEPENDENT_CODE ${BUILD_SHARED_LIBS}
+)
 
 target_include_directories(pomp PUBLIC
                             $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -36,8 +39,3 @@ if(WIN32)
   target_link_libraries(pomp ws2_32)
 endif()
 target_link_libraries(pomp ${LIBS})
-
-# state that libpomp need PIC when the default is shared libraries
-set_target_properties(pomp PROPERTIES
-                    POSITION_INDEPENDENT_CODE ${BUILD_SHARED_LIBS}
-)
