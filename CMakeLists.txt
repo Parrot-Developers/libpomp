@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.15)
 project(libpomp VERSION 1.0)
 
-set(LIBS pthread)
+set(LIBS )
 
 set(LIB_SOURCES
     src/pomp_addr.c
@@ -36,6 +36,9 @@ target_compile_definitions(pomp PRIVATE "POMP_API_EXPORTS")
 target_compile_options(pomp PRIVATE "-fvisibility=hidden")
 
 if(WIN32)
-  target_link_libraries(pomp ws2_32)
+  target_link_libraries(pomp PRIVATE ws2_32)
 endif()
-target_link_libraries(pomp ${LIBS})
+target_link_libraries(pomp PRIVATE 
+                        pthread 
+                        rt
+)
