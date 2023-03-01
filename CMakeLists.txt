@@ -1,6 +1,13 @@
 cmake_minimum_required(VERSION 3.15)
 project(pomp VERSION 1.0)
 
+# checks if set up rpath exists for install
+if(COMMAND set_up_rpath)
+    set_up_rpath()
+else()
+    message("Set up rpath not defined!")
+endif()
+
 set(LIBS pthread rt)
 
 set(LIB_SOURCES
@@ -36,7 +43,12 @@ target_compile_options(${PROJECT_NAME} PRIVATE "-fvisibility=hidden")
 if(WIN32)
   target_link_libraries(${PROJECT_NAME} ws2_32)
 endif()
-target_link_libraries(${PROJECT_NAME} ${LIBS})
+
+# target_link_libraries(${PROJECT_NAME} ${LIBS})
+
+set(${PROJECT_NAME}-headers
+    ${PROJECT_SOURCE_DIR}/include/
+)
 
 # state that lib${PROJECT_NAME} need PIC when the default is shared libraries
 set_target_properties(${PROJECT_NAME} PROPERTIES
@@ -44,7 +56,16 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
 )
 
 install(TARGETS ${PROJECT_NAME}
-        PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_PREFIX}/include/${PROJECT_NAME}
-        LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/${PROJECT_NAME}
-        ARCHIVE DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/${PROJECT_NAME}
+    EXPORT ${PROJECT_NAME}-targets
+    ARCHIVE DESTINATION lib
+    LIBRARY DESTINATION lib
+    RUNTIME DESTINATION bin
 )
+
+# to get all header files correctly
+# directly in include due to reasons
+
+install(
+    DIRECTORY ${${PROJECT_NAME}-headers} DESTINATION include/
+)
+
