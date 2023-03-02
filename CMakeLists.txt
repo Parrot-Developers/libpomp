@@ -8,7 +8,7 @@ else()
     message("Set up rpath not defined!")
 endif()
 
-set(LIBS pthread rt)
+set(LIBS pthread)
 
 set(LIB_SOURCES
     src/pomp_addr.c
@@ -42,6 +42,8 @@ target_compile_options(${PROJECT_NAME} PRIVATE "-fvisibility=hidden")
 
 if(WIN32)
   target_link_libraries(${PROJECT_NAME} ws2_32)
+else()
+target_link_libraries(${PROJECT_NAME} rt)
 endif()
 
 # target_link_libraries(${PROJECT_NAME} ${LIBS})
