@@ -46,6 +46,7 @@ target_compile_options(${PROJECT_NAME} PRIVATE "-fvisibility=hidden")
 
 if(WIN32)
     list(APPEND LIBS ws2_32)
+    target_link_options(${PROJECT_NAME} PUBLIC "-Wl,--export-all-symbols")
 else()
     list(APPEND LIBS rt)
 endif()
