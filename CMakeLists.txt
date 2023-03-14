@@ -20,7 +20,7 @@ set(LIB_SOURCES
     src/pomp_timer.c
 )
 
-add_library(${PROJECT_NAME} ${LIB_SOURCES})
+add_library(${PROJECT_NAME} SHARED ${LIB_SOURCES})
 
 # checks if set up rpath exists for install
 if(COMMAND set_up_rpath)
@@ -72,6 +72,6 @@ install(TARGETS ${PROJECT_NAME}
 # to get all header files correctly
 # directly in include due to reasons
 install(
-    DIRECTORY ${${PROJECT_NAME}-headers} DESTINATION include/
+    DIRECTORY ${${PROJECT_NAME}-headers} DESTINATION include
 )
 
