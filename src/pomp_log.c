@@ -38,3 +38,64 @@
 #ifdef BUILD_LIBULOG
 ULOG_DECLARE_TAG(pomp);
 #endif /* BUILD_LIBULOG */
+
+#ifdef _WIN32
+
+int pomp_win32_error_to_errno(int error)
+{
+	switch (error) {
+	case 0: return 0;
+	case ERROR_ACCESS_DENIED: return EACCES;
+	case ERROR_ALREADY_EXISTS: return EEXIST;
+	case ERROR_DISK_FULL: return ENOSPC;
+	case ERROR_FILE_EXISTS: return EEXIST;
+	case ERROR_FILE_NOT_FOUND: return ENOENT;
+	case ERROR_NOT_ENOUGH_MEMORY: return ENOMEM;
+
+	case WSAEINTR: return EINTR;
+	case WSAEBADF: return EBADF;
+	case WSAEACCES: return EACCES;
+	case WSAEFAULT: return EFAULT;
+	case WSAEINVAL: return EINVAL;
+	case WSAEMFILE: return EMFILE;
+	case WSAEWOULDBLOCK: return EWOULDBLOCK;
+	case WSAEINPROGRESS: return EINPROGRESS;
+	case WSAEALREADY: return EALREADY;
+	case WSAENOTSOCK: return ENOTSOCK;
+	case WSAEDESTADDRREQ: return EDESTADDRREQ;
+	case WSAEMSGSIZE: return EMSGSIZE;
+	case WSAEPROTOTYPE: return EPROTOTYPE;
+	case WSAENOPROTOOPT: return ENOPROTOOPT;
+	case WSAEPROTONOSUPPORT: return EPROTONOSUPPORT;
+	/*case WSAESOCKTNOSUPPORT: return ESOCKTNOSUPPORT;*/
+	case WSAEOPNOTSUPP: return EOPNOTSUPP;
+	/*case WSAEPFNOSUPPORT: return EPFNOSUPPORT;*/
+	case WSAEAFNOSUPPORT: return EAFNOSUPPORT;
+	case WSAEADDRINUSE: return EADDRINUSE;
+	case WSAEADDRNOTAVAIL: return EADDRNOTAVAIL;
+	case WSAENETDOWN: return ENETDOWN;
+	case WSAENETUNREACH: return ENETUNREACH;
+	case WSAENETRESET: return ENETRESET;
+	case WSAECONNABORTED: return ECONNABORTED;
+	case WSAECONNRESET: return ECONNRESET;
+	case WSAENOBUFS: return ENOBUFS;
+	case WSAEISCONN: return EISCONN;
+	case WSAENOTCONN: return ENOTCONN;
+	/*case WSAESHUTDOWN: return ESHUTDOWN;*/
+	/*case WSAETOOMANYREFS: return ETOOMANYREFS;*/
+	case WSAETIMEDOUT: return ETIMEDOUT;
+	case WSAECONNREFUSED: return ECONNREFUSED;
+	case WSAELOOP: return ELOOP;
+	case WSAENAMETOOLONG: return ENAMETOOLONG;
+	case WSAEHOSTDOWN: return EHOSTDOWN;
+	case WSAEHOSTUNREACH: return EHOSTUNREACH;
+	case WSAENOTEMPTY: return ENOTEMPTY;
+
+	default:
+		POMP_LOGW("Unknown win32 error:%d", error);
+		/* codecheck_ignore[USE_NEGATIVE_ERRNO] */
+		return EINVAL;
+	}
+}
+
+#endif /* _WIN32 */

@@ -87,6 +87,7 @@ struct pomp_conn;
 struct pomp_buffer;
 struct pomp_msg;
 struct pomp_loop;
+struct pomp_loop_sync;
 struct pomp_evt;
 struct pomp_timer;
 
@@ -108,7 +109,7 @@ enum pomp_event {
 
 /**
  * Get the string description of a context event.
- * @param event : event to convert.
+ * @param event event to convert.
  * @return string description of the context event.
  */
 POMP_API const char *pomp_event_str(enum pomp_event event);
@@ -132,7 +133,7 @@ enum pomp_socket_kind {
 
 /**
  * Get the string description of a socket kind.
- * @param kind : socket kind to convert.
+ * @param kind socket kind to convert.
  * @return string description of the socket kind.
  */
 POMP_API const char *pomp_socket_kind_str(enum pomp_socket_kind kind);
@@ -154,11 +155,11 @@ struct pomp_cred {
 
 /**
  * Context event callback prototype.
- * @param ctx : context.
- * @param event : event that occurred.
- * @param conn : connection on which the event occurred.
- * @param msg : received message when event is POMP_EVENT_MSG.
- * @param userdata : user data given in pomp_ctx_new.
+ * @param ctx context.
+ * @param event event that occurred.
+ * @param conn connection on which the event occurred.
+ * @param msg received message when event is POMP_EVENT_MSG.
+ * @param userdata user data given in pomp_ctx_new.
  */
 typedef void (*pomp_event_cb_t)(
 		struct pomp_ctx *ctx,
@@ -169,10 +170,10 @@ typedef void (*pomp_event_cb_t)(
 
 /**
  * Context raw data reception callback prototype.
- * @param ctx : context.
- * @param conn : connection on which the event occurred.
- * @param buf : received data.
- * @param userdata : user data given in pomp_ctx_new.
+ * @param ctx context.
+ * @param conn connection on which the event occurred.
+ * @param buf received data.
+ * @param userdata user data given in pomp_ctx_new.
  */
 typedef void (*pomp_ctx_raw_cb_t)(
 		struct pomp_ctx *ctx,
@@ -182,10 +183,10 @@ typedef void (*pomp_ctx_raw_cb_t)(
 
 /**
  * Context socket callback. If set, will be called after socket is created.
- * @param ctx : context.
- * @param fd : socket fd.
- * @param kind : socket kind.
- * @param userdata : user data given in pomp_ctx_new.
+ * @param ctx context.
+ * @param fd socket fd.
+ * @param kind socket kind.
+ * @param userdata user data given in pomp_ctx_new.
  */
 typedef void (*pomp_socket_cb_t)(
 		struct pomp_ctx *ctx,
@@ -196,16 +197,16 @@ typedef void (*pomp_socket_cb_t)(
 /**
  * Send callback. If set, it is called to indicate that the given buffer has
  * been sent (or not).
- * @param ctx : context.
- * @param conn : connection on which the event occurred.
- * @param buf : buffer whose send status id notified. If in raw mode is it the
+ * @param ctx context.
+ * @param conn connection on which the event occurred.
+ * @param buf buffer whose send status id notified. If in raw mode is it the
  * one given in send operation, otherwise it is the internal buffer associated
  * with the message sent.
- * @param status : set of flags (enum pomp_send_status) indicating the status.
+ * @param status set of flags (enum pomp_send_status) indicating the status.
  * one of OK, ERROR or ABORTED is always set. QUEUE_EMPTY indicates that there
  * is no more buffer queued internally.
- * @param cookie : NULL, reserved for future use.
- * @param userdata : user data given in pomp_ctx_new.
+ * @param cookie NULL, reserved for future use.
+ * @param userdata user data given in pomp_ctx_new.
  *
  */
 typedef void (*pomp_send_cb_t)(
@@ -218,37 +219,37 @@ typedef void (*pomp_send_cb_t)(
 
 /**
  * Fd event callback.
- * @param fd : triggered fd.
- * @param revents : event that occurred.
- * @param userdata : callback user data.
+ * @param fd triggered fd.
+ * @param revents event that occurred.
+ * @param userdata callback user data.
  */
 typedef void (*pomp_fd_event_cb_t)(int fd, uint32_t revents, void *userdata);
 
 /**
  * pomp_evt event callback.
  * @note The event will be cleared automatically before calling this.
- * @param evt : triggered event.
- * @param userdata : callback user data.
+ * @param evt triggered event.
+ * @param userdata callback user data.
  */
 typedef void (*pomp_evt_cb_t)(struct pomp_evt *evt, void *userdata);
 
 /**
  * Timer callback
- * @param timer : timer.
- * @param userdata : callback user data.
+ * @param timer timer.
+ * @param userdata callback user data.
  */
 typedef void (*pomp_timer_cb_t) (struct pomp_timer *timer, void *userdata);
 
 /**
  * Idle callback.
- * @param userdata : callback user data.
+ * @param userdata callback user data.
  */
 typedef void (*pomp_idle_cb_t)(void *userdata);
 
 /**
  * Watchdog callback
- * @param loop: associated loop.
- * @param userdata : callback user data.
+ * @param loop associated loop.
+ * @param userdata callback user data.
  */
 typedef void (*pomp_watchdog_cb_t)(struct pomp_loop *loop, void *userdata);
 
@@ -258,19 +259,19 @@ typedef void (*pomp_watchdog_cb_t)(struct pomp_loop *loop, void *userdata);
 
 /**
  * Create a new context structure.
- * @param cb : function to be called when connection/disconnection/message
+ * @param cb function to be called when connection/disconnection/message
  * events occur.
- * @param userdata : user data to give in cb.
+ * @param userdata user data to give in cb.
  * @return context structure or NULL in case of error.
  */
 POMP_API struct pomp_ctx *pomp_ctx_new(pomp_event_cb_t cb, void *userdata);
 
 /**
  * Create a new context structure in an existing loop.
- * @param cb : function to be called when connection/disconnection/message
+ * @param cb function to be called when connection/disconnection/message
  * events occur.
- * @param userdata : user data to give in cb.
- * @param loop: loop to use.
+ * @param userdata user data to give in cb.
+ * @param loop loop to use.
  * @return context structure or NULL in case of error.
  */
 POMP_API struct pomp_ctx *pomp_ctx_new_with_loop(pomp_event_cb_t cb,
@@ -281,8 +282,8 @@ POMP_API struct pomp_ctx *pomp_ctx_new_with_loop(pomp_event_cb_t cb,
  * be used, only raw data can be sent/received. Connection/Disconnection
  * events will be notified with the generic context event callback.
  * message API.
- * @param ctx : context.
- * @param cb : function to call when data has been received. The userdata
+ * @param ctx context.
+ * @param cb function to call when data has been received. The userdata
  * argument will be the same as the one set when creating the context.
  * @return 0 in case of success, negative errno value in case of error.
  */
@@ -291,8 +292,8 @@ POMP_API int pomp_ctx_set_raw(struct pomp_ctx *ctx, pomp_ctx_raw_cb_t cb);
 /**
  * Set the function to call when socket fd are created. This allows application
  * to configure socket before it is used.
- * @param ctx : context.
- * @param cb : function to call when socket are created. The userdata
+ * @param ctx context.
+ * @param cb function to call when socket are created. The userdata
  * argument will be the same as the one set when creating the context.
  * @return 0 in case of success, negative errno value in case of error.
  */
@@ -302,8 +303,8 @@ POMP_API int pomp_ctx_set_socket_cb(struct pomp_ctx *ctx, pomp_socket_cb_t cb);
  * Set the function to call when send operations are completed. This allows
  * application to be notified of actual completion in case operations are
  * internally queued.
- * @param ctx : context.
- * @param cb : function to call when send operations are completed. The userdata
+ * @param ctx context.
+ * @param cb function to call when send operations are completed. The userdata
  * argument will be the same as the one set when creating the context.
  * @return 0 in case of success, negative errno value in case of error.
  */
@@ -312,11 +313,11 @@ POMP_API int pomp_ctx_set_send_cb(struct pomp_ctx *ctx, pomp_send_cb_t cb);
 /**
  * Setup TCP keepalive. Settings will be applied to all future TCP connections.
  * Current connections (if any) will not be affected.
- * @param ctx : context.
- * @param enable : 1 to enable, 0, to disable.
- * @param idle : start keepalives after this period (in seconds).
- * @param interval : Interval between keepalives (in seconds).
- * @param count : number of keepalives before death.
+ * @param ctx context.
+ * @param enable 1 to enable, 0, to disable.
+ * @param idle start keepalives after this period (in seconds).
+ * @param interval Interval between keepalives (in seconds).
+ * @param count number of keepalives before death.
  * @return 0 in case of success, negative errno value in case of error.
  *
  * @remarks Default values if nothing else is specified is (1, 5, 1, 2).
@@ -325,8 +326,19 @@ POMP_API int pomp_ctx_setup_keepalive(struct pomp_ctx *ctx, int enable,
 		int idle, int interval, int count);
 
 /**
+ * Set maximum number of active connections for a server
+ *
+ * @param ctx context.
+ * @param count maximum connection count. It must be strictly positive.
+ * @return 0 in case of success, negative errno value in case of error.
+ *
+ * @remarks Default to POMP_SERVER_MAX_CONN_COUNT (32) if not set
+ */
+POMP_API int pomp_ctx_set_max_conn(struct pomp_ctx *ctx, size_t count);
+
+/**
  * Destroy a context.
- * @param ctx : context.
+ * @param ctx context.
  * @return 0 in case of success, negative errno value in case of error.
  * If the client or server is still running, -EBUSY is returned.
  */
@@ -334,9 +346,9 @@ POMP_API int pomp_ctx_destroy(struct pomp_ctx *ctx);
 
 /**
  * Start a server.
- * @param ctx : context.
- * @param addr : local address to listen on.
- * @param addrlen : local address size.
+ * @param ctx context.
+ * @param addr local address to listen on.
+ * @param addrlen local address size.
  * @return 0 in case of success, negative errno value in case of error.
  */
 POMP_API int pomp_ctx_listen(struct pomp_ctx *ctx,
@@ -344,10 +356,10 @@ POMP_API int pomp_ctx_listen(struct pomp_ctx *ctx,
 
 /**
  * Start a server, but changing the access mode for unix socket address.
- * @param ctx : context.
- * @param addr : local address to listen on.
- * @param addrlen : local address size.
- * @param mode : acces mode to set (see CHMOD(2)). if 0 is given this effect is
+ * @param ctx context.
+ * @param addr local address to listen on.
+ * @param addrlen local address size.
+ * @param mode acces mode to set (see CHMOD(2)). if 0 is given this effect is
  * the same as simply calling pomp_ctx_listen, it will use default access mode
  * depending on current value of UMASK(2).
  * @return 0 in case of success, negative errno value in case of error.
@@ -360,9 +372,9 @@ POMP_API int pomp_ctx_listen_with_access_mode(struct pomp_ctx *ctx,
  * Start a client.
  * If connection can not be completed immediately, it will try again later
  * automatically. Call pomp_ctx_stop to disconnect and stop everything.
- * @param ctx : context.
- * @param addr : remote address to connect to.
- * @param addrlen : remote address size.
+ * @param ctx context.
+ * @param addr remote address to connect to.
+ * @param addrlen remote address size.
  * @return 0 in case of success, negative errno value in case of error.
  */
 POMP_API int pomp_ctx_connect(struct pomp_ctx *ctx,
@@ -370,9 +382,9 @@ POMP_API int pomp_ctx_connect(struct pomp_ctx *ctx,
 
 /**
  * Bind a connection-less context (inet-udp).
- * @param ctx : context.
- * @param addr : address to bind to.
- * @param addrlen : address size.
+ * @param ctx context.
+ * @param addr address to bind to.
+ * @param addrlen address size.
  * @return 0 in case of success, negative errno value in case of error.
  */
 POMP_API int pomp_ctx_bind(struct pomp_ctx *ctx,
@@ -382,14 +394,14 @@ POMP_API int pomp_ctx_bind(struct pomp_ctx *ctx,
  * Stop the context. It will disconnects all peers (with notification). The
  * context structure itself is not freed. It can be used again with listen or
  * connect.
- * @param ctx : context.
+ * @param ctx context.
  * @return 0 in case of success, negative errno value in case of error.
  */
 POMP_API int pomp_ctx_stop(struct pomp_ctx *ctx);
 
 /**
  * Get the internal loop structure of the context.
- * @param ctx : context.
+ * @param ctx context.
  * @return loop structure or NULL in case of error.
  */
 POMP_API struct pomp_loop *pomp_ctx_get_loop(struct pomp_ctx *ctx);
@@ -401,7 +413,7 @@ POMP_API struct pomp_loop *pomp_ctx_get_loop(struct pomp_ctx *ctx);
  * win32...) and monitored for input events. When it becomes readable, the
  * function pomp_ctx_process_fd shall be called to dispatch internal events.
  *
- * @param ctx : context.
+ * @param ctx context.
  * @return file descriptor (or event handle for win32), negative errno value
  * in case of error.
  *
@@ -411,7 +423,7 @@ POMP_API intptr_t pomp_ctx_get_fd(const struct pomp_ctx *ctx);
 
 /**
  * Function to be called when the loop of the context is signaled.
- * @param ctx : context.
+ * @param ctx context.
  * @return 0 in case of success, negative errno value in case of error.
  * @remarks this is equivalent to calling pomp_ctx_wait_and_process with a
  * timeout of 0 (no wait).
@@ -420,8 +432,8 @@ POMP_API int pomp_ctx_process_fd(struct pomp_ctx *ctx);
 
 /**
  * Wait for events to occur in the context and process them.
- * @param ctx : context.
- * @param timeout : timeout of wait (in ms) or -1 for infinite wait.
+ * @param ctx context.
+ * @param timeout timeout of wait (in ms) or -1 for infinite wait.
  * @return 0 in case of success, -ETIMEDOUT if timeout occurred,
  * negative errno value in case of error.
  */
@@ -429,7 +441,7 @@ POMP_API int pomp_ctx_wait_and_process(struct pomp_ctx *ctx, int timeout);
 
 /**
  * Wakeup a context from a wait in pomp_ctx_wait_and_process.
- * @param ctx : context.
+ * @param ctx context.
  * @return 0 in case of success, negative errno value in case of error.
  *
  * @remarks: this function is safe to call from another thread that the one
@@ -441,8 +453,8 @@ POMP_API int pomp_ctx_wakeup(struct pomp_ctx *ctx);
 
 /**
  * Get next connection structure for a server context.
- * @param ctx : context (shall be a server one).
- * @param prev : previous connection structure or NULL to get the first one.
+ * @param ctx context (shall be a server one).
+ * @param prev previous connection structure or NULL to get the first one.
  * @return connection structure or NULL if there is no more connection.
  */
 POMP_API struct pomp_conn *pomp_ctx_get_next_conn(const struct pomp_ctx *ctx,
@@ -450,7 +462,7 @@ POMP_API struct pomp_conn *pomp_ctx_get_next_conn(const struct pomp_ctx *ctx,
 
 /**
  * Get the connection structure for a client context.
- * @param ctx : context (shall be a client one).
+ * @param ctx context (shall be a client one).
  * @return connection structure or NULL if there is no connection with server.
  */
 POMP_API struct pomp_conn *pomp_ctx_get_conn(const struct pomp_ctx *ctx);
@@ -458,8 +470,8 @@ POMP_API struct pomp_conn *pomp_ctx_get_conn(const struct pomp_ctx *ctx);
 /**
  * Get context local address (for server or udp context started with listen or
  * bind ).
- * @param ctx : context (shall be a server or udp one).
- * @param addrlen : returned address size.
+ * @param ctx context (shall be a server or udp one).
+ * @param addrlen returned address size.
  * @return local address or NULL in case of error.
  */
 POMP_API const struct sockaddr *pomp_ctx_get_local_addr(struct pomp_ctx *ctx,
@@ -470,8 +482,8 @@ POMP_API const struct sockaddr *pomp_ctx_get_local_addr(struct pomp_ctx *ctx,
  * For server it will broadcast to all connected clients. If there is no
  * connection, the message is lost and no error is returned.
  * For client, if there is no connection, -ENOTCONN is returned.
- * @param ctx : context.
- * @param msg : message to send.
+ * @param ctx context.
+ * @param msg message to send.
  * @return 0 in case of success, negative errno value in case of error.
  *
  * @remarks the operation will be queued automatically for later processing
@@ -483,10 +495,10 @@ POMP_API int pomp_ctx_send_msg(struct pomp_ctx *ctx,
 
 /**
  * Send a message on dgram context to a remote address.
- * @param ctx : context.
- * @param msg : message to send.
- * @param addr : destination address.
- * @param addrlen : address size.
+ * @param ctx context.
+ * @param msg message to send.
+ * @param addr destination address.
+ * @param addrlen address size.
  * @return 0 in case of success, negative errno value in case of error.
  *
  * @remarks the operation will be queued automatically for later processing
@@ -502,10 +514,10 @@ POMP_API int pomp_ctx_send_msg_to(struct pomp_ctx *ctx,
  * For server it will broadcast to all connected clients. If there is no
  * connection, no message is sent and no error is returned.
  * For client, if there is no connection, -ENOTCONN is returned.
- * @param ctx : context.
- * @param msgid : message id.
- * @param fmt : format string. Can be NULL if no arguments given.
- * @param ... : message arguments.
+ * @param ctx context.
+ * @param msgid message id.
+ * @param fmt format string. Can be NULL if no arguments given.
+ * @param ... message arguments.
  * @return 0 in case of success, negative errno value in case of error.
  *
  * @remarks the operation will be queued automatically for later processing
@@ -521,10 +533,10 @@ POMP_API int pomp_ctx_send(struct pomp_ctx *ctx, uint32_t msgid,
  * For server it will broadcast to all connected clients. If there is no
  * connection, the message is lost and no error is returned.
  * For client, if there is no connection, -ENOTCONN is returned.
- * @param ctx : context.
- * @param msgid : message id.
- * @param fmt : format string. Can be NULL if no arguments given.
- * @param args : message arguments.
+ * @param ctx context.
+ * @param msgid message id.
+ * @param fmt format string. Can be NULL if no arguments given.
+ * @param args message arguments.
  * @return 0 in case of success, negative errno value in case of error.
  *
  * @remarks the operation will be queued automatically for later processing
@@ -539,8 +551,8 @@ POMP_API int pomp_ctx_sendv(struct pomp_ctx *ctx, uint32_t msgid,
  * For server it will broadcast to all connected clients. If there is no
  * connection, no buffer is sent and no error is returned.
  * For client, if there is no connection, -ENOTCONN is returned.
- * @param ctx : context.
- * @param buf : buffer to send.
+ * @param ctx context.
+ * @param buf buffer to send.
  * @return 0 in case of success, negative errno value in case of error.
  *
  * @remarks the operation will be queued automatically for later processing
@@ -552,10 +564,10 @@ POMP_API int pomp_ctx_send_raw_buf(struct pomp_ctx *ctx,
 
 /**
  * Send a buffer on dgram raw context to a remote address.
- * @param ctx : context.
- * @param buff : buffer to send.
- * @param addr : destination address.
- * @param addrlen : address size.
+ * @param ctx context.
+ * @param buff buffer to send.
+ * @param addr destination address.
+ * @param addrlen address size.
  * @return 0 in case of success, negative errno value in case of error.
  *
  * @remarks the operation will be queued automatically for later processing
@@ -573,8 +585,8 @@ POMP_API int pomp_ctx_send_raw_buf_to(struct pomp_ctx *ctx,
  * @note The default read buffer length is 4096 bytes.
  * @note Read buffers of existing connections are not affected by this function,
  * use pomp_conn_set_read_buffer_len() instead for them.
- * @param ctx : context.
- * @param len : the length in bytes of the read buffer.
+ * @param ctx context.
+ * @param len the length in bytes of the read buffer.
  * @return 0 in case of success, negative errno value in case of error.
  */
 POMP_API int pomp_ctx_set_read_buffer_len(struct pomp_ctx *ctx,
@@ -586,15 +598,15 @@ POMP_API int pomp_ctx_set_read_buffer_len(struct pomp_ctx *ctx,
 
 /**
  * Force disconnection of an established connection.
- * @param conn : connection
+ * @param conn connection
  * @return 0 in case of success, negative errno value in case of error.
  */
 POMP_API int pomp_conn_disconnect(struct pomp_conn *conn);
 
 /**
  * Get connection local address.
- * @param conn : connection
- * @param addrlen : returned address size.
+ * @param conn connection
+ * @param addrlen returned address size.
  * @return local address or NULL in case of error.
  */
 POMP_API const struct sockaddr *pomp_conn_get_local_addr(struct pomp_conn *conn,
@@ -602,8 +614,8 @@ POMP_API const struct sockaddr *pomp_conn_get_local_addr(struct pomp_conn *conn,
 
 /**
  * Get connection remote peer address.
- * @param conn : connection
- * @param addrlen : returned address size.
+ * @param conn connection
+ * @param addrlen returned address size.
  * @return remote peer address or NULL in case of error.
  */
 POMP_API const struct sockaddr *pomp_conn_get_peer_addr(struct pomp_conn *conn,
@@ -611,7 +623,7 @@ POMP_API const struct sockaddr *pomp_conn_get_peer_addr(struct pomp_conn *conn,
 
 /**
  * Get connection remote peer credentials for local sockets.
- * @param conn : connection
+ * @param conn connection
  * @return connection remote peer credentials or NULL if not a local socket.
  */
 POMP_API const struct pomp_cred *pomp_conn_get_peer_cred(
@@ -619,29 +631,29 @@ POMP_API const struct pomp_cred *pomp_conn_get_peer_cred(
 
 /**
  * Get file descriptor associated with the connection.
- * @param conn : connection.
+ * @param conn connection.
  * @return fd of the connection or -EINVAL in case of error.
  */
 POMP_API int pomp_conn_get_fd(struct pomp_conn *conn);
 
 /**
  * Suspend read operation on connection.
- * @param conn : connection.
+ * @param conn connection.
  * @return 0 in case of success, negative errno value in case of error.
  */
 POMP_API int pomp_conn_suspend_read(struct pomp_conn *conn);
 
 /**
  * Resume read operation on connection.
- * @param conn : connection.
+ * @param conn connection.
  * @return 0 in case of success, negative errno value in case of error.
  */
 POMP_API int pomp_conn_resume_read(struct pomp_conn *conn);
 
 /**
  * Send a message to the peer of the connection.
- * @param conn : connection.
- * @param msg : message to send.
+ * @param conn connection.
+ * @param msg message to send.
  * @return 0 in case of success, negative errno value in case of error.
  *
  * @remarks the operation will be queued automatically for later processing
@@ -653,10 +665,10 @@ POMP_API int pomp_conn_send_msg(struct pomp_conn *conn,
 
 /**
  * Format and send a message to the peer of the connection.
- * @param conn : connection.
- * @param msgid : message id.
- * @param fmt : format string. Can be NULL if no arguments given.
- * @param ... : message arguments.
+ * @param conn connection.
+ * @param msgid message id.
+ * @param fmt format string. Can be NULL if no arguments given.
+ * @param ... message arguments.
  * @return 0 in case of success, negative errno value in case of error.
  *
  * @remarks the operation will be queued automatically for later processing
@@ -668,10 +680,10 @@ POMP_API int pomp_conn_send(struct pomp_conn *conn, uint32_t msgid,
 
 /**
  * Format and send a message to the peer of the connection.
- * @param conn : connection.
- * @param msgid : message id.
- * @param fmt : format string. Can be NULL if no arguments given.
- * @param args : message arguments.
+ * @param conn connection.
+ * @param msgid message id.
+ * @param fmt format string. Can be NULL if no arguments given.
+ * @param args message arguments.
  * @return 0 in case of success, negative errno value in case of error.
  *
  * @remarks the operation will be queued automatically for later processing
@@ -683,8 +695,8 @@ POMP_API int pomp_conn_sendv(struct pomp_conn *conn, uint32_t msgid,
 
 /**
  * Send a buffer to the peer of the raw connection.
- * @param conn : connection.
- * @param buf : buffer to send.
+ * @param conn connection.
+ * @param buf buffer to send.
  * @return 0 in case of success, negative errno value in case of error.
  *
  * @remarks the operation will be queued automatically for later processing
@@ -696,8 +708,8 @@ POMP_API int pomp_conn_send_raw_buf(struct pomp_conn *conn,
 
 /**
  * Set the connection read buffer length
- * @param conn : connection.
- * @param len : the length in bytes of the read buffer.
+ * @param conn connection.
+ * @param len the length in bytes of the read buffer.
  * @return 0 in case of success, negative errno value in case of error.
  */
 POMP_API int pomp_conn_set_read_buffer_len(struct pomp_conn *conn,
@@ -709,14 +721,14 @@ POMP_API int pomp_conn_set_read_buffer_len(struct pomp_conn *conn,
 
 /**
  * Allocate a new buffer.
- * @param capacity : initial capacity of the buffer.
+ * @param capacity initial capacity of the buffer.
  * @return new buffer with initial ref count at 1 or NULL in case of error.
  */
 POMP_API struct pomp_buffer *pomp_buffer_new(size_t capacity);
 
 /**
  * Create a new buffer with content copied from another buffer.
- * @param buf : buffer to copy.
+ * @param buf buffer to copy.
  * @return new buffer with initial ref count at 1 and internal data copied from
  * given buffer or NULL in case of error.
  */
@@ -726,8 +738,8 @@ POMP_API struct pomp_buffer *pomp_buffer_new_copy(
 /**
  * Create a new buffer with content copied from given data. Internal length and
  * capacity will be set to given data length.
- * @param data : data to copy.
- * @param len : length to copy.
+ * @param data data to copy.
+ * @param len length to copy.
  * @return new buffer with initial ref count at 1 and internal data copied from
  * given buffer or NULL in case of error.
  */
@@ -736,8 +748,8 @@ POMP_API struct pomp_buffer *pomp_buffer_new_with_data(
 
 /**
  * Same as pomp_buffer_new but retrieved internal data pointer at the same time.
- * @param capacity : initial capacity of the buffer.
- * @param data : data of buffer (optional can be NULL).
+ * @param capacity initial capacity of the buffer.
+ * @param data data of buffer (optional can be NULL).
  * @return new buffer with initial ref count at 1 or NULL in case of error.
  */
 POMP_API struct pomp_buffer *pomp_buffer_new_get_data(
@@ -745,28 +757,28 @@ POMP_API struct pomp_buffer *pomp_buffer_new_get_data(
 
 /**
  * Increase ref count of buffer.
- * @param buf : buffer.
+ * @param buf buffer.
  */
 POMP_API void pomp_buffer_ref(struct pomp_buffer *buf);
 
 /**
  * Decrease ref count of buffer. When it reaches 0, internal data as well as
  * buffer structure itself is freed.
- * @param buf : buffer.
+ * @param buf buffer.
  */
 POMP_API void pomp_buffer_unref(struct pomp_buffer *buf);
 
 /**
  * Determine if the buffer is shared
- * @param buf : buffer.
+ * @param buf buffer.
  * @return 1 if the buffer is shared (ref count greater than 1), 0 otherwise.
  */
 POMP_API int pomp_buffer_is_shared(const struct pomp_buffer *buf);
 
 /**
  * Set the capacity of the buffer.
- * @param buf : buffer.
- * @param capacity : new capacity of buffer (shall be greater than used length).
+ * @param buf buffer.
+ * @param capacity new capacity of buffer (shall be greater than used length).
  * @return 0 in case of success, negative errno value in case of error.
  * -EPERM is returned if the buffer is shared (ref count is greater than 1).
  */
@@ -774,20 +786,20 @@ POMP_API int pomp_buffer_set_capacity(struct pomp_buffer *buf, size_t capacity);
 
 /**
  * Make sure internal data has enough room for the given size.
- * @param buf : buffer.
- * @param capacity : new capacity of buffer.
+ * @param buf buffer.
+ * @param capacity new capacity of buffer.
  * @return 0 in case of success, negative errno value in case of error.
  * -EPERM is returned if the buffer is shared (ref count is greater than 1).
  *
- * @remarks : internally the size will be aligned to POMP_BUFFER_ALLOC_STEP.
+ * @remarks internally the size will be aligned to POMP_BUFFER_ALLOC_STEP.
  */
 POMP_API int pomp_buffer_ensure_capacity(struct pomp_buffer *buf,
 		size_t capacity);
 
 /**
  * Set the used length of the buffer.
- * @param buf : buffer.
- * @param len : used length of data (shall be lesser than allocated size).
+ * @param buf buffer.
+ * @param len used length of data (shall be lesser than allocated size).
  * @return 0 in case of success, negative errno value in case of error.
  * -EPERM is returned if the buffer is shared (ref count is greater than 1) or
  * readonly.
@@ -796,10 +808,10 @@ POMP_API int pomp_buffer_set_len(struct pomp_buffer *buf, size_t len);
 
 /**
  * Get internal buffer data for read/write.
- * @param buf : buffer.
- * @param data : data of buffer (optional can be NULL).
- * @param len : used length of buffer (optional can be NULL).
- * @param capacity : capacity of buffer (optional can be NULL).
+ * @param buf buffer.
+ * @param data data of buffer (optional can be NULL).
+ * @param len used length of buffer (optional can be NULL).
+ * @param capacity capacity of buffer (optional can be NULL).
  * @return 0 in case of success, negative errno value in case of error.
  * -EPERM is returned if the buffer is shared.
  */
@@ -808,10 +820,10 @@ POMP_API int pomp_buffer_get_data(const struct pomp_buffer *buf,
 
 /**
  * Get internal buffer data for read-only.
- * @param buf : buffer
- * @param cdata : data of buffer (optional can be NULL).
- * @param len : used length of buffer (optional can be NULL).
- * @param capacity : capacity of buffer (optional can be NULL).
+ * @param buf buffer
+ * @param cdata data of buffer (optional can be NULL).
+ * @param len used length of buffer (optional can be NULL).
+ * @param capacity capacity of buffer (optional can be NULL).
  * @return 0 in case of success, negative errno value in case of error.
  */
 POMP_API int pomp_buffer_get_cdata(const struct pomp_buffer *buf,
@@ -819,9 +831,9 @@ POMP_API int pomp_buffer_get_cdata(const struct pomp_buffer *buf,
 
 /**
  * Append data to the buffer.
- * @param buf : buffer.
- * @param data : data to append.
- * @param len : length of the data to append.
+ * @param buf buffer.
+ * @param data data to append.
+ * @param len length of the data to append.
  * @return 0 in case of success, negative errno value in case of error.
  * -EPERM is returned if the buffer is shared.
  *
@@ -833,8 +845,8 @@ POMP_API int pomp_buffer_append_data(struct pomp_buffer *buf,
 
 /**
  * Append source buffer data to the buffer.
- * @param buf : destination buffer.
- * @param src : source buffer to append.
+ * @param buf destination buffer.
+ * @param src source buffer to append.
  * @return 0 in case of success, negative errno value in case of error.
  * -EPERM is returned if the buffer is shared.
  *
@@ -846,10 +858,10 @@ POMP_API int pomp_buffer_append_buffer(struct pomp_buffer *buf,
 
 /**
  * Write data to the buffer at the given position.
- * @param buf : buffer.
- * @param pos : position in the buffer (will be updated after success)
- * @param data : data to write.
- * @param len : length of the data to write.
+ * @param buf buffer.
+ * @param pos position in the buffer (will be updated after success)
+ * @param data data to write.
+ * @param len length of the data to write.
  * @return 0 in case of success, negative errno value in case of error.
  * -EPERM is returned if the buffer is shared.
  *
@@ -861,10 +873,10 @@ POMP_API int pomp_buffer_write(struct pomp_buffer *buf, size_t *pos,
 
 /**
  * Read data from buffer at the given position.
- * @param buf : buffer.
- * @param pos : read position. It will be updated in case of success.
- * @param data : pointer to data to read.
- * @param len : number of bytes to read.
+ * @param buf buffer.
+ * @param pos read position. It will be updated in case of success.
+ * @param data pointer to data to read.
+ * @param len number of bytes to read.
  * @return 0 in case of success, negative errno value in case of error.
  */
 POMP_API int pomp_buffer_read(const struct pomp_buffer *buf, size_t *pos,
@@ -872,12 +884,14 @@ POMP_API int pomp_buffer_read(const struct pomp_buffer *buf, size_t *pos,
 
 /**
  * Read data from buffer without copy.
- * @param buf : buffer.
- * @param pos : read position. It will be updated in case of success.
- * @param cdata : will receive pointer to data inside buffer. It is valid as
+ * @param buf buffer.
+ * @param pos read position. It will be updated in case of success.
+ * @param cdata will receive pointer to data inside buffer. It is valid as
  * long as the buffer is valid and no write or resize operation is performed.
- * @param len : number of bytes to read.
+ * @param len number of bytes to read.
  * @return 0 in case of success, negative errno value in case of error.
+ * @remarks pointer to data inside buffer has unspecified alignment, so it
+ *          should be assumed to be aligned on byte boundary.
  */
 POMP_API int pomp_buffer_cread(const struct pomp_buffer *buf, size_t *pos,
 		const void **cdata, size_t len);
@@ -897,38 +911,38 @@ POMP_API struct pomp_msg *pomp_msg_new(void);
  * Create a new message structure.
  * Message will be a copy of given message (with internal buffer copied as
  * well, not just shared).
- * @param msg : message to copy.
+ * @param msg message to copy.
  * @return new message structure or NULL in case of error.
  *
- * @remarks : if the message contains file descriptors, they are duplicated in
+ * @remarks if the message contains file descriptors, they are duplicated in
  * the new message.
  */
 POMP_API struct pomp_msg *pomp_msg_new_copy(const struct pomp_msg *msg);
 
 /**
  * Create a new message structure from a buffer with data.
- * @param buf : buffer with message content (header + playload).
+ * @param buf buffer with message content (header + payload).
  * @return new message structure or NULL in case of error.
  */
 POMP_API struct pomp_msg *pomp_msg_new_with_buffer(struct pomp_buffer *buf);
 
 /**
  * Destroy a message.
- * @param msg : message.
+ * @param msg message.
  * @return 0 in case of success, negative errno value in case of error.
  */
 POMP_API int pomp_msg_destroy(struct pomp_msg *msg);
 
 /**
  * Get the id of the message.
- * @param msg : message.
+ * @param msg message.
  * @return id of the message or 0 in case of error.
  */
 POMP_API uint32_t pomp_msg_get_id(const struct pomp_msg *msg);
 
 /**
  * Get the internal buffer of the message.
- * @param msg : message.
+ * @param msg message.
  * @return internal buffer of the message or NULL in case of error.
  *
  * @remarks this function is useful when only the serialization of the library
@@ -939,10 +953,10 @@ POMP_API struct pomp_buffer *pomp_msg_get_buffer(const struct pomp_msg *msg);
 
 /**
  * Write and encode a message.
- * @param msg : message.
- * @param msgid : message id.
- * @param fmt : format string. Can be NULL if no arguments given.
- * @param ... : message arguments.
+ * @param msg message.
+ * @param msgid message id.
+ * @param fmt format string. Can be NULL if no arguments given.
+ * @param ... message arguments.
  * @return 0 in case of success, negative errno value in case of error.
  */
 POMP_API int pomp_msg_write(struct pomp_msg *msg, uint32_t msgid,
@@ -950,10 +964,10 @@ POMP_API int pomp_msg_write(struct pomp_msg *msg, uint32_t msgid,
 
 /**
  * Write and encode a message.
- * @param msg : message.
- * @param msgid : message id.
- * @param fmt : format string. Can be NULL if no arguments given.
- * @param args : message arguments.
+ * @param msg message.
+ * @param msgid message id.
+ * @param fmt format string. Can be NULL if no arguments given.
+ * @param args message arguments.
  * @return 0 in case of success, negative errno value in case of error.
  */
 POMP_API int pomp_msg_writev(struct pomp_msg *msg, uint32_t msgid,
@@ -961,11 +975,11 @@ POMP_API int pomp_msg_writev(struct pomp_msg *msg, uint32_t msgid,
 
 /**
  * Write and encode a message.
- * @param msg : message.
- * @param msgid : message id.
- * @param fmt : format string. Can be NULL if no arguments given.
- * @param argc : number of arguments.
- * @param argv : array of arguments as strings. Each string will be converted
+ * @param msg message.
+ * @param msgid message id.
+ * @param fmt format string. Can be NULL if no arguments given.
+ * @param argc number of arguments.
+ * @param argv array of arguments as strings. Each string will be converted
  *               according to its real type specified in format.
  * @return 0 in case of success, negative errno value in case of error.
  *
@@ -979,9 +993,9 @@ POMP_API int pomp_msg_write_argv(struct pomp_msg *msg, uint32_t msgid,
  * If the format is shorter (less arguments) than the message written, the last
  * arguments written will be silently ignored and only the first arguments in
  * the read format will be filled.
- * @param msg : message.
- * @param fmt : format string. Can be NULL if no arguments given.
- * @param ... : message arguments.
+ * @param msg message.
+ * @param fmt format string. Can be NULL if no arguments given.
+ * @param ... message arguments.
  * @return 0 in case of success, negative errno value in case of error.
  */
 POMP_API int pomp_msg_read(const struct pomp_msg *msg,
@@ -992,9 +1006,9 @@ POMP_API int pomp_msg_read(const struct pomp_msg *msg,
  * If the format is shorter (less arguments) than the message written, the last
  * arguments written will be silently ignored and only the first arguments in
  * the read format will be filled.
- * @param msg : message.
- * @param fmt : format string. Can be NULL if no arguments given.
- * @param args : message arguments.
+ * @param msg message.
+ * @param fmt format string. Can be NULL if no arguments given.
+ * @param args message arguments.
  * @return 0 in case of success, negative errno value in case of error.
  */
 POMP_API int pomp_msg_readv(const struct pomp_msg *msg,
@@ -1002,9 +1016,9 @@ POMP_API int pomp_msg_readv(const struct pomp_msg *msg,
 
 /**
  * Dump a message in a human readable form.
- * @param msg : message.
- * @param dst : destination buffer.
- * @param maxdst : max length of destination buffer.
+ * @param msg message.
+ * @param dst destination buffer.
+ * @param maxdst max length of destination buffer.
  * @return 0 in case of success, negative errno value in case of error.
 
  * @remarks if the buffer is too small, it will be ended with ellipsis '...' if
@@ -1017,8 +1031,8 @@ POMP_API int pomp_msg_dump(const struct pomp_msg *msg,
  * Dump a message in a human readable form. Similar to pomp_msg_dump() but
  * allocates the output buffer dynamically.
  * Dump a message in a human readable form.
- * @param msg : message.
- * @param dst : destination buffer, which will be allocated to a suitable size
+ * @param msg message.
+ * @param dst destination buffer, which will be allocated to a suitable size
  * dynamically. Must be freed with free(), after usage.
  * @return 0 in case of success, negative errno value in case of error.
  */
@@ -1036,17 +1050,17 @@ POMP_API struct pomp_loop *pomp_loop_new(void);
 
 /**
  * Destroy a loop.
- * @param loop : loop to destroy.
+ * @param loop loop to destroy.
  * @return 0 in case of success, negative errno value in case of error.
  */
 POMP_API int pomp_loop_destroy(struct pomp_loop *loop);
 
 /**
  * Register a new fd in loop.
- * @param loop : loop.
- * @param fd : fd to register.
- * @param events : events to monitor. @see pomp_fd_event.
- * @param cb : callback for notifications.
+ * @param loop loop.
+ * @param fd fd to register.
+ * @param events events to monitor. @see pomp_fd_event.
+ * @param cb callback for notifications.
  * @param userdata user data for callback.
  * @return 0 in case of success, negative errno value in case of error.
  */
@@ -1055,19 +1069,19 @@ POMP_API int pomp_loop_add(struct pomp_loop *loop, int fd, uint32_t events,
 
 /**
  * Modify the set of events to monitor for a registered fd.
- * @param loop : loop.
- * @param fd : fd to modify.
- * @param events : new events to monitor. @see pomp_fd_event.
+ * @param loop loop.
+ * @param fd fd to modify.
+ * @param events new events to monitor. @see pomp_fd_event.
  * @return 0 in case of success, negative errno value in case of error.
  */
 POMP_API int pomp_loop_update(struct pomp_loop *loop, int fd, uint32_t events);
 
 /**
  * Modify the set of events to monitor for a registered fd.
- * @param loop : loop.
- * @param fd : fd to modify.
- * @param events_to_add : events to add. @see pomp_fd_event.
- * @param events_to_remove : events to remove. @see pomp_fd_event.
+ * @param loop loop.
+ * @param fd fd to modify.
+ * @param events_to_add events to add. @see pomp_fd_event.
+ * @param events_to_remove events to remove. @see pomp_fd_event.
  * @return 0 in case of success, negative errno value in case of error.
  */
 POMP_API int pomp_loop_update2(struct pomp_loop *loop, int fd,
@@ -1075,16 +1089,16 @@ POMP_API int pomp_loop_update2(struct pomp_loop *loop, int fd,
 
 /**
  * Unregister a fd from the loop
- * @param loop : loop.
- * @param fd : fd to unregister.
+ * @param loop loop.
+ * @param fd fd to unregister.
  * @return 0 in case of success, negative errno value in case of error.
  */
 POMP_API int pomp_loop_remove(struct pomp_loop *loop, int fd);
 
 /**
  * Check if fd has been added in loop.
- * @param loop : loop.
- * @param fd : fd to check.
+ * @param loop loop.
+ * @param fd fd to check.
  * @return 1 if fd is in loop 0 otherwise.
  */
 POMP_API int pomp_loop_has_fd(struct pomp_loop *loop, int fd);
@@ -1098,7 +1112,7 @@ POMP_API int pomp_loop_has_fd(struct pomp_loop *loop, int fd);
  * function pomp_loop_wait_and_process shall be called to dispatch internal
  * events.
  *
- * @param loop : loop.
+ * @param loop loop.
  * @return file descriptor (or event handle for win32), negative errno value
  * in case of error.
  *
@@ -1110,7 +1124,7 @@ POMP_API intptr_t pomp_loop_get_fd(struct pomp_loop *loop);
 
 /**
  * Function to be called when the loop is signaled for readiness.
- * @param loop : loop.
+ * @param loop loop.
  * @return 0 in case of success, negative errno value in case of error.
  * @remarks this is equivalent to calling pomp_loop_wait_and_process with a
  * timeout of 0 (no wait).
@@ -1119,8 +1133,8 @@ POMP_API int pomp_loop_process_fd(struct pomp_loop *loop);
 
 /**
  * Wait for events to occur in loop and process them.
- * @param loop : loop.
- * @param timeout : timeout of wait (in ms) or -1 for infinite wait.
+ * @param loop loop.
+ * @param timeout timeout of wait (in ms) or -1 for infinite wait.
  * @return 0 in case of success, -ETIMEDOUT if timeout occurred,
  * negative errno value in case of error.
  */
@@ -1128,7 +1142,7 @@ POMP_API int pomp_loop_wait_and_process(struct pomp_loop *loop, int timeout);
 
 /**
  * Wakeup a loop from a wait in pomp_loop_wait_and_process.
- * @param loop : loop.
+ * @param loop loop.
  * @return 0 in case of success, negative errno value in case of error.
  *
  * @remarks: this function is safe to call from another thread that the one
@@ -1142,9 +1156,9 @@ POMP_API int pomp_loop_wakeup(struct pomp_loop *loop);
  * Register a function to be called when loop is idle, i.e. there is no event
  * to be processed. The registered function will be called only once and in
  * the order they are registered.
- * @param loop : loop.
- * @param cb : callback to call.
- * @param userdata : user data for callback.
+ * @param loop loop.
+ * @param cb callback to call.
+ * @param userdata user data for callback.
  * @return 0 in case of success, negative errno value in case of error.
  *
  * @remarks: this function is useful to register cleanup functions when called
@@ -1160,11 +1174,15 @@ POMP_API int pomp_loop_idle_add(struct pomp_loop *loop, pomp_idle_cb_t cb,
  * Similar to pomp_loop_idle_add but associate a cookie with the idle entry
  * that can be used with pomp_loop_idle_remove_by_cookie or
  * pomp_loop_idle_flush_by_cookie.
- * @param loop : loop.
- * @param cb : callback to call.
- * @param userdata : user data for callback.
- * @param cookie : cookie to better identify the idle entry.
+ * @param loop loop.
+ * @param cb callback to call.
+ * @param userdata user data for callback.
+ * @param cookie cookie to better identify the idle entry.
  * @return 0 in case of success, negative errno value in case of error.
+ *
+ * @remarks: this function is safe to call from another thread that the one
+ * associated normally with the loop. However caller must ensure that the
+ * given loop will be valid for the complete duration of the call.
  */
 POMP_API int pomp_loop_idle_add_with_cookie(struct pomp_loop *loop,
 		pomp_idle_cb_t cb,
@@ -1173,9 +1191,9 @@ POMP_API int pomp_loop_idle_add_with_cookie(struct pomp_loop *loop,
 
 /**
  * Unregister a function registered with pomp_loop_idle_add.
- * @param loop : loop.
- * @param cb : callback given in pomp_loop_idle_add.
- * @param userdata : user data given in pomp_loop_idle_add.
+ * @param loop loop.
+ * @param cb callback given in pomp_loop_idle_add.
+ * @param userdata user data given in pomp_loop_idle_add.
  * @return 0 in case of success, negative errno value in case of error.
  *
  * @remarks: if nothing match the given criteria, no error is returned.
@@ -1190,9 +1208,13 @@ POMP_API int pomp_loop_idle_remove(struct pomp_loop *loop, pomp_idle_cb_t cb,
 /**
  * Similar to pomp_loop_idle_remove but remove all idle functions registered
  * with the given cookie.
- * @param loop : loop.
- * @param cookie : cookie given in pomp_loop_idle_add_with_cookie.
+ * @param loop loop.
+ * @param cookie cookie given in pomp_loop_idle_add_with_cookie.
  * @return 0 in case of success, negative errno value in case of error.
+ *
+ * @remarks: this function is safe to call from another thread that the one
+ * associated normally with the loop. However caller must ensure that the
+ * given loop will be valid for the complete duration of the call.
  */
 POMP_API int pomp_loop_idle_remove_by_cookie(struct pomp_loop *loop,
 		void *cookie);
@@ -1200,16 +1222,24 @@ POMP_API int pomp_loop_idle_remove_by_cookie(struct pomp_loop *loop,
 /**
  * Flush idle entries. Calls all pending idles.
  *
- * @param loop : loop.
+ * @param loop loop.
  * @return 0 in case of success, negative errno value in case of error.
+ *
+ * @remarks: this function is safe to call from another thread that the one
+ * associated normally with the loop. However caller must ensure that the
+ * given loop will be valid for the complete duration of the call.
  */
 POMP_API int pomp_loop_idle_flush(struct pomp_loop *loop);
 
 /**
  * Similar to pomp_loop_idle_flush but with a filter on the cookie.
- * @param loop : loop.
- * @param cookie : cookie given in pomp_loop_idle_add.
+ * @param loop loop.
+ * @param cookie cookie given in pomp_loop_idle_add.
  * @return 0 in case of success, negative errno value in case of error.
+ *
+ * @remarks: this function is safe to call from another thread that the one
+ * associated normally with the loop. However caller must ensure that the
+ * given loop will be valid for the complete duration of the call.
  */
 POMP_API int pomp_loop_idle_flush_by_cookie(struct pomp_loop *loop,
 		void *cookie);
@@ -1218,16 +1248,16 @@ POMP_API int pomp_loop_idle_flush_by_cookie(struct pomp_loop *loop,
  * Enable watchdog on the loop. If the dispatch of the events on the loop takes
  * longer than the given delay, the given function will be called
  * (in an internal thread) to notify that processing is stuck.
- * @param loop : loop.
- * @param delay : maximum time (in ms allowed for the processing of events)
- * @param cb :  function to call when the processing took too long.
- * @param userdata : user data for the callback.
+ * @param loop loop.
+ * @param delay maximum time (in ms allowed for the processing of events)
+ * @param cb  function to call when the processing took too long.
+ * @param userdata user data for the callback.
  * @return 0 in case of success, negative errno value in case of error.
  *
  * @remarks: the function is called in the context of an internal thread and
- * should therefore nor call other functions of the library. The intent is to
+ * should therefore not call other functions of the library. The intent is to
  * provide a way to log something or kill the offending process.
- * @remarks: it should be called only once before caling once of the 'process'
+ * @remarks: it should be called only once before calling any of the 'process'
  * functions.
  */
 POMP_API int pomp_loop_watchdog_enable(struct pomp_loop *loop,
@@ -1237,10 +1267,45 @@ POMP_API int pomp_loop_watchdog_enable(struct pomp_loop *loop,
 
 /**
  * Disable the watchdog on the loop.
- * @param loop : loop.
+ * @param loop loop.
  * @return 0 in case of success, negative errno value in case of error.
  */
 POMP_API int pomp_loop_watchdog_disable(struct pomp_loop *loop);
+
+/**
+ * Enable thread synchronization safety on the loop. If concurrent threads want
+ * to access loop api, they shall lock the loop first.
+ * @param loop loop.
+ * @return 0 in case of success, negative errno value in case of error.
+ */
+POMP_API int pomp_loop_enable_thread_sync(struct pomp_loop *loop);
+
+/**
+ * Lock the loop. Internally it will ensure that no event and callback
+ * processing will be done by the 'main' thread while the lock is held.
+ * @param loop loop.
+ * @return 0 in case of success, negative errno value in case of error.
+ * @remarks: the loop shall be first enabled for thread safety.
+ *
+ * @remarks: this function is safe to call from another thread that the one
+ * associated normally with the loop. However caller must ensure that the
+ * given loop will be valid for the complete duration of the call.
+ */
+POMP_API int pomp_loop_lock(struct pomp_loop *loop);
+
+/**
+ * Unlock the loop.
+ * loop.
+ * The loop shall be first be enabled for thread safety.
+ * @param loop loop.
+ * @return 0 in case of success, negative errno value in case of error.
+ * @remarks: the loop shall be first enabled for thread safety.
+ *
+ * @remarks: this function is safe to call from another thread that the one
+ * associated normally with the loop. However caller must ensure that the
+ * given loop will be valid for the complete duration of the call.
+ */
+POMP_API int pomp_loop_unlock(struct pomp_loop *loop);
 
 /*
  * Event API.
@@ -1249,21 +1314,28 @@ POMP_API int pomp_loop_watchdog_disable(struct pomp_loop *loop);
 /**
  * Create a new event.
  * @return new event or NULL in case of error.
+ *
+ * @remarks: this function is safe to call from another thread that the one
+ * associated normally with the loop.
  */
 POMP_API struct pomp_evt *pomp_evt_new(void);
 
 /**
  * Destroy an event.
- * @param evt : event to destroy.
+ * @param evt event to destroy.
  * @return 0 in case of success, negative errno value in case of error.
+ *
+ *
+ * @remarks: this function is safe to call from another thread that the one
+ * associated normally with the loop.
  */
 POMP_API int pomp_evt_destroy(struct pomp_evt *evt);
 
 /**
  * Attach a pomp_evt to a loop.
- * @param evt : event to attach.
- * @param loop : loop to attach to.
- * @param cb : callback for notifications.
+ * @param evt event to attach.
+ * @param loop loop to attach to.
+ * @param cb callback for notifications.
  * @param userdata user data for callback.
  * @return 0 in case of success, negative errno value in case of error.
  */
@@ -1272,8 +1344,8 @@ POMP_API int pomp_evt_attach_to_loop(struct pomp_evt *evt,
 
 /**
  * Detach an event from a loop.
- * @param evt : event to detach.
- * @param loop : loop.
+ * @param evt event to detach.
+ * @param loop loop.
  * @return 0 in case of success, negative errno value in case of error.
  */
 POMP_API int pomp_evt_detach_from_loop(struct pomp_evt *evt,
@@ -1281,8 +1353,8 @@ POMP_API int pomp_evt_detach_from_loop(struct pomp_evt *evt,
 
 /**
  * Check if the event is attached to the given loop.
- * @param evt : event to check.
- * @param loop : loop to check.
+ * @param evt event to check.
+ * @param loop loop to check.
  *               If NULL, check if the event is attached to any loop.
  * @return 1 if event is attached to the given loop, 0 otherwise.
  */
@@ -1293,8 +1365,12 @@ POMP_API int pomp_evt_is_attached(struct pomp_evt *evt, struct pomp_loop *loop);
  *
  * The fd associated with the pomp_evt will become readable.
  *
- * @param evt : event.
+ * @param evt event.
  * @return 0 in case of success, negative errno value in case of error.
+ *
+ * @remarks: this function is safe to call from another thread that the one
+ * associated normally with the loop. However caller must ensure that the
+ * given event will be valid for the complete duration of the call.
  */
 POMP_API int pomp_evt_signal(struct pomp_evt *evt);
 
@@ -1303,8 +1379,12 @@ POMP_API int pomp_evt_signal(struct pomp_evt *evt);
  *
  * The fd associated with the pomp_evt will no longer be readable.
  *
- * @param evt : event.
+ * @param evt event.
  * @return 0 in case of success, negative errno value in case of error.
+ *
+ * @remarks: this function is safe to call from another thread that the one
+ * associated normally with the loop. However caller must ensure that the
+ * given event will be valid for the complete duration of the call.
  */
 POMP_API int pomp_evt_clear(struct pomp_evt *event);
 
@@ -1314,9 +1394,9 @@ POMP_API int pomp_evt_clear(struct pomp_evt *event);
 
 /**
  * Create a new timer.
- * @param loop : fd loop to use for notifications.
- * @param cb : callback to use for notifications.
- * @param userdata : user data for callback.
+ * @param loop fd loop to use for notifications.
+ * @param cb callback to use for notifications.
+ * @param userdata user data for callback.
  * @return new timer or NULL in case of error.
  */
 POMP_API struct pomp_timer *pomp_timer_new(struct pomp_loop *loop,
@@ -1324,33 +1404,42 @@ POMP_API struct pomp_timer *pomp_timer_new(struct pomp_loop *loop,
 
 /**
  * Destroy a timer.
- * @param timer : timer to destroy.
+ * @param timer timer to destroy.
  * @return 0 in case of success, negative errno value in case of error.
  */
 POMP_API int pomp_timer_destroy(struct pomp_timer *timer);
 
 /**
  * Set a one shot timer.
- * @param timer : timer to set.
- * @param delay : expiration delay in milliseconds.
+ * @param timer timer to set.
+ * @param delay expiration delay in milliseconds.
  * @return 0 in case of success, negative errno value in case of error.
+ * @remarks: this function is safe to call from another thread that the one
+ * associated normally with the loop. However caller must ensure that the
+ * given timer will be valid for the complete duration of the call.
  */
 POMP_API int pomp_timer_set(struct pomp_timer *timer, uint32_t delay);
 
 /**
  * Set a periodic timer.
- * @param timer : timer to set.
- * @param delay : initial expiration delay in milliseconds.
- * @param period : period in milliseconds.
+ * @param timer timer to set.
+ * @param delay initial expiration delay in milliseconds.
+ * @param period period in milliseconds.
  * @return 0 in case of success, negative errno value in case of error.
+ * @remarks: this function is safe to call from another thread that the one
+ * associated normally with the loop. However caller must ensure that the
+ * given timer will be valid for the complete duration of the call.
  */
 POMP_API int pomp_timer_set_periodic(struct pomp_timer *timer, uint32_t delay,
 		uint32_t period);
 
 /**
  * Clear a timer.
- * @param timer : timer to clear.
+ * @param timer timer to clear.
  * @return 0 in case of success, negative errno value in case of error.
+ * @remarks: this function is safe to call from another thread that the one
+ * associated normally with the loop. However caller must ensure that the
+ * given timer will be valid for the complete duration of the call.
  */
 POMP_API int pomp_timer_clear(struct pomp_timer *timer);
 
@@ -1360,9 +1449,9 @@ POMP_API int pomp_timer_clear(struct pomp_timer *timer);
 
 /**
  * Parse a socket address given as a string and convert it to sockaddr.
- * @param buf: input string.
- * @param addr: destination structure.
- * @param addrlen: maximum size of destination structure as input, real size
+ * @param buf input string.
+ * @param addr destination structure.
+ * @param addrlen maximum size of destination structure as input, real size
  * converted as output. Should be at least sizeof(struct sockaddr_storage)
  * @return 0 in case of success, negative errno value in case of error.
  *
@@ -1377,10 +1466,10 @@ POMP_API int pomp_addr_parse(const char *buf, struct sockaddr *addr,
 
 /**
  * Format a socket address into a string.
- * @param buf: destination buffer
- * @param buflen: maximum size of destination buffer.
- * @param addr: address to format.
- * @param addrlen: size of address.
+ * @param buf destination buffer
+ * @param buflen maximum size of destination buffer.
+ * @param addr address to format.
+ * @param addrlen size of address.
  * @return 0 in case of success, negative errno value in case of error.
  */
 POMP_API int pomp_addr_format(char *buf, uint32_t buflen,
@@ -1388,16 +1477,16 @@ POMP_API int pomp_addr_format(char *buf, uint32_t buflen,
 
 /**
  * Determine if a socket address is a unix local one.
- * @param addr: address to check.
- * @param addrlen: size of address.
+ * @param addr address to check.
+ * @param addrlen size of address.
  * @return 1 if socket is unix local, 0 otherwise.
  */
 POMP_API int pomp_addr_is_unix(const struct sockaddr *addr, uint32_t addrlen);
 
 /**
  * Prepend the product root path to a unix local address with file system name.
- * @param buf: input string.
- * @param dst: destination buffer, which will be allocated to a suitable size
+ * @param buf input string.
+ * @param dst destination buffer, which will be allocated to a suitable size
  * dynamically. Must be freed with free(), after usage.
  * @return 0 in case of success, negative errno value in case of error.
  *
@@ -1424,8 +1513,8 @@ struct pomp_prot;
 
 /**
  * Initialize a message object before starting to encode it.
- * @param msg : message.
- * @param msgid : message id.
+ * @param msg message.
+ * @param msgid message id.
  * @return 0 in case of success, negative errno value in case of error.
  */
 POMP_API int pomp_msg_init(struct pomp_msg *msg, uint32_t msgid);
@@ -1434,7 +1523,7 @@ POMP_API int pomp_msg_init(struct pomp_msg *msg, uint32_t msgid);
  * Finish message encoding by writing the header. It shall be called after
  * encoding is done and before sending it. Any write operation on the message
  * will return -EPERM after this function is called.
- * @param msg : message.
+ * @param msg message.
  * @return 0 in case of success, negative errno value in case of error.
  */
 POMP_API int pomp_msg_finish(struct pomp_msg *msg);
@@ -1443,10 +1532,19 @@ POMP_API int pomp_msg_finish(struct pomp_msg *msg);
  * Clear message object. It only free the internal data, not the message itself.
  * It shall be called before pomp_msg_init can be called again after a previous
  * encoding.
- * @param msg : message.
+ * @param msg message.
  * @return 0 in case of success, negative errno value in case of error.
  */
 POMP_API int pomp_msg_clear(struct pomp_msg *msg);
+
+/**
+ * Partially clear message object. Similar to pomp_msg_clear but it will try to
+ * keep some of the allocated memory. File descriptors stored inside the
+ * internal buffer will always be released.
+ * @param msg message.
+ * @return 0 in case of success, negative errno value in case of error.
+ */
+POMP_API int pomp_msg_clear_partial(struct pomp_msg *msg);
 
 /*
  * Encoder API (Advanced).
@@ -1460,7 +1558,7 @@ POMP_API struct pomp_encoder *pomp_encoder_new(void);
 
 /**
  * Destroy an encoder object.
- * @param enc : encoder.
+ * @param enc encoder.
  * @return 0 in case of success, negative errno value in case of error.
  *
  * @remarks the associated message is NOT destroyed.
@@ -1469,8 +1567,8 @@ POMP_API int pomp_encoder_destroy(struct pomp_encoder *enc);
 
 /**
  * Initialize an encoder object before starting to encode a message.
- * @param enc : encoder.
- * @param msg : message to encode.
+ * @param enc encoder.
+ * @param msg message to encode.
  * @return 0 in case of success, negative errno value in case of error.
  *
  * @remarks the message ownership is not transferred, it will NOT be destroyed
@@ -1480,7 +1578,7 @@ POMP_API int pomp_encoder_init(struct pomp_encoder *enc, struct pomp_msg *msg);
 
 /**
  * Clear encoder object.
- * @param enc : encoder.
+ * @param enc encoder.
  * @return 0 in case of success, negative errno value in case of error.
  *
  * @remarks the associated message is NOT destroyed.
@@ -1489,9 +1587,9 @@ POMP_API int pomp_encoder_clear(struct pomp_encoder *enc);
 
 /**
  * Encode arguments according to given format string.
- * @param enc : encoder.
- * @param fmt : format string. Can be NULL if no arguments given.
- * @param ... : arguments.
+ * @param enc encoder.
+ * @param fmt format string. Can be NULL if no arguments given.
+ * @param ... arguments.
  * @return 0 in case of success, negative errno value in case of error.
  */
 POMP_API int pomp_encoder_write(struct pomp_encoder *enc,
@@ -1499,9 +1597,9 @@ POMP_API int pomp_encoder_write(struct pomp_encoder *enc,
 
 /**
  * Encode arguments according to given format string.
- * @param enc : encoder.
- * @param fmt : format string. Can be NULL if no arguments given.
- * @param args : arguments.
+ * @param enc encoder.
+ * @param fmt format string. Can be NULL if no arguments given.
+ * @param args arguments.
  * @return 0 in case of success, negative errno value in case of error.
  */
 POMP_API int pomp_encoder_writev(struct pomp_encoder *enc,
@@ -1509,10 +1607,10 @@ POMP_API int pomp_encoder_writev(struct pomp_encoder *enc,
 
 /**
  * Encode arguments according to given format string.
- * @param enc : encoder.
- * @param fmt : format string. Can be NULL if no arguments given.
- * @param argc : number of arguments.
- * @param argv : array of arguments as strings. Each string will be converted
+ * @param enc encoder.
+ * @param fmt format string. Can be NULL if no arguments given.
+ * @param argc number of arguments.
+ * @param argv array of arguments as strings. Each string will be converted
  *               according to its real type specified in format.
  * @return 0 in case of success, negative errno value in case of error.
  *
@@ -1523,81 +1621,81 @@ POMP_API int pomp_encoder_write_argv(struct pomp_encoder *enc,
 
 /**
  * Encode a 8-bit signed integer.
- * @param enc : encoder.
- * @param v : value to encode.
+ * @param enc encoder.
+ * @param v value to encode.
  * @return 0 in case of success, negative errno value in case of error.
  */
 POMP_API int pomp_encoder_write_i8(struct pomp_encoder *enc, int8_t v);
 
 /**
  * Encode a 8-bit unsigned integer.
- * @param enc : encoder.
- * @param v : value to encode.
+ * @param enc encoder.
+ * @param v value to encode.
  * @return 0 in case of success, negative errno value in case of error.
  */
 POMP_API int pomp_encoder_write_u8(struct pomp_encoder *enc, uint8_t v);
 
 /**
  * Encode a 16-bit signed integer.
- * @param enc : encoder.
- * @param v : value to encode.
+ * @param enc encoder.
+ * @param v value to encode.
  * @return 0 in case of success, negative errno value in case of error.
  */
 POMP_API int pomp_encoder_write_i16(struct pomp_encoder *enc, int16_t v);
 
 /**
  * Encode a 16-bit unsigned integer.
- * @param enc : encoder.
- * @param v : value to encode.
+ * @param enc encoder.
+ * @param v value to encode.
  * @return 0 in case of success, negative errno value in case of error.
  */
 POMP_API int pomp_encoder_write_u16(struct pomp_encoder *enc, uint16_t v);
 
 /**
  * Encode a 32-bit signed integer.
- * @param enc : encoder.
- * @param v : value to encode.
+ * @param enc encoder.
+ * @param v value to encode.
  * @return 0 in case of success, negative errno value in case of error.
  */
 POMP_API int pomp_encoder_write_i32(struct pomp_encoder *enc, int32_t v);
 
 /**
  * Encode a 32-bit unsigned integer.
- * @param enc : encoder.
- * @param v : value to encode.
+ * @param enc encoder.
+ * @param v value to encode.
  * @return 0 in case of success, negative errno value in case of error.
  */
 POMP_API int pomp_encoder_write_u32(struct pomp_encoder *enc, uint32_t v);
 
 /**
  * Encode a 64-bit signed integer.
- * @param enc : encoder.
- * @param v : value to encode.
+ * @param enc encoder.
+ * @param v value to encode.
  * @return 0 in case of success, negative errno value in case of error.
  */
 POMP_API int pomp_encoder_write_i64(struct pomp_encoder *enc, int64_t v);
 
 /**
  * Encode a 64-bit unsigned integer.
- * @param enc : encoder.
- * @param v : value to encode.
+ * @param enc encoder.
+ * @param v value to encode.
  * @return 0 in case of success, negative errno value in case of error.
  */
 POMP_API int pomp_encoder_write_u64(struct pomp_encoder *enc, uint64_t v);
 
 /**
  * Encode a string.
- * @param enc : encoder.
- * @param v : string to encode.
+ * @param enc encoder.
+ * @param v string to encode.
  * @return 0 in case of success, negative errno value in case of error.
  */
 POMP_API int pomp_encoder_write_str(struct pomp_encoder *enc, const char *v);
 
 /**
  * Encode a buffer.
- * @param enc : encoder.
- * @param v : buffer to encode.
- * @param n : buffer size.
+ * @param enc encoder.
+ * @param v buffer to encode.
+ * @param n buffer size.
  * @return 0 in case of success, negative errno value in case of error.
  */
 POMP_API int pomp_encoder_write_buf(struct pomp_encoder *enc, const void *v,
@@ -1605,16 +1703,16 @@ POMP_API int pomp_encoder_write_buf(struct pomp_encoder *enc, const void *v,
 
 /**
  * Encode a 32-bit floating point.
- * @param enc : encoder.
- * @param v : value to encode.
+ * @param enc encoder.
+ * @param v value to encode.
  * @return 0 in case of success, negative errno value in case of error.
  */
 POMP_API int pomp_encoder_write_f32(struct pomp_encoder *enc, float v);
 
 /**
  * Encode a 64-bit floating point.
- * @param enc : encoder.
- * @param v : value to encode.
+ * @param enc encoder.
+ * @param v value to encode.
  * @return 0 in case of success, negative errno value in case of error.
  */
 POMP_API int pomp_encoder_write_f64(struct pomp_encoder *enc, double v);
@@ -1622,11 +1720,11 @@ POMP_API int pomp_encoder_write_f64(struct pomp_encoder *enc, double v);
 /**
  * Encode a file descriptor. It will be internally duplicated and close when
  * associated message is released.
- * @param enc : encoder.
- * @param v : value to encode.
+ * @param enc encoder.
+ * @param v value to encode.
  * @return 0 in case of success, negative errno value in case of error.
  *
- * @remarks : the encoded message will only be able to be exchanged over
+ * @remarks the encoded message will only be able to be exchanged over
  * unix local socket.
  */
 POMP_API int pomp_encoder_write_fd(struct pomp_encoder *enc, int v);
@@ -1643,7 +1741,7 @@ POMP_API struct pomp_decoder *pomp_decoder_new(void);
 
 /**
  * Destroy a decoder object.
- * @param dec : decoder.
+ * @param dec decoder.
  * @return 0 in case of success, negative errno value in case of error.
  *
  * @remarks the associated message is NOT destroyed.
@@ -1652,8 +1750,8 @@ POMP_API int pomp_decoder_destroy(struct pomp_decoder *dec);
 
 /**
  * Initialize a decoder object before starting to decode a message.
- * @param dec : encoder.
- * @param msg : message to decode.
+ * @param dec encoder.
+ * @param msg message to decode.
  * @return 0 in case of success, negative errno value in case of error.
  *
  * @remarks the message ownership is not transferred, it will NOT be destroyed
@@ -1664,7 +1762,7 @@ POMP_API int pomp_decoder_init(struct pomp_decoder *dec,
 
 /**
  * Clear decoder object.
- * @param dec : encoder.
+ * @param dec encoder.
  * @return 0 in case of success, negative errno value in case of error.
  *
  * @remarks the associated message is NOT destroyed.
@@ -1672,10 +1770,17 @@ POMP_API int pomp_decoder_init(struct pomp_decoder *dec,
 POMP_API int pomp_decoder_clear(struct pomp_decoder *dec);
 
 /**
+ * Check if additional data can be read from the message being decoded.
+ * @param dec encoder.
+ * @return 1 if some data are still available, 0 if the decoding is complete.
+ */
+POMP_API int pomp_decoder_can_read(struct pomp_decoder *dec);
+
+/**
  * Decode arguments according to given format string.
- * @param dec : decoder.
- * @param fmt : format string. Can be NULL if no arguments given.
- * @param ... : arguments.
+ * @param dec decoder.
+ * @param fmt format string. Can be NULL if no arguments given.
+ * @param ... arguments.
  * @return 0 in case of success, negative errno value in case of error.
  */
 POMP_API int pomp_decoder_read(struct pomp_decoder *dec,
@@ -1683,9 +1788,9 @@ POMP_API int pomp_decoder_read(struct pomp_decoder *dec,
 
 /**
  * Decode arguments according to given format string.
- * @param dec : decoder.
- * @param fmt : format string. Can be NULL if no arguments given.
- * @param args : arguments.
+ * @param dec decoder.
+ * @param fmt format string. Can be NULL if no arguments given.
+ * @param args arguments.
  * @return 0 in case of success, negative errno value in case of error.
  */
 POMP_API int pomp_decoder_readv(struct pomp_decoder *dec,
@@ -1693,9 +1798,9 @@ POMP_API int pomp_decoder_readv(struct pomp_decoder *dec,
 
 /**
  * Dump arguments in a human readable form.
- * @param dec : decoder.
- * @param dst : destination buffer.
- * @param maxdst : max length of destination buffer.
+ * @param dec decoder.
+ * @param dst destination buffer.
+ * @param maxdst max length of destination buffer.
  * @return 0 in case of success, negative errno value in case of error.
 
  * @remarks if the buffer is too small, it will be ended with ellipsis '...' if
@@ -1707,8 +1812,8 @@ POMP_API int pomp_decoder_dump(struct pomp_decoder *dec,
 /**
  * Dump arguments in a human readable form. Similar to pomp_decoder_dump() but
  * allocates the output buffer dynamically.
- * @param dec : decoder.
- * @param dst : destination buffer, which will be allocated to a suitable size
+ * @param dec decoder.
+ * @param dst destination buffer, which will be allocated to a suitable size
  * dynamically. Must be freed with free(), after usage.
  * @return 0 in case of success, negative errno value in case of error.
  */
@@ -1716,80 +1821,80 @@ POMP_API int pomp_decoder_adump(struct pomp_decoder *dec, char **dst);
 
 /**
  * Decode a 8-bit signed integer.
- * @param dec : decoder.
- * @param v : decoded value.
+ * @param dec decoder.
+ * @param v decoded value.
  * @return 0 in case of success, negative errno value in case of error.
  */
 POMP_API int pomp_decoder_read_i8(struct pomp_decoder *dec, int8_t *v);
 
 /**
  * Decode a 8-bit unsigned integer.
- * @param dec : decoder.
- * @param v : decoded value.
+ * @param dec decoder.
+ * @param v decoded value.
  * @return 0 in case of success, negative errno value in case of error.
  */
 POMP_API int pomp_decoder_read_u8(struct pomp_decoder *dec, uint8_t *v);
 
 /**
  * Decode a 16-bit signed integer.
- * @param dec : decoder.
- * @param v : decoded value.
+ * @param dec decoder.
+ * @param v decoded value.
  * @return 0 in case of success, negative errno value in case of error.
  */
 POMP_API int pomp_decoder_read_i16(struct pomp_decoder *dec, int16_t *v);
 
 /**
  * Decode a 16-bit unsigned integer.
- * @param dec : decoder.
- * @param v : decoded value.
+ * @param dec decoder.
+ * @param v decoded value.
  * @return 0 in case of success, negative errno value in case of error.
  */
 POMP_API int pomp_decoder_read_u16(struct pomp_decoder *dec, uint16_t *v);
 
 /**
  * Decode a 32-bit signed integer.
- * @param dec : decoder.
- * @param v : decoded value.
+ * @param dec decoder.
+ * @param v decoded value.
  * @return 0 in case of success, negative errno value in case of error.
  */
 POMP_API int pomp_decoder_read_i32(struct pomp_decoder *dec, int32_t *v);
 
 /**
  * Decode a 32-bit unsigned integer.
- * @param dec : decoder.
- * @param v : decoded value.
+ * @param dec decoder.
+ * @param v decoded value.
  * @return 0 in case of success, negative errno value in case of error.
  */
 POMP_API int pomp_decoder_read_u32(struct pomp_decoder *dec, uint32_t *v);
 
 /**
  * Decode a 64-bit signed integer.
- * @param dec : decoder.
- * @param v : decoded value.
+ * @param dec decoder.
+ * @param v decoded value.
  * @return 0 in case of success, negative errno value in case of error.
  */
 POMP_API int pomp_decoder_read_i64(struct pomp_decoder *dec, int64_t *v);
 
 /**
  * Decode a 64-bit unsigned integer.
- * @param dec : decoder.
- * @param v : decoded value.
+ * @param dec decoder.
+ * @param v decoded value.
  * @return 0 in case of success, negative errno value in case of error.
  */
 POMP_API int pomp_decoder_read_u64(struct pomp_decoder *dec, uint64_t *v);
 
 /**
  * Decode a string.
- * @param dec : decoder.
- * @param v : decoded string. Call 'free' when done.
+ * @param dec decoder.
+ * @param v decoded string. Call 'free' when done.
  * @return 0 in case of success, negative errno value in case of error.
  */
 POMP_API int pomp_decoder_read_str(struct pomp_decoder *dec, char **v);
 
 /**
  * Decode a string without any extra allocation or copy.
- * @param dec : decoder.
- * @param v : decoded string. Shall NOT be modified or freed as it points
+ * @param dec decoder.
+ * @param v decoded string. Shall NOT be modified or freed as it points
  * directly to internal storage. Scope is the same as the associated message.
  * @return 0 in case of success, negative errno value in case of error.
  */
@@ -1797,9 +1902,9 @@ POMP_API int pomp_decoder_read_cstr(struct pomp_decoder *dec, const char **v);
 
 /**
  * Decode a buffer.
- * @param dec : decoder.
- * @param v : decoded buffer. Call 'free' when done.
- * @param n : decoded buffer size.
+ * @param dec decoder.
+ * @param v decoded buffer. Call 'free' when done.
+ * @param n decoded buffer size.
  * @return 0 in case of success, negative errno value in case of error.
  */
 POMP_API int pomp_decoder_read_buf(struct pomp_decoder *dec, void **v,
@@ -1807,38 +1912,40 @@ POMP_API int pomp_decoder_read_buf(struct pomp_decoder *dec, void **v,
 
 /**
  * Decode a buffer without any extra allocation or copy.
- * @param dec : decoder.
- * @param v : decoded buffer. Shall NOT be modified or freed as it points
+ * @param dec decoder.
+ * @param v decoded buffer. Shall NOT be modified or freed as it points
  * directly to internal storage. Scope is the same as the associated message.
- * @param n : decoded buffer size.
+ * @param n decoded buffer size.
  * @return 0 in case of success, negative errno value in case of error.
+ * @remarks pointer to decoder buffer has unspecified alignment, so it should
+ *          be assumed to be aligned on byte boundary.
  */
 POMP_API int pomp_decoder_read_cbuf(struct pomp_decoder *dec, const void **v,
 		uint32_t *n);
 
 /**
  * Decode a 32-bit floating point.
- * @param dec : decoder.
- * @param v : decoded value.
+ * @param dec decoder.
+ * @param v decoded value.
  * @return 0 in case of success, negative errno value in case of error.
  */
 POMP_API int pomp_decoder_read_f32(struct pomp_decoder *dec, float *v);
 
 /**
  * Decode a 64-bit floating point.
- * @param dec : decoder.
- * @param v : decoded value.
+ * @param dec decoder.
+ * @param v decoded value.
  * @return 0 in case of success, negative errno value in case of error.
  */
 POMP_API int pomp_decoder_read_f64(struct pomp_decoder *dec, double *v);
 
 /**
  * Decode a file descriptor.
- * @param dec : decoder.
- * @param v : decoded value.
+ * @param dec decoder.
+ * @param v decoded value.
  * @return 0 in case of success, negative errno value in case of error.
  *
- * @remarks : the returned file descriptor shall NOT be closed. Duplicate it if
+ * @remarks the returned file descriptor shall NOT be closed. Duplicate it if
  * you need to use it after the decoder or the message is released.
  */
 POMP_API int pomp_decoder_read_fd(struct pomp_decoder *dec, int *v);
@@ -1855,17 +1962,17 @@ POMP_API struct pomp_prot *pomp_prot_new(void);
 
 /**
  * Destroy a protocol decoder object.
- * @param prot : protocol decoder.
+ * @param prot protocol decoder.
  * @return 0 in case of success, negative errno value in case of error.
  */
 POMP_API int pomp_prot_destroy(struct pomp_prot *prot);
 
 /**
  * Try to decode a message with given input data.
- * @param prot : protocol decoder.
- * @param buf : input data.
- * @param len : size of input data.
- * @param msg : will receive decoded message. If more input data is required
+ * @param prot protocol decoder.
+ * @param buf input data.
+ * @param len size of input data.
+ * @param msg will receive decoded message. If more input data is required
  * to decode the message, NULL will be returned. The message needs to be
  * released either by calling 'pomp_msg_destroy' or 'pomp_prot_release_msg'.
  * Calling 'pomp_prot_release_msg' allows reuse of allocated message structure.
@@ -1879,8 +1986,8 @@ POMP_API int pomp_prot_decode_msg(struct pomp_prot *prot, const void *buf,
  * Release a previously decoded message. This is to reuse message structure
  * if possible and avoid some malloc/free at each decoded message. If there
  * is already a internal message structure, it is simply destroyed.
- * @param prot : protocol decoder.
- * @param msg : message to release.
+ * @param prot protocol decoder.
+ * @param msg message to release.
  * @return 0 in case of success, negative errno value in case of error.
  */
 POMP_API int pomp_prot_release_msg(struct pomp_prot *prot,
@@ -1906,10 +2013,10 @@ enum pomp_timer_impl {
 
 /**
  * Force the loop implementation to use.
- * @param impl: the implementation to use.
+ * @param impl the implementation to use.
  * @return 0 in case of success, negative errno value in case of error.
  *
- * @remarks : This function modifies the implementation of ALL loops. It shall
+ * @remarks This function modifies the implementation of ALL loops. It shall
  * only be called BEFORE creating anything and ONLY for tests or specific use
  * cases. Not all implementations are available on all platforms.
  */
@@ -1917,10 +2024,10 @@ POMP_API int pomp_internal_set_loop_impl(enum pomp_loop_impl impl);
 
 /**
  * Force the timer implementation to use.
- * @param impl: the implementation to use.
+ * @param impl the implementation to use.
  * @return 0 in case of success, negative errno value in case of error.
  *
- * @remarks : This function modifies the implementation of ALL timers. It shall
+ * @remarks This function modifies the implementation of ALL timers. It shall
  * only be called BEFORE creating anything and ONLY for tests or specific use
  * cases. Not all implementations are available on all platforms.
  */

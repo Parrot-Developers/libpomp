@@ -93,6 +93,16 @@ int pomp_decoder_clear(struct pomp_decoder *dec)
 	return 0;
 }
 
+/*
+ * See documentation in public header.
+ */
+int pomp_decoder_can_read(struct pomp_decoder *dec)
+{
+	POMP_RETURN_VAL_IF_FAILED(dec != NULL, -EINVAL, 0);
+	POMP_RETURN_VAL_IF_FAILED(dec->msg != NULL, -EINVAL, 0);
+	return pomp_buffer_can_read(dec->msg->buf, dec->pos, 1);
+}
+
 /**
  * Read data from message.
  * @param dec : decoder.
@@ -464,7 +474,7 @@ struct pomp_decoder_dump_ctx {
 /**
  * Append text to dump buffer.
  * @param ctx : dump context.
- * @param addlen : approximative length of new text that with be appended.
+ * @param addlen : approximate length of new text that with be appended.
  * @param fmt : text format.
  * @param ... : format arguments.
  * @return 0 in case of success, negative errno value in case of error.
@@ -577,11 +587,11 @@ static int decoder_dump_cb(struct pomp_decoder *dec, uint8_t type,
 		break;
 
 	case POMP_PROT_DATA_TYPE_I32:
-		res = dump_append(ctx, 6 + MAX_DEC, ", I32:%d", v->i32);
+		res = dump_append(ctx, 6 + MAX_DEC, ", I32:%" PRIi32, v->i32);
 		break;
 
 	case POMP_PROT_DATA_TYPE_U32:
-		res = dump_append(ctx, 6 + MAX_DEC, ", U32:%u", v->u32);
+		res = dump_append(ctx, 6 + MAX_DEC, ", U32:%" PRIu32, v->u32);
 		break;
 
 	case POMP_PROT_DATA_TYPE_I64:
@@ -639,7 +649,7 @@ static int decoder_dump(struct pomp_decoder *dec,
 	int res = 0;
 
 	/* Message id */
-	res = dump_append(ctx, 4 + MAX_DEC, "{ID:%u", dec->msg->msgid);
+	res = dump_append(ctx, 4 + MAX_DEC, "{ID:%" PRIu32, dec->msg->msgid);
 	if (res < 0)
 		goto out;
 
@@ -721,7 +731,7 @@ int pomp_decoder_adump(struct pomp_decoder *dec, char **dst)
  * @param cb : function to call for each argument. The return value shall be 1
  * to continue the operation, 0 to stop it.
  * @param userdata : user data for callback.
- * @param checkfds : 1 to check that file descriptors are correctly regsitered
+ * @param checkfds : 1 to check that file descriptors are correctly registered
  * in buffer, 0 to simply read an 'int'. Used by the fixup function just after
  * the message has been received.
  * @return 0 in case of success, negative errno value in case of error.

@@ -47,6 +47,7 @@
 #include <string.h>
 #include <errno.h>
 #include <signal.h>
+#include <getopt.h>
 
 /* Unix headers */
 #ifndef _WIN32
@@ -102,7 +103,7 @@ static struct app s_app = {
 		.hasmsg = 0,
 		.msgid = 0,
 		.msgfmt = NULL,
-		.msgargc = -1,
+		.msgargc = 0,
 		.msgargv = NULL,
 		.running = 0,
 		.loop = NULL,
@@ -316,55 +317,66 @@ static void usage(const char *progname)
 int main(int argc, char *argv[])
 {
 	int res = 0;
+	int c = 0;
 	int server = 0;
 	int udp = 0;
-	int argidx = 0;
 	const char *arg_addr = NULL;
 	const char *arg_addrto = NULL;
 	const char *arg_msgid = NULL;
 	struct sockaddr_storage addr_storage;
 	struct sockaddr_storage addrto_storage;
 
+	const struct option long_options[] = {
+		{"help",    no_argument,       NULL, 'h' },
+		{"server",  no_argument,       NULL, 's' },
+		{"client",  no_argument,       NULL, 'c' },
+		{"udp",     no_argument,       NULL, 'u' },
+		{"dump",    no_argument,       NULL, 'd' },
+		{"timeout", required_argument, NULL, 't' },
+		{"wait",    required_argument, NULL, 'w' },
+		{NULL,     0,                  NULL, 0   },
+	};
+	const char short_options[] = "hscudt:w:";
+
 	/* Parse options */
-	for (argidx = 1; argidx < argc; argidx++) {
-		if (argv[argidx][0] != '-') {
-			/* End of options */
+	while ((c = getopt_long(argc, argv, short_options,
+			long_options, NULL)) != -1) {
+		switch (c) {
+		case 0:
 			break;
-		} else if (strcmp(argv[argidx], "-h") == 0
-				|| strcmp(argv[argidx], "--help") == 0) {
-			/* Help */
+
+		case 'h':
 			usage(argv[0]);
 			goto out;
-		} else if (strcmp(argv[argidx], "-s") == 0
-				|| strcmp(argv[argidx], "--server") == 0) {
+			break;
+
+		case 's':
 			server = 1;
-		} else if (strcmp(argv[argidx], "-c") == 0
-				|| strcmp(argv[argidx], "--client") == 0) {
+			break;
+
+		case 'c':
 			server = 0;
-		} else if (strcmp(argv[argidx], "-u") == 0
-				|| strcmp(argv[argidx], "--udp") == 0) {
+			break;
+
+		case 'u':
 			udp = 1;
-		} else if (strcmp(argv[argidx], "-d") == 0
-				|| strcmp(argv[argidx], "--dump") == 0) {
+			break;
+
+		case 'd':
 			s_app.dump = 1;
-		} else if (strcmp(argv[argidx], "-t") == 0
-				|| strcmp(argv[argidx], "--timeout") == 0) {
-			if (++argidx >= argc) {
-				diag("Missing timeout value");
-				goto error;
-			}
-			s_app.timeout = strtol(argv[argidx], NULL, 10);
-		} else if (strcmp(argv[argidx], "-w") == 0
-				|| strcmp(argv[argidx], "--wait") == 0) {
-			if (++argidx >= argc) {
-				diag("Missing expected message id");
-				goto error;
-			}
-			s_app.expected_msgid = strtol(argv[argidx], NULL, 10);
+			break;
+
+		case 't':
+			s_app.timeout = strtol(optarg, NULL, 10);
+			break;
+
+		case 'w':
+			s_app.expected_msgid = strtol(optarg, NULL, 10);
 			s_app.waitmsg = 1;
-		} else {
-			diag("Unknown option: '%s'", argv[argidx]);
-			goto error;
+			break;
+
+		default:
+			break;
 		}
 	}
 
@@ -376,8 +388,8 @@ int main(int argc, char *argv[])
 	s_app.loop = pomp_ctx_get_loop(s_app.ctx);
 
 	/* Get address */
-	if (argc - argidx >= 1) {
-		arg_addr = argv[argidx++];
+	if (argc - optind >= 1) {
+		arg_addr = argv[optind++];
 
 		/* Parse address */
 		memset(&addr_storage, 0, sizeof(addr_storage));
@@ -394,8 +406,8 @@ int main(int argc, char *argv[])
 
 	/* Get destination address for udp (optional if dumping) */
 	if (udp) {
-		if (argc - argidx >= 1) {
-			arg_addrto = argv[argidx++];
+		if (argc - optind >= 1) {
+			arg_addrto = argv[optind++];
 
 			/* Parse address */
 			memset(&addrto_storage, 0, sizeof(addrto_storage));
@@ -413,8 +425,8 @@ int main(int argc, char *argv[])
 	}
 
 	/* Get message id (optional if dumping) */
-	if (argc - argidx >= 1) {
-		arg_msgid = argv[argidx++];
+	if (argc - optind >= 1) {
+		arg_msgid = argv[optind++];
 		s_app.msgid = strtoul(arg_msgid, NULL, 10);
 		s_app.hasmsg = 1;
 	} else if (!s_app.dump) {
@@ -423,14 +435,14 @@ int main(int argc, char *argv[])
 	}
 
 	/* Get message format (optional) */
-	if (argc - argidx >= 1)
-		s_app.msgfmt = argv[argidx++];
+	if (argc - optind >= 1)
+		s_app.msgfmt = argv[optind++];
 
 	/* Get message arguments (optional) */
-	if (argc - argidx >= 1) {
-		s_app.msgargc = argc - argidx;
-		s_app.msgargv = (const char * const *)&argv[argidx];
-		argidx += s_app.msgargc;
+	if (argc - optind >= 1) {
+		s_app.msgargc = argc - optind;
+		s_app.msgargv = (const char * const *)&argv[optind];
+		optind += s_app.msgargc;
 	}
 
 	/* Attach sig handler */

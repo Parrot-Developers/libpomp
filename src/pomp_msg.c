@@ -1,7 +1,7 @@
 /**
  * @file pomp_msg.c
  *
- * @brief Handle formating/decoding of messages
+ * @brief Handle formatting/decoding of messages
  *
  * @author yves-marie.morgan@parrot.com
  *
@@ -107,14 +107,14 @@ struct pomp_msg *pomp_msg_new_with_buffer(struct pomp_buffer *buf)
 
 	/* Make sure header is valid */
 	if (msg->buf->len < POMP_PROT_HEADER_SIZE) {
-		POMP_LOGW("Bad header size: %u", (uint32_t)msg->buf->len);
+		POMP_LOGW("Bad header size: %" PRIu32, (uint32_t)msg->buf->len);
 		goto error;
 	}
 
 	/* Check magic */
 	(void)pomp_buffer_read(msg->buf, &pos, &d, sizeof(d));
 	if (POMP_LE32TOH(d) != POMP_PROT_HEADER_MAGIC) {
-		POMP_LOGW("Bad header magic: %08x(%08x)",
+		POMP_LOGW("Bad header magic: %08" PRIx32 "(%08x)",
 				POMP_LE32TOH(d), POMP_PROT_HEADER_MAGIC);
 		goto error;
 	}
@@ -126,7 +126,7 @@ struct pomp_msg *pomp_msg_new_with_buffer(struct pomp_buffer *buf)
 	/* Check message size */
 	(void)pomp_buffer_read(msg->buf, &pos, &d, sizeof(d));
 	if (POMP_LE32TOH(d) != buf->len) {
-		POMP_LOGW("Bad message size: %08x(%08x)",
+		POMP_LOGW("Bad message size: %08" PRIx32 "(%08" PRIx32 ")",
 				(uint32_t)buf->len, POMP_LE32TOH(d));
 		goto error;
 	}
@@ -159,18 +159,30 @@ int pomp_msg_destroy(struct pomp_msg *msg)
  */
 int pomp_msg_init(struct pomp_msg *msg, uint32_t msgid)
 {
+	int res = 0;
 	POMP_RETURN_ERR_IF_FAILED(msg != NULL, -EINVAL);
-	POMP_RETURN_ERR_IF_FAILED(msg->buf == NULL, -EPERM);
 
 	msg->msgid = msgid;
 	msg->finished = 0;
 
-	/* Allocate new buffer */
-	msg->buf = pomp_buffer_new(0);
-	if (msg->buf == NULL)
-		return -ENOMEM;
+	/* If current buffer is shared, unref it */
+	if (msg->buf != NULL && msg->buf->refcount > 1) {
+		pomp_buffer_unref(msg->buf);
+		msg->buf = NULL;
+	}
 
-	return 0;
+	/* Try to reuse previous buffer (but limit its capacity) */
+	if (msg->buf != NULL) {
+		res = pomp_buffer_clear_partial(msg->buf,
+				POMP_BUFFER_MAX_REUSE_CAPACITY);
+	} else {
+		/* Allocate new buffer */
+		msg->buf = pomp_buffer_new(0);
+		if (msg->buf == NULL)
+			return -ENOMEM;
+	}
+
+	return res;
 }
 
 /*
@@ -226,12 +238,36 @@ int pomp_msg_clear(struct pomp_msg *msg)
 	msg->msgid = 0;
 	msg->finished = 0;
 
-	/* Release buffer */
+	/* Always release buffer */
 	if (msg->buf != NULL)
 		pomp_buffer_unref(msg->buf);
 	msg->buf = NULL;
 
 	return 0;
+}
+
+/*
+ * See documentation in public header.
+ */
+int pomp_msg_clear_partial(struct pomp_msg *msg)
+{
+	int res = 0;
+	POMP_RETURN_ERR_IF_FAILED(msg != NULL, -EINVAL);
+
+	msg->msgid = 0;
+	msg->finished = 0;
+
+	/* If current buffer is shared, unref it,
+	 * otherwise partially clear it */
+	if (msg->buf != NULL && msg->buf->refcount > 1) {
+		pomp_buffer_unref(msg->buf);
+		msg->buf = NULL;
+	} else if (msg->buf != NULL) {
+		res = pomp_buffer_clear_partial(msg->buf,
+				POMP_BUFFER_MAX_REUSE_CAPACITY);
+	}
+
+	return res;
 }
 
 /*

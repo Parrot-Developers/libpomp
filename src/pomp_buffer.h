@@ -46,6 +46,9 @@
 /** Allocation step in buffer (shall be a power of 2) */
 #define POMP_BUFFER_ALLOC_STEP	(256u)
 
+/** Default maximum capacity to reuse a buffer after a partial clear */
+#define POMP_BUFFER_MAX_REUSE_CAPACITY 4096
+
 /** Align size up to next allocation step */
 #define POMP_BUFFER_ALIGN_ALLOC_SIZE(_x) \
 	(((_x) + POMP_BUFFER_ALLOC_STEP - 1) & (~(POMP_BUFFER_ALLOC_STEP - 1)))
@@ -71,9 +74,13 @@ int pomp_buffer_register_fd(struct pomp_buffer *buf, size_t off, int fd);
 
 int pomp_buffer_clear(struct pomp_buffer *buf);
 
+int pomp_buffer_clear_partial(struct pomp_buffer *buf, size_t max_capacity);
+
 int pomp_buffer_writeb(struct pomp_buffer *buf, size_t *pos, uint8_t b);
 
 int pomp_buffer_write_fd(struct pomp_buffer *buf, size_t *pos, int fd);
+
+int pomp_buffer_can_read(const struct pomp_buffer *buf, size_t pos, size_t n);
 
 int pomp_buffer_readb(const struct pomp_buffer *buf, size_t *pos, uint8_t *b);
 

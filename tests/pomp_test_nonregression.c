@@ -42,7 +42,6 @@ static void stop_in_callback_cli_cbs(struct pomp_ctx *pctx,
 		enum pomp_event event, struct pomp_conn *conn,
 		const struct pomp_msg *msg, void *userdata)
 {
-	int res;
 	switch (event) {
 	case POMP_EVENT_CONNECTED:
 		break;

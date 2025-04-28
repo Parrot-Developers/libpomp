@@ -332,6 +332,16 @@ static void test_buffer_base(void)
 	res = pomp_buffer_get_cdata(NULL, &cdata, &len, &capacity);
 	CU_ASSERT_EQUAL(res, -EINVAL);
 
+	/* Partial clears */
+	res = pomp_buffer_ensure_capacity(buf, 1000);
+	CU_ASSERT_EQUAL(res, 0);
+	res = pomp_buffer_clear_partial(buf, 500);
+	CU_ASSERT_EQUAL(res, 0);
+	CU_ASSERT_EQUAL(buf->capacity, 500);
+	res = pomp_buffer_clear_partial(buf, 2000);
+	CU_ASSERT_EQUAL(res, 0);
+	CU_ASSERT_EQUAL(buf->capacity, 500);
+
 	/* Release */
 	pomp_buffer_unref(buf);
 	pomp_buffer_unref(buf2);
@@ -776,6 +786,8 @@ static void test_buffer_fd(void)
 
 	/* Invalid arguments */
 	pos = 50;
+	res = pomp_buffer_register_fd(buf, pos, -42);
+	CU_ASSERT_EQUAL(res, -EBADF);
 	res = pomp_buffer_register_fd(NULL, pos, fds[4][0]);
 	CU_ASSERT_EQUAL(res, -EINVAL);
 	res = pomp_buffer_register_fd(buf, 98, fds[4][0]);
@@ -913,6 +925,18 @@ static void test_msg_advanced(void)
 	buf = pomp_msg_get_buffer(NULL);
 	CU_ASSERT_PTR_NULL(buf);
 
+	/* Partial clear */
+	res = pomp_msg_clear_partial(msg);
+	CU_ASSERT_EQUAL(res, 0);
+	CU_ASSERT_EQUAL(msg->msgid, 0);
+	CU_ASSERT_EQUAL(msg->finished, 0);
+
+	/* Put back data */
+	res = pomp_msg_init(msg, TEST_MSGID);
+	CU_ASSERT_EQUAL(res, 0);
+	res = pomp_msg_finish(msg);
+	CU_ASSERT_EQUAL(res, 0);
+
 	/* Clear */
 	res = pomp_msg_clear(msg);
 	CU_ASSERT_EQUAL(res, 0);
@@ -938,11 +962,11 @@ static void test_msg_advanced(void)
 	res = pomp_msg_clear(NULL);
 	CU_ASSERT_EQUAL(res, -EINVAL);
 
-	/* Not permitted init (init called twice) */
+	/* Now permitted dual init */
 	res = pomp_msg_init(msg, TEST_MSGID);
 	CU_ASSERT_EQUAL(res, 0);
 	res = pomp_msg_init(msg, TEST_MSGID);
-	CU_ASSERT_EQUAL(res, -EPERM);
+	CU_ASSERT_EQUAL(res, 0);
 
 	/* Invalid finish (finish called twice) */
 	res = pomp_msg_finish(msg);
@@ -1788,6 +1812,8 @@ static void test_decoder_base(void)
 
 	/* Read */
 	memset(&dout, 0, sizeof(dout));
+	res = pomp_decoder_can_read(dec);
+	CU_ASSERT_EQUAL(res, 1);
 	res = pomp_decoder_read_i8(dec, &dout.i8);
 	CU_ASSERT_EQUAL(res, 0);
 	res = pomp_decoder_read_u8(dec, &dout.u8);
@@ -1811,6 +1837,8 @@ static void test_decoder_base(void)
 	res = pomp_decoder_read_f32(dec, &dout.f32);
 	CU_ASSERT_EQUAL(res, 0);
 	res = pomp_decoder_read_f64(dec, &dout.f64);
+	CU_ASSERT_EQUAL(res, 0);
+	res = pomp_decoder_can_read(dec);
 	CU_ASSERT_EQUAL(res, 0);
 
 	/* Check */
@@ -1841,6 +1869,8 @@ static void test_decoder_base(void)
 	CU_ASSERT_EQUAL(res, -EINVAL);
 
 	/* Invalid read (NULL param) */
+	res = pomp_decoder_can_read(NULL);
+	CU_ASSERT_EQUAL(res, 0);
 	res = pomp_decoder_read_i8(NULL, &dout.i8);
 	CU_ASSERT_EQUAL(res, -EINVAL);
 	res = pomp_decoder_read_i8(dec, NULL);

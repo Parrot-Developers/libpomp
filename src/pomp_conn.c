@@ -65,11 +65,11 @@ struct pomp_io_buffer {
 
 /** Data for send callback in idle mode */
 struct idle_sendcb_data {
-	struct pomp_ctx			*ctx;	/**< context */
-	struct pomp_conn		*conn;	/**< connection */
-	struct pomp_buffer		*buf;	/**< buffer sent */
-	uint32_t			status;	/**< send status */
-	struct idle_sendcb_data		*next;	/**< next data in chain */
+	struct pomp_ctx		*ctx;	/**< context */
+	struct pomp_conn	*conn;	/**< connection */
+	struct pomp_buffer	*buf;	/**< buffer sent */
+	uint32_t		status;	/**< send status */
+	struct idle_sendcb_data	*next;	/**< next data in chain */
 };
 
 struct pomp_conn_rx_fds {
@@ -101,7 +101,10 @@ struct pomp_conn {
 	struct pomp_buffer	*readbuf;
 
 	/** Read buffer len */
-	size_t readbuf_len;
+	size_t			readbuf_len;
+
+	/** Pre-allocated message for sending operation */
+	struct pomp_msg		*sendmsg;
 
 	/** To chain connection structures in server context */
 	struct pomp_conn	*next;
@@ -136,7 +139,7 @@ struct pomp_conn {
 	/* See this link for a discussion about how ancillary data are managed
 	 * https://unix.stackexchange.com/questions/185011/what-happens-with-unix-stream-ancillary-data-on-partial-reads
 	 *
-	 * Our read buffer size is currently 4096, the folowing test case need
+	 * Our read buffer size is currently 4096, the following test case need
 	 * to be handled:
 	 *
 	 * msg1 [~4000 bytes] (no ancillary data)
@@ -228,10 +231,10 @@ static int pomp_io_buffer_write_normal(struct pomp_io_buffer *iobuf,
 				iobuf->len - iobuf->off);
 	} while (writelen < 0 && errno == EINTR);
 
-	/* Log errors except EAGAIN */
+	/* Log errors except EAGAIN/EPIPE */
 	if (writelen < 0) {
 		res = -errno;
-		if (!POMP_CONN_WOULD_BLOCK(errno))
+		if (!POMP_CONN_WOULD_BLOCK(errno) && errno != EPIPE)
 			POMP_LOG_FD_ERRNO("write", conn->fd);
 		return res;
 	}
@@ -254,10 +257,10 @@ static int pomp_io_buffer_write_dgram(struct pomp_io_buffer *iobuf,
 				iobuf->addrlen);
 	} while (writelen < 0 && errno == EINTR);
 
-	/* Log errors except EAGAIN */
+	/* Log errors except EAGAIN/EPIPE */
 	if (writelen < 0) {
 		res = -errno;
-		if (!POMP_CONN_WOULD_BLOCK(errno))
+		if (!POMP_CONN_WOULD_BLOCK(errno) && errno != EPIPE)
 			POMP_LOG_FD_ERRNO("sendto", conn->fd);
 		return res;
 	}
@@ -318,10 +321,10 @@ static int pomp_io_buffer_write_with_cmsg(struct pomp_io_buffer *iobuf,
 		writelen = sendmsg(conn->fd, &msg, 0);
 	} while (writelen < 0 && errno == EINTR);
 
-	/* Log errors except EAGAIN */
+	/* Log errors except EAGAIN/EPIPE */
 	if (writelen < 0) {
 		res = -errno;
-		if (!POMP_CONN_WOULD_BLOCK(errno))
+		if (!POMP_CONN_WOULD_BLOCK(errno) && errno != EPIPE)
 			POMP_LOG_FD_ERRNO("sendmsg", conn->fd);
 		return res;
 	}
@@ -637,7 +640,7 @@ static int pomp_conn_process_read_with_cmsg(struct pomp_conn *conn)
 		return 0;
 
 	/* TODO: add a check on msg.msg_flags for MSG_TRUNC if the buffer
-	 * capacity has been exeeded. In that case, the rest of the datagram
+	 * capacity has been exceeded. In that case, the rest of the datagram
 	 * is lost. */
 
 	/* If we already have both current and next table with fds, we will
@@ -712,7 +715,10 @@ static int pomp_conn_process_read_with_cmsg(struct pomp_conn *conn)
 	/* Return number of bytes read or error */
 	return res < 0 ? res : (int)readlen;
 #else /* !SCM_RIGHTS */
-	return pomp_conn_process_read_normal(conn);
+	if (conn->isdgram)
+		return pomp_conn_process_read_dgram(conn);
+	else
+		return pomp_conn_process_read_normal(conn);
 #endif /* !SCM_RIGHTS */
 }
 
@@ -744,15 +750,8 @@ static void pomp_conn_process_read(struct pomp_conn *conn)
 			break;
 
 		/* Read data */
-#ifndef _WIN32
 		if (conn->isdgram || POMP_CONN_IS_LOCAL(conn))
 			res = pomp_conn_process_read_with_cmsg(conn);
-#else
-		if (conn->isdgram)
-			res = pomp_conn_process_read_dgram(conn);
-		else if (POMP_CONN_IS_LOCAL(conn))
-			res = pomp_conn_process_read_with_cmsg(conn);
-#endif
 		else
 			res = pomp_conn_process_read_normal(conn);
 
@@ -1045,6 +1044,13 @@ struct pomp_conn *pomp_conn_new(struct pomp_ctx *ctx,
 	conn->readbuf_len = readbuf_len;
 	conn->rx_fds_current = &conn->rx_fds[0];
 	conn->rx_fds_next = &conn->rx_fds[1];
+	pomp_conn_rx_fds_init(conn->rx_fds_current);
+	pomp_conn_rx_fds_init(conn->rx_fds_next);
+
+	/* Pre-allocate a message for sending operation */
+	conn->sendmsg = pomp_msg_new();
+	if (conn->sendmsg == NULL)
+		goto error;
 
 	/* Allocate protocol */
 	if (!israw) {
@@ -1123,6 +1129,8 @@ int pomp_conn_destroy(struct pomp_conn *conn)
 {
 	POMP_RETURN_ERR_IF_FAILED(conn != NULL, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(conn->fd < 0, -EBUSY);
+	if (conn->sendmsg != NULL)
+		pomp_msg_destroy(conn->sendmsg);
 	if (conn->prot != NULL)
 		pomp_prot_destroy(conn->prot);
 	if (conn->readbuf != NULL)
@@ -1214,6 +1222,7 @@ int pomp_conn_disconnect(struct pomp_conn *conn)
 	POMP_RETURN_ERR_IF_FAILED(conn != NULL, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(conn->fd >= 0, -ENOTCONN);
 	POMP_RETURN_ERR_IF_FAILED(!conn->isdgram, -ENOTCONN);
+	POMP_LOOP_CHECK_OWNER(conn->loop);
 
 	/* Shutting down connection will ultimately cause an EOF */
 	if (shutdown(conn->fd, SHUT_WR) < 0) {
@@ -1235,6 +1244,7 @@ const struct sockaddr *pomp_conn_get_local_addr(struct pomp_conn *conn,
 {
 	POMP_RETURN_VAL_IF_FAILED(conn != NULL, -EINVAL, NULL);
 	POMP_RETURN_VAL_IF_FAILED(addrlen != NULL, -EINVAL, NULL);
+	POMP_LOOP_CHECK_OWNER(conn->loop);
 	*addrlen = conn->local_addrlen;
 	return (const struct sockaddr *)&conn->tmp_local_addr;
 }
@@ -1247,6 +1257,7 @@ const struct sockaddr *pomp_conn_get_peer_addr(struct pomp_conn *conn,
 {
 	POMP_RETURN_VAL_IF_FAILED(conn != NULL, -EINVAL, NULL);
 	POMP_RETURN_VAL_IF_FAILED(addrlen != NULL, -EINVAL, NULL);
+	POMP_LOOP_CHECK_OWNER(conn->loop);
 	*addrlen = conn->peer_addrlen;
 	return (const struct sockaddr *)&conn->peer_addr;
 }
@@ -1257,6 +1268,7 @@ const struct sockaddr *pomp_conn_get_peer_addr(struct pomp_conn *conn,
 const struct pomp_cred *pomp_conn_get_peer_cred(struct pomp_conn *conn)
 {
 	POMP_RETURN_VAL_IF_FAILED(conn != NULL, -EINVAL, NULL);
+	POMP_LOOP_CHECK_OWNER(conn->loop);
 	if (conn->peer_addr.ss_family == AF_UNIX)
 		return &conn->peer_cred;
 	else
@@ -1269,6 +1281,7 @@ const struct pomp_cred *pomp_conn_get_peer_cred(struct pomp_conn *conn)
 int pomp_conn_get_fd(struct pomp_conn *conn)
 {
 	POMP_RETURN_ERR_IF_FAILED(conn != NULL, -EINVAL);
+	POMP_LOOP_CHECK_OWNER(conn->loop);
 	return conn->fd;
 }
 
@@ -1280,6 +1293,7 @@ int pomp_conn_suspend_read(struct pomp_conn *conn)
 	int res;
 
 	POMP_RETURN_ERR_IF_FAILED(conn != NULL, -EINVAL);
+	POMP_LOOP_CHECK_OWNER(conn->loop);
 	res = pomp_loop_update2(conn->loop, conn->fd, 0, POMP_FD_EVENT_IN);
 	if (res == 0)
 		conn->read_suspended = 1;
@@ -1295,6 +1309,7 @@ int pomp_conn_resume_read(struct pomp_conn *conn)
 	int res;
 
 	POMP_RETURN_ERR_IF_FAILED(conn != NULL, -EINVAL);
+	POMP_LOOP_CHECK_OWNER(conn->loop);
 	res = pomp_loop_update2(conn->loop, conn->fd, POMP_FD_EVENT_IN, 0);
 	if (res == 0)
 		conn->read_suspended = 0;
@@ -1408,7 +1423,9 @@ static int pomp_conn_send_buf_internal(struct pomp_conn *conn,
 int pomp_conn_send_msg_to(struct pomp_conn *conn, const struct pomp_msg *msg,
 		const struct sockaddr *addr, uint32_t addrlen)
 {
+	POMP_RETURN_ERR_IF_FAILED(conn != NULL, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(msg != NULL, -EINVAL);
+	POMP_LOOP_CHECK_OWNER(conn->loop);
 	return pomp_conn_send_buf_internal(conn, msg->buf, addr, addrlen);
 }
 
@@ -1417,7 +1434,9 @@ int pomp_conn_send_msg_to(struct pomp_conn *conn, const struct pomp_msg *msg,
  */
 int pomp_conn_send_msg(struct pomp_conn *conn, const struct pomp_msg *msg)
 {
+	POMP_RETURN_ERR_IF_FAILED(conn != NULL, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(msg != NULL, -EINVAL);
+	POMP_LOOP_CHECK_OWNER(conn->loop);
 	return pomp_conn_send_buf_internal(conn, msg->buf, NULL, 0);
 }
 
@@ -1441,15 +1460,15 @@ int pomp_conn_sendv(struct pomp_conn *conn, uint32_t msgid,
 		const char *fmt, va_list args)
 {
 	int res = 0;
-	struct pomp_msg msg = POMP_MSG_INITIALIZER;
+	POMP_RETURN_ERR_IF_FAILED(conn != NULL, -EINVAL);
+	POMP_LOOP_CHECK_OWNER(conn->loop);
 
-	/* Write message and send it*/
-	res = pomp_msg_writev(&msg, msgid, fmt, args);
+	/* Write message using pre-allocated one and send it */
+	res = pomp_msg_writev(conn->sendmsg, msgid, fmt, args);
 	if (res == 0)
-		res = pomp_conn_send_msg(conn, &msg);
+		res = pomp_conn_send_msg(conn, conn->sendmsg);
 
-	/* Always cleanup message */
-	(void)pomp_msg_clear(&msg);
+	/* Do not clean message, to avoid re-allocation */
 	return res;
 }
 
@@ -1466,6 +1485,8 @@ int pomp_conn_send_raw_buf_to(struct pomp_conn *conn,
 		struct pomp_buffer *buf,
 		const struct sockaddr *addr, uint32_t addrlen)
 {
+	POMP_RETURN_ERR_IF_FAILED(conn != NULL, -EINVAL);
+	POMP_LOOP_CHECK_OWNER(conn->loop);
 	return pomp_conn_send_buf_internal(conn, buf, addr, addrlen);
 }
 
@@ -1474,6 +1495,8 @@ int pomp_conn_send_raw_buf_to(struct pomp_conn *conn,
  */
 int pomp_conn_send_raw_buf(struct pomp_conn *conn, struct pomp_buffer *buf)
 {
+	POMP_RETURN_ERR_IF_FAILED(conn != NULL, -EINVAL);
+	POMP_LOOP_CHECK_OWNER(conn->loop);
 	return pomp_conn_send_buf_internal(conn, buf, NULL, 0);
 }
 
@@ -1485,6 +1508,7 @@ int pomp_conn_set_read_buffer_len(struct pomp_conn *conn,
 {
 	POMP_RETURN_ERR_IF_FAILED(conn != NULL, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(len != 0, -EINVAL);
+	POMP_LOOP_CHECK_OWNER(conn->loop);
 
 	/* If current read buffer has already been allocated, unref it so that
 	 * it will be reallocated with the correct length when needed. */

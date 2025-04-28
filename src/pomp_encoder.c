@@ -623,7 +623,8 @@ int pomp_encoder_write_str(struct pomp_encoder *enc, const char *v)
 	/* Compute string length, add null byte */
 	len = strlen(v) + 1;
 	if (len > 0xffff) {
-		POMP_LOGW("encoder : invalid string length %u", (uint32_t)len);
+		POMP_LOGW("encoder : invalid string length %" PRIu32,
+			  (uint32_t)len);
 		return -EINVAL;
 	}
 

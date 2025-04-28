@@ -1,11 +1,11 @@
 /**
- * @file pomp_watchdog.h
+ * @file pomp_loop_sync.h
  *
- * @brief Loop watchdog.
+ * @brief Loop thread synchronisation.
  *
  * @author yves-marie.morgan@parrot.com
  *
- * Copyright (c) 2021 Parrot Drones SAS.
+ * Copyright (c) 2023 Parrot Drones SAS.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -32,40 +32,26 @@
  *
  */
 
-#ifndef _POMP_WATCHDOG_H_
-#define _POMP_WATCHDOG_H_
+#ifndef POMP_LOOP_SYNC_H
+#define POMP_LOOP_SYNC_H
 
-struct pomp_watchdog {
-	pthread_mutex_t		mutex;
-	pthread_cond_t		cond;
-	pthread_t		thread;
-	int			started;
-	int			should_stop;
-
-	struct pomp_loop	*loop;
-	uint32_t		delay;
-	pomp_watchdog_cb_t	cb;
-	void			*userdata;
-
-	uint32_t		counter;
-	int			monitoring;
-	struct timespec		next_timeout;
+/** Loop synchronization */
+struct pomp_loop_sync {
+	struct pomp_loop	*loop;		/**< Attached loop */
+	pthread_t		owner;		/**< Current owner */
+	pthread_mutex_t		mutex;		/**< Lock */
+	pthread_cond_t		cond_count;	/**< Count condition */
+	pthread_cond_t		cond_waiters;	/**< Waiter condition */
+	uint32_t		count;		/**< Acquire recursion */
+	uint32_t		waiters;	/**< Waiter count */
 };
 
-void pomp_watchdog_init(struct pomp_watchdog *watchdog);
+int pomp_loop_sync_init(struct pomp_loop_sync *sync, struct pomp_loop *loop);
 
-void pomp_watchdog_clear(struct pomp_watchdog *watchdog);
+int pomp_loop_sync_clear(struct pomp_loop_sync *sync);
 
-int pomp_watchdog_start(struct pomp_watchdog *watchdog,
-	struct pomp_loop *loop,
-	uint32_t delay,
-	pomp_watchdog_cb_t cb,
-	void *userdata);
+int pomp_loop_sync_lock(struct pomp_loop_sync *sync, int willblock);
 
-int pomp_watchdog_stop(struct pomp_watchdog *watchdog);
+int pomp_loop_sync_unlock(struct pomp_loop_sync *sync);
 
-void pomp_watchdog_enter(struct pomp_watchdog *watchdog);
-
-void pomp_watchdog_leave(struct pomp_watchdog *watchdog);
-
-#endif /* !_POMP_WATCHDOG_H_ */
+#endif /* !POMP_LOOP_SYNC_H */

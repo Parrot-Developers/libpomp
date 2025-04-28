@@ -100,7 +100,8 @@ struct pomp_ctx {
 	/** 0 for normal context, 1, for raw context */
 	int			israw;
 
-	/** Mode to set the unix socket (0 to use default value baed on umask */
+	/** Mode to set the unix socket
+	 ** (0 to use default value based on umask) */
 	uint32_t		mode;
 
 	/** Function to call for raw data reception in raw mode */
@@ -124,11 +125,14 @@ struct pomp_ctx {
 	/** Prevent event processing during stop and destroy */
 	int			stopping;
 
-	/** Prevent synchronous stop/destroy during notications */
+	/** Prevent synchronous stop/destroy during notifications */
 	int			notifying;
 
 	/** Default read buffer len */
 	size_t readbuf_len;
+
+	/** Pre-allocated message for sending operation */
+	struct pomp_msg		*sendmsg;
 
 	/** Keepalive settings */
 	struct {
@@ -137,6 +141,9 @@ struct pomp_ctx {
 		int		interval;
 		int		count;
 	} keepalive;
+
+	/** maximum number of active connections for a server */
+	size_t max_conn_count;
 
 	/** Client/Server specific parameters */
 	union {
@@ -304,7 +311,7 @@ static int server_accept_conn(int server_fd, struct pomp_ctx *ctx)
 	}
 
 	/* If maximum number of connection is reached, close fd immediately */
-	if (ctx->u.server.conncount >= POMP_SERVER_MAX_CONN_COUNT) {
+	if (ctx->u.server.conncount >= ctx->max_conn_count) {
 		POMP_LOGI("Maximum number of connections reached");
 		close(fd);
 		return 0;
@@ -371,15 +378,19 @@ static void server_cb(int fd, uint32_t revents, void *userdata)
 		res = getsockopt(fd,
 				 SOL_SOCKET, SO_ERROR,
 				 &error, &errorlen);
-		if (res < 0)
+		if (res < 0) {
 			POMP_LOG_FD_ERRNO("getsockopt", fd);
-		else if (errorlen != (socklen_t)sizeof(error))
+		} else if (errorlen != (socklen_t)sizeof(error)) {
 			POMP_LOGE("error event(fd=%d) err=?(?)",
 				  fd);
-		else
+		} else {
+#ifdef _WIN32
+			error = pomp_win32_error_to_errno(error);
+#endif /* _WIN32 */
 			POMP_LOGE("error event(fd=%d) err=%d(%s)",
 				  fd,
 				  error, strerror(error));
+		}
 	}
 
 	if (revents & POMP_FD_EVENT_OUT)
@@ -492,7 +503,8 @@ static int server_start(struct pomp_ctx *ctx)
 	/* Cleanup in case of error */
 error:
 	if (ctx->u.server.fd >= 0) {
-		pomp_loop_remove(ctx->loop, ctx->u.server.fd);
+		if (pomp_loop_has_fd(ctx->loop, ctx->u.server.fd))
+			pomp_loop_remove(ctx->loop, ctx->u.server.fd);
 		close(ctx->u.server.fd);
 		ctx->u.server.fd = -1;
 		memset(&ctx->u.server.local_addr, 0,
@@ -575,6 +587,9 @@ static int client_complete_conn(int client_fd, struct pomp_ctx *ctx)
 		POMP_LOG_FD_ERRNO("getsockopt.SO_ERROR", client_fd);
 		goto reconnect;
 	}
+#ifdef _WIN32
+	sockerr = pomp_win32_error_to_errno(sockerr);
+#endif /* _WIN32 */
 
 	/* Reconnect in case of error */
 	if (sockerr != 0) {
@@ -648,7 +663,14 @@ static int client_start(struct pomp_ctx *ctx)
 	int res = 0;
 
 	/* Create client socket */
-	ctx->u.client.fd = socket(ctx->addr->sa_family, SOCK_STREAM, 0);
+	ctx->u.client.fd = socket(
+		ctx->addr->sa_family,
+#ifdef AF_QIPCRTR
+		ctx->addr->sa_family == AF_QIPCRTR ? SOCK_DGRAM : SOCK_STREAM,
+#else
+		SOCK_STREAM,
+#endif
+		0);
 	if (ctx->u.client.fd < 0) {
 		res = -errno;
 		POMP_LOG_ERRNO("socket");
@@ -947,6 +969,7 @@ struct pomp_ctx *pomp_ctx_new_with_loop(pomp_event_cb_t cb,
 	struct pomp_ctx *ctx = NULL;
 
 	POMP_RETURN_VAL_IF_FAILED(loop != NULL, -EINVAL, NULL);
+	POMP_LOOP_CHECK_OWNER(loop);
 
 	/* Allocate context structure */
 	ctx = calloc(1, sizeof(*ctx));
@@ -966,6 +989,13 @@ struct pomp_ctx *pomp_ctx_new_with_loop(pomp_event_cb_t cb,
 	ctx->keepalive.interval = 1;
 	ctx->keepalive.count = 2;
 	ctx->readbuf_len = POMP_CONN_READ_SIZE;
+
+	ctx->max_conn_count = POMP_SERVER_MAX_CONN_COUNT;
+
+	/* Pre-allocate a message for sending operation */
+	ctx->sendmsg = pomp_msg_new();
+	if (ctx->sendmsg == NULL)
+		goto error;
 
 	/* Allocate timer */
 	ctx->timer = pomp_timer_new(ctx->loop, &timer_cb, ctx);
@@ -989,6 +1019,7 @@ int pomp_ctx_set_raw(struct pomp_ctx *ctx, pomp_ctx_raw_cb_t cb)
 	POMP_RETURN_ERR_IF_FAILED(ctx != NULL, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(cb != NULL, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(ctx->addr == NULL, -EBUSY);
+	POMP_LOOP_CHECK_OWNER(ctx->loop);
 	ctx->israw = 1;
 	ctx->rawcb = cb;
 	return 0;
@@ -1002,6 +1033,7 @@ int pomp_ctx_set_socket_cb(struct pomp_ctx *ctx, pomp_socket_cb_t cb)
 	POMP_RETURN_ERR_IF_FAILED(ctx != NULL, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(cb != NULL, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(ctx->addr == NULL, -EBUSY);
+	POMP_LOOP_CHECK_OWNER(ctx->loop);
 	ctx->sockcb = cb;
 	return 0;
 }
@@ -1014,6 +1046,7 @@ int pomp_ctx_set_send_cb(struct pomp_ctx *ctx, pomp_send_cb_t cb)
 	POMP_RETURN_ERR_IF_FAILED(ctx != NULL, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(cb != NULL, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(ctx->addr == NULL, -EBUSY);
+	POMP_LOOP_CHECK_OWNER(ctx->loop);
 	ctx->sendcb = cb;
 	return 0;
 }
@@ -1025,6 +1058,7 @@ int pomp_ctx_setup_keepalive(struct pomp_ctx *ctx, int enable,
 		int idle, int interval, int count)
 {
 	POMP_RETURN_ERR_IF_FAILED(ctx != NULL, -EINVAL);
+	POMP_LOOP_CHECK_OWNER(ctx->loop);
 	ctx->keepalive.enable = enable;
 	ctx->keepalive.idle = idle;
 	ctx->keepalive.interval = interval;
@@ -1035,10 +1069,27 @@ int pomp_ctx_setup_keepalive(struct pomp_ctx *ctx, int enable,
 /*
  * See documentation in public header.
  */
+POMP_API int pomp_ctx_set_max_conn(struct pomp_ctx *ctx, size_t count)
+{
+	POMP_RETURN_ERR_IF_FAILED(ctx != NULL, -EINVAL);
+	POMP_RETURN_ERR_IF_FAILED(count > 0, -EINVAL);
+	POMP_LOOP_CHECK_OWNER(ctx->loop);
+
+	ctx->max_conn_count = count;
+
+	return 0;
+}
+
+/*
+ * See documentation in public header.
+ */
 int pomp_ctx_destroy(struct pomp_ctx *ctx)
 {
 	POMP_RETURN_ERR_IF_FAILED(ctx != NULL, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(ctx->addr == NULL, -EBUSY);
+	POMP_LOOP_CHECK_OWNER(ctx->loop);
+	if (ctx->sendmsg != NULL)
+		pomp_msg_destroy(ctx->sendmsg);
 	if (ctx->timer != NULL)
 		pomp_timer_destroy(ctx->timer);
 	if (ctx->loop != NULL && !ctx->extloop)
@@ -1062,6 +1113,7 @@ static int pomp_ctx_start(struct pomp_ctx *ctx, enum pomp_ctx_type type,
 	POMP_RETURN_ERR_IF_FAILED(ctx != NULL, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(addr != NULL, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(ctx->addr == NULL, -EBUSY);
+	POMP_LOOP_CHECK_OWNER(ctx->loop);
 
 	/* Copy address */
 	ctx->addr = malloc(addrlen);
@@ -1104,6 +1156,12 @@ static int pomp_ctx_start(struct pomp_ctx *ctx, enum pomp_ctx_type type,
 		break;
 	}
 
+	/* Cleanup address in case of error */
+	if (res < 0) {
+		free(ctx->addr);
+		ctx->addr = NULL;
+		ctx->addrlen = 0;
+	}
 	return res;
 }
 
@@ -1114,6 +1172,7 @@ int pomp_ctx_listen(struct pomp_ctx *ctx,
 		const struct sockaddr *addr, uint32_t addrlen)
 {
 	POMP_RETURN_ERR_IF_FAILED(ctx != NULL, -EINVAL);
+	POMP_LOOP_CHECK_OWNER(ctx->loop);
 	ctx->mode = 0;
 	return pomp_ctx_start(ctx, POMP_CTX_TYPE_SERVER, addr, addrlen);
 }
@@ -1125,6 +1184,7 @@ int pomp_ctx_listen_with_access_mode(struct pomp_ctx *ctx,
 		const struct sockaddr *addr, uint32_t addrlen, uint32_t mode)
 {
 	POMP_RETURN_ERR_IF_FAILED(ctx != NULL, -EINVAL);
+	POMP_LOOP_CHECK_OWNER(ctx->loop);
 	ctx->mode = mode;
 	return pomp_ctx_start(ctx, POMP_CTX_TYPE_SERVER, addr, addrlen);
 }
@@ -1135,6 +1195,8 @@ int pomp_ctx_listen_with_access_mode(struct pomp_ctx *ctx,
 int pomp_ctx_connect(struct pomp_ctx *ctx,
 		const struct sockaddr *addr, uint32_t addrlen)
 {
+	POMP_RETURN_ERR_IF_FAILED(ctx != NULL, -EINVAL);
+	POMP_LOOP_CHECK_OWNER(ctx->loop);
 	return pomp_ctx_start(ctx, POMP_CTX_TYPE_CLIENT, addr, addrlen);
 }
 
@@ -1144,6 +1206,8 @@ int pomp_ctx_connect(struct pomp_ctx *ctx,
 int pomp_ctx_bind(struct pomp_ctx *ctx,
 		const struct sockaddr *addr, uint32_t addrlen)
 {
+	POMP_RETURN_ERR_IF_FAILED(ctx != NULL, -EINVAL);
+	POMP_LOOP_CHECK_OWNER(ctx->loop);
 	return pomp_ctx_start(ctx, POMP_CTX_TYPE_DGRAM, addr, addrlen);
 }
 
@@ -1184,13 +1248,14 @@ static void pomp_ctx_stop_idle(void *userdata)
 int pomp_ctx_stop(struct pomp_ctx *ctx)
 {
 	POMP_RETURN_ERR_IF_FAILED(ctx != NULL, -EINVAL);
+	POMP_LOOP_CHECK_OWNER(ctx->loop);
 	if (ctx->addr == NULL || ctx->stopping)
 		return 0;
 
 	ctx->stopping = 1;
 
 	/* If currently notifying events/messages, do the stop in idle,
-	 * otherwise do it syncchronously */
+	 * otherwise do it synchronously */
 	if (ctx->notifying > 0) {
 		return pomp_loop_idle_add(ctx->loop, &pomp_ctx_stop_idle, ctx);
 	} else {
@@ -1205,6 +1270,7 @@ int pomp_ctx_stop(struct pomp_ctx *ctx)
 intptr_t pomp_ctx_get_fd(const struct pomp_ctx *ctx)
 {
 	POMP_RETURN_ERR_IF_FAILED(ctx != NULL, -EINVAL);
+	POMP_LOOP_CHECK_OWNER(ctx->loop);
 	return pomp_loop_get_fd(ctx->loop);
 }
 
@@ -1213,6 +1279,7 @@ intptr_t pomp_ctx_get_fd(const struct pomp_ctx *ctx)
  */
 int pomp_ctx_process_fd(struct pomp_ctx *ctx)
 {
+	/* No owner check */
 	POMP_RETURN_ERR_IF_FAILED(ctx != NULL, -EINVAL);
 	return pomp_loop_wait_and_process(ctx->loop, 0);
 }
@@ -1222,12 +1289,14 @@ int pomp_ctx_process_fd(struct pomp_ctx *ctx)
  */
 int pomp_ctx_wait_and_process(struct pomp_ctx *ctx, int timeout)
 {
+	/* No owner check */
 	POMP_RETURN_ERR_IF_FAILED(ctx != NULL, -EINVAL);
 	return pomp_loop_wait_and_process(ctx->loop, timeout);
 }
 
 /*
  * See documentation in public header.
+ * Thread safe.
  */
 int pomp_ctx_wakeup(struct pomp_ctx *ctx)
 {
@@ -1237,6 +1306,7 @@ int pomp_ctx_wakeup(struct pomp_ctx *ctx)
 
 /*
  * See documentation in public header.
+ * Thread safe.
  */
 struct pomp_loop *pomp_ctx_get_loop(struct pomp_ctx *ctx)
 {
@@ -1253,6 +1323,7 @@ struct pomp_conn *pomp_ctx_get_next_conn(const struct pomp_ctx *ctx,
 	POMP_RETURN_VAL_IF_FAILED(ctx != NULL, -EINVAL, NULL);
 	POMP_RETURN_VAL_IF_FAILED(ctx->type == POMP_CTX_TYPE_SERVER,
 			-EINVAL, NULL);
+	POMP_LOOP_CHECK_OWNER(ctx->loop);
 	return prev == NULL ? ctx->u.server.conns : pomp_conn_get_next(prev);
 }
 
@@ -1264,6 +1335,7 @@ struct pomp_conn *pomp_ctx_get_conn(const struct pomp_ctx *ctx)
 	POMP_RETURN_VAL_IF_FAILED(ctx != NULL, -EINVAL, NULL);
 	POMP_RETURN_VAL_IF_FAILED(ctx->type == POMP_CTX_TYPE_CLIENT,
 			-EINVAL, NULL);
+	POMP_LOOP_CHECK_OWNER(ctx->loop);
 	return ctx->u.client.conn;
 }
 
@@ -1275,6 +1347,7 @@ const struct sockaddr *pomp_ctx_get_local_addr(struct pomp_ctx *ctx,
 {
 	POMP_RETURN_VAL_IF_FAILED(ctx != NULL, -EINVAL, NULL);
 	POMP_RETURN_VAL_IF_FAILED(addrlen != NULL, -EINVAL, NULL);
+	POMP_LOOP_CHECK_OWNER(ctx->loop);
 
 	if (ctx->type == POMP_CTX_TYPE_SERVER) {
 		*addrlen = ctx->u.server.local_addrlen;
@@ -1297,6 +1370,7 @@ int pomp_ctx_send_msg(struct pomp_ctx *ctx, const struct pomp_msg *msg)
 
 	POMP_RETURN_ERR_IF_FAILED(ctx != NULL, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(msg != NULL, -EINVAL);
+	POMP_LOOP_CHECK_OWNER(ctx->loop);
 
 	switch (ctx->type) {
 	case POMP_CTX_TYPE_SERVER:
@@ -1336,6 +1410,7 @@ int pomp_ctx_send_msg_to(struct pomp_ctx *ctx,
 	POMP_RETURN_ERR_IF_FAILED(addr != NULL, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(ctx->type == POMP_CTX_TYPE_DGRAM, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(ctx->u.dgram.conn != NULL, -EINVAL);
+	POMP_LOOP_CHECK_OWNER(ctx->loop);
 
 	return pomp_conn_send_msg_to(ctx->u.dgram.conn, msg, addr, addrlen);
 }
@@ -1360,15 +1435,15 @@ int pomp_ctx_sendv(struct pomp_ctx *ctx, uint32_t msgid,
 		const char *fmt, va_list args)
 {
 	int res = 0;
-	struct pomp_msg msg = POMP_MSG_INITIALIZER;
+	POMP_RETURN_ERR_IF_FAILED(ctx != NULL, -EINVAL);
+	POMP_LOOP_CHECK_OWNER(ctx->loop);
 
-	/* Write message and send it*/
-	res = pomp_msg_writev(&msg, msgid, fmt, args);
+	/* Write message using pre-allocated one and send it */
+	res = pomp_msg_writev(ctx->sendmsg, msgid, fmt, args);
 	if (res == 0)
-		res = pomp_ctx_send_msg(ctx, &msg);
+		res = pomp_ctx_send_msg(ctx, ctx->sendmsg);
 
-	/* Always cleanup message */
-	(void)pomp_msg_clear(&msg);
+	/* Do not clean message, to avoid re-allocation */
 	return res;
 }
 
@@ -1383,6 +1458,7 @@ int pomp_ctx_send_raw_buf(struct pomp_ctx *ctx, struct pomp_buffer *buf)
 	POMP_RETURN_ERR_IF_FAILED(ctx != NULL, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(buf != NULL, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(ctx->israw, -EINVAL);
+	POMP_LOOP_CHECK_OWNER(ctx->loop);
 
 	switch (ctx->type) {
 	case POMP_CTX_TYPE_SERVER:
@@ -1422,6 +1498,7 @@ int pomp_ctx_send_raw_buf_to(struct pomp_ctx *ctx, struct pomp_buffer *buf,
 	POMP_RETURN_ERR_IF_FAILED(ctx->israw, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(ctx->type == POMP_CTX_TYPE_DGRAM, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(ctx->u.dgram.conn != NULL, -EINVAL);
+	POMP_LOOP_CHECK_OWNER(ctx->loop);
 
 	return pomp_conn_send_raw_buf_to(ctx->u.dgram.conn, buf, addr, addrlen);
 }
@@ -1434,6 +1511,7 @@ int pomp_ctx_set_read_buffer_len(struct pomp_ctx *ctx,
 {
 	POMP_RETURN_ERR_IF_FAILED(ctx != NULL, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(len != 0, -EINVAL);
+	POMP_LOOP_CHECK_OWNER(ctx->loop);
 	ctx->readbuf_len = len;
 	return 0;
 }
@@ -1551,6 +1629,7 @@ int pomp_ctx_notify_msg(struct pomp_ctx *ctx, struct pomp_conn *conn,
 	POMP_RETURN_ERR_IF_FAILED(ctx != NULL, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(conn != NULL, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(msg != NULL, -EINVAL);
+	POMP_LOOP_CHECK_OWNER(ctx->loop);
 
 	if (ctx->eventcb != NULL) {
 		ctx->notifying++;
@@ -1575,6 +1654,7 @@ int pomp_ctx_notify_raw_buf(struct pomp_ctx *ctx, struct pomp_conn *conn,
 	POMP_RETURN_ERR_IF_FAILED(ctx->rawcb != NULL, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(conn != NULL, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(buf != NULL, -EINVAL);
+	POMP_LOOP_CHECK_OWNER(ctx->loop);
 
 	ctx->notifying++;
 	(*ctx->rawcb)(ctx, conn, buf, ctx->userdata);
@@ -1596,6 +1676,7 @@ int pomp_ctx_notify_send(struct pomp_ctx *ctx, struct pomp_conn *conn,
 	POMP_RETURN_ERR_IF_FAILED(ctx != NULL, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(conn != NULL, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(buf != NULL, -EINVAL);
+	POMP_LOOP_CHECK_OWNER(ctx->loop);
 
 	if (ctx->sendcb != NULL) {
 		ctx->notifying++;

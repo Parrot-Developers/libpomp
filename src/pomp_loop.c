@@ -134,7 +134,27 @@ static intptr_t pomp_loop_do_get_fd(struct pomp_loop *loop)
  */
 static int pomp_loop_do_wait_and_process(struct pomp_loop *loop, int timeout)
 {
-	return (*s_pomp_loop_ops->do_wait_and_process)(loop, timeout);
+	int res = 0;
+	POMP_RETURN_ERR_IF_FAILED(loop != NULL, -EINVAL);
+
+	/* Lock the loop if needed, indicating that we may block */
+	if (loop->sync.loop == loop)
+		pomp_loop_sync_lock(&loop->sync, 1);
+
+	/* Update the main owner and current owner */
+	loop->owner.waiter = pthread_self();
+	loop->owner.current = loop->owner.waiter;
+
+	res = (*s_pomp_loop_ops->do_wait_and_process)(loop, timeout);
+
+	/* Restore ownership to creator */
+	loop->owner.current = loop->owner.creator;
+
+	/* Unlock the loop if needed */
+	if (loop->sync.loop == loop)
+		pomp_loop_sync_unlock(&loop->sync);
+
+	return res;
 }
 
 /**
@@ -289,11 +309,23 @@ struct pomp_loop *pomp_loop_new(void)
 {
 	int res;
 	struct pomp_loop *loop = NULL;
+	char *env = NULL;
 
 	/* Allocate loop structure */
 	loop = calloc(1, sizeof(*loop));
 	if (loop == NULL)
 		return NULL;
+
+	/* Initial owner is current thread */
+	loop->owner.creator = pthread_self();
+	loop->owner.current = loop->owner.creator;
+
+	/* Check environment variable to enable loop owner checks */
+	env = getenv("POMP_LOOP_CHECK_OWNER");
+	if (env != NULL && strcmp(env, "1") == 0)
+		loop->owner_checked = 1;
+	else
+		loop->owner_checked = 0;
 
 	/* Implementation specific */
 	if (pomp_loop_do_new(loop) < 0) {
@@ -332,6 +364,8 @@ int pomp_loop_destroy(struct pomp_loop *loop)
 	unsigned int pfdi;
 	POMP_RETURN_ERR_IF_FAILED(loop != NULL, -EINVAL);
 
+	/* No check of owner, we are destroying the loop */
+
 	/* Detach the event for idle entries */
 	if (!loop->is_destroying)
 		pomp_evt_detach_from_loop(loop->idle_evt, loop);
@@ -341,7 +375,7 @@ int pomp_loop_destroy(struct pomp_loop *loop)
 
 	/* Check for remaining idle entries. calling flush here is not safe
 	 * associated callbacks and userdata may have been destroyed already
-	 * pomp_loop_idle_flush should be called explicitely before when safe.
+	 * pomp_loop_idle_flush should be called explicitly before when safe.
 	 */
 	pomp_list_walk_forward(&loop->idle_entries, node) {
 		entry = pomp_list_entry(node, struct pomp_idle_entry, node);
@@ -363,6 +397,7 @@ int pomp_loop_destroy(struct pomp_loop *loop)
 
 	pthread_mutex_destroy(&loop->lock);
 	pomp_watchdog_clear(&loop->watchdog);
+	pomp_loop_sync_clear(&loop->sync);
 
 	/* Implementation specific */
 	res = pomp_loop_do_destroy(loop);
@@ -387,6 +422,7 @@ int pomp_loop_add(struct pomp_loop *loop, int fd, uint32_t events,
 	POMP_RETURN_ERR_IF_FAILED(fd >= 0, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(events != 0, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(cb != NULL, -EINVAL);
+	POMP_LOOP_CHECK_OWNER(loop);
 
 	/* Make sure fd is not already registered */
 	pfd = pomp_loop_find_pfd(loop, fd);
@@ -419,6 +455,7 @@ int pomp_loop_update(struct pomp_loop *loop, int fd, uint32_t events)
 	uint32_t oldevents = 0;
 	POMP_RETURN_ERR_IF_FAILED(loop != NULL, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(fd >= 0, -EINVAL);
+	POMP_LOOP_CHECK_OWNER(loop);
 
 	/* Make sure fd is registered */
 	pfd = pomp_loop_find_pfd(loop, fd);
@@ -447,6 +484,7 @@ int pomp_loop_update2(struct pomp_loop *loop, int fd,
 	uint32_t oldevents = 0;
 	POMP_RETURN_ERR_IF_FAILED(loop != NULL, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(fd >= 0, -EINVAL);
+	POMP_LOOP_CHECK_OWNER(loop);
 
 	/* Make sure fd is registered */
 	pfd = pomp_loop_find_pfd(loop, fd);
@@ -474,6 +512,7 @@ int pomp_loop_remove(struct pomp_loop *loop, int fd)
 	struct pomp_fd *pfd = NULL;
 	POMP_RETURN_ERR_IF_FAILED(loop != NULL, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(fd >= 0, -EINVAL);
+	POMP_LOOP_CHECK_OWNER(loop);
 
 	/* Make sure fd is registered */
 	pfd = pomp_loop_find_pfd(loop, fd);
@@ -497,7 +536,9 @@ int pomp_loop_remove(struct pomp_loop *loop, int fd)
  */
 int pomp_loop_has_fd(struct pomp_loop *loop, int fd)
 {
-	return (loop && pomp_loop_find_pfd(loop, fd)) ? 1 : 0;
+	POMP_RETURN_VAL_IF_FAILED(loop != NULL, -EINVAL, 0);
+	POMP_LOOP_CHECK_OWNER(loop);
+	return pomp_loop_find_pfd(loop, fd) != NULL;
 }
 
 /*
@@ -507,6 +548,7 @@ intptr_t pomp_loop_get_fd(struct pomp_loop *loop)
 {
 	/* Implementation specific */
 	POMP_RETURN_ERR_IF_FAILED(loop != NULL, -EINVAL);
+	POMP_LOOP_CHECK_OWNER(loop);
 	return pomp_loop_do_get_fd(loop);
 }
 
@@ -526,6 +568,8 @@ int pomp_loop_wait_and_process(struct pomp_loop *loop, int timeout)
 	int res = 0;
 	POMP_RETURN_ERR_IF_FAILED(loop != NULL, -EINVAL);
 
+	/* No check of owner, it may change */
+
 	/* Implementation specific */
 	res = pomp_loop_do_wait_and_process(loop, timeout);
 
@@ -534,6 +578,7 @@ int pomp_loop_wait_and_process(struct pomp_loop *loop, int timeout)
 
 /*
  * See documentation in public header.
+ * Thread safe.
  */
 int pomp_loop_wakeup(struct pomp_loop *loop)
 {
@@ -544,6 +589,7 @@ int pomp_loop_wakeup(struct pomp_loop *loop)
 
 /*
  * See documentation in public header.
+ * Thread safe.
  */
 int pomp_loop_idle_add(struct pomp_loop *loop, pomp_idle_cb_t cb,
 		void *userdata)
@@ -580,6 +626,7 @@ int pomp_loop_idle_add(struct pomp_loop *loop, pomp_idle_cb_t cb,
 
 /*
  * See documentation in public header.
+ * Thread safe.
  */
 int pomp_loop_idle_add_with_cookie(struct pomp_loop *loop, pomp_idle_cb_t cb,
 		void *userdata, void *cookie)
@@ -617,6 +664,7 @@ int pomp_loop_idle_add_with_cookie(struct pomp_loop *loop, pomp_idle_cb_t cb,
 
 /*
  * See documentation in public header.
+ * Thread safe.
  */
 int pomp_loop_idle_remove(struct pomp_loop *loop, pomp_idle_cb_t cb,
 		void *userdata)
@@ -646,6 +694,7 @@ int pomp_loop_idle_remove(struct pomp_loop *loop, pomp_idle_cb_t cb,
 
 /*
  * See documentation in public header.
+ * Thread safe.
  */
 int pomp_loop_idle_remove_by_cookie(struct pomp_loop *loop, void *cookie)
 {
@@ -675,6 +724,7 @@ int pomp_loop_idle_remove_by_cookie(struct pomp_loop *loop, void *cookie)
 
 /*
  * See documentation in public header.
+ * Thread safe.
  */
 int pomp_loop_idle_flush(struct pomp_loop *loop)
 {
@@ -707,6 +757,7 @@ int pomp_loop_idle_flush(struct pomp_loop *loop)
 
 /*
  * See documentation in public header.
+ * Thread safe.
  */
 int pomp_loop_idle_flush_by_cookie(struct pomp_loop *loop,
 		void *cookie)
@@ -757,6 +808,7 @@ int pomp_loop_watchdog_enable(struct pomp_loop *loop,
 	POMP_RETURN_ERR_IF_FAILED(loop != NULL, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(delay > 0, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(cb != NULL, -EINVAL);
+	POMP_LOOP_CHECK_OWNER(loop);
 	return pomp_watchdog_start(&loop->watchdog, loop, delay, cb, userdata);
 }
 
@@ -766,7 +818,46 @@ int pomp_loop_watchdog_enable(struct pomp_loop *loop,
 int pomp_loop_watchdog_disable(struct pomp_loop *loop)
 {
 	POMP_RETURN_ERR_IF_FAILED(loop != NULL, -EINVAL);
+	POMP_LOOP_CHECK_OWNER(loop);
 	return pomp_watchdog_stop(&loop->watchdog);
+}
+
+/*
+ * See documentation in public header.
+ */
+int pomp_loop_enable_thread_sync(struct pomp_loop *loop)
+{
+	POMP_RETURN_ERR_IF_FAILED(loop != NULL, -EINVAL);
+	POMP_LOOP_CHECK_OWNER(loop);
+	return pomp_loop_sync_init(&loop->sync, loop);
+}
+
+int pomp_loop_lock(struct pomp_loop *loop)
+{
+	int res = 0;
+	POMP_RETURN_ERR_IF_FAILED(loop != NULL, -EINVAL);
+	res = pomp_loop_sync_lock(&loop->sync, 0);
+	/* Remember which thread can call loop API */
+	if (res == 0)
+		loop->owner.current = pthread_self();
+	return res;
+}
+
+int pomp_loop_unlock(struct pomp_loop *loop)
+{
+	POMP_RETURN_ERR_IF_FAILED(loop != NULL, -EINVAL);
+	/* Restore ownership to thread normally doing the wait_and_process */
+	loop->owner.current = loop->owner.waiter;
+	return pomp_loop_sync_unlock(&loop->sync);
+}
+
+void pomp_loop_check_owner(struct pomp_loop *loop, const char *caller)
+{
+	POMP_RETURN_IF_FAILED(loop != NULL, -EINVAL);
+	if (loop->owner_checked &&
+			!pthread_equal(loop->owner.current, pthread_self())) {
+		POMP_LOGW("loop %p: %s called from wrong thread", loop, caller);
+	}
 }
 
 /*

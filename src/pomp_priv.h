@@ -57,6 +57,10 @@
 #  include <io.h>
 #endif /* !_MSC_VER */
 
+#if defined(__APPLE__)
+#  include <TargetConditionals.h>
+#endif
+
 /* Detect available system headers */
 #include "pomp_config.h"
 
@@ -131,6 +135,8 @@
 #  define POMP_HAVE_WATCHDOG_MONOTONIC
 #endif /* __linux__ */
 
+#define POMP_HAVE_LOOP_SYNC
+
 #include "libpomp.h"
 
 #include "pomp_log.h"
@@ -139,6 +145,7 @@
 #include "pomp_evt.h"
 #include "pomp_timer.h"
 #include "pomp_watchdog.h"
+#include "pomp_loop_sync.h"
 #include "pomp_loop.h"
 #include "pomp_prot.h"
 

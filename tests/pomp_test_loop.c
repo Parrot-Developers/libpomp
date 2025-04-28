@@ -808,6 +808,92 @@ static void test_loop_watchdog(void)
 
 #endif /* POMP_HAVE_WATCHDOG */
 
+#ifdef POMP_HAVE_LOOP_SYNC
+
+/** */
+struct sync_data {
+	struct pomp_loop  *loop;
+};
+
+static void *test_loop_sync_thread(void *arg)
+{
+	int res = 0, i = 0;
+	struct sync_data *data = arg;
+
+	for (i = 0; i < 10; i++) {
+		usleep(100 * 1000);
+		res = pomp_loop_lock(data->loop);
+		CU_ASSERT_EQUAL(res, 0);
+		usleep(10 * 1000);
+		res = pomp_loop_unlock(data->loop);
+		CU_ASSERT_EQUAL(res, 0);
+	}
+
+	return NULL;
+}
+
+static void test_loop_sync()
+{
+	int res = 0, i = 0;
+	struct sync_data data = {NULL};
+	pthread_t thread1;
+	pthread_t thread2;
+
+	data.loop = pomp_loop_new();
+	CU_ASSERT_PTR_NOT_NULL_FATAL(data.loop);
+
+	res = pomp_loop_enable_thread_sync(data.loop);
+	CU_ASSERT_EQUAL(res, 0);
+
+	/* Create 2 threads that will do the locks */
+	res = pthread_create(&thread1, NULL, &test_loop_sync_thread, &data);
+	CU_ASSERT_EQUAL(res, 0);
+	res = pthread_create(&thread2, NULL, &test_loop_sync_thread, &data);
+	CU_ASSERT_EQUAL(res, 0);
+
+	/* Basic lock/unlock without pending wait on loop */
+	res = pomp_loop_lock(data.loop);
+	CU_ASSERT_EQUAL(res, 0);
+	res = pomp_loop_unlock(data.loop);
+	CU_ASSERT_EQUAL(res, 0);
+
+	for (i = 0; i < 10; i++) {
+		/* Execute loop until wakeup by locks, shall not timeout */
+		res = pomp_loop_wait_and_process(data.loop, 1000);
+		CU_ASSERT_EQUAL(res, 0);
+	}
+
+	res = pthread_join(thread1, NULL);
+	CU_ASSERT_EQUAL(res, 0);
+	res = pthread_join(thread2, NULL);
+	CU_ASSERT_EQUAL(res, 0);
+
+	res = pomp_loop_destroy(data.loop);
+	CU_ASSERT_EQUAL(res, 0);
+
+	/* Check lock/unlock on loop without thread sync enabled */
+	data.loop = pomp_loop_new();
+	CU_ASSERT_PTR_NOT_NULL_FATAL(data.loop);
+
+	res = pomp_loop_lock(data.loop);
+	CU_ASSERT_EQUAL(res, -EINVAL);
+	res = pomp_loop_unlock(data.loop);
+	CU_ASSERT_EQUAL(res, -EINVAL);
+
+	/* Invalid parameters checks */
+	res = pomp_loop_enable_thread_sync(NULL);
+	CU_ASSERT_EQUAL(res, -EINVAL);
+	res = pomp_loop_lock(NULL);
+	CU_ASSERT_EQUAL(res, -EINVAL);
+	res = pomp_loop_unlock(NULL);
+	CU_ASSERT_EQUAL(res, -EINVAL);
+
+	res = pomp_loop_destroy(data.loop);
+	CU_ASSERT_EQUAL(res, 0);
+}
+
+#endif /* POMP_HAVE_LOOP_SYNC */
+
 /** */
 #ifdef POMP_HAVE_LOOP_EPOLL
 static void test_loop_epoll(void)
@@ -820,6 +906,9 @@ static void test_loop_epoll(void)
 #ifdef POMP_HAVE_WATCHDOG
 	test_loop_watchdog();
 #endif /* POMP_HAVE_WATCHDOG */
+#ifdef POMP_HAVE_LOOP_SYNC
+	test_loop_sync();
+#endif /* POMP_HAVE_LOOP_SYNC */
 	pomp_loop_set_ops(loop_ops);
 }
 #endif /* POMP_HAVE_LOOP_EPOLL */
@@ -836,6 +925,9 @@ static void test_loop_poll(void)
 #ifdef POMP_HAVE_WATCHDOG
 	test_loop_watchdog();
 #endif /* POMP_HAVE_WATCHDOG */
+#ifdef POMP_HAVE_LOOP_SYNC
+	test_loop_sync();
+#endif /* POMP_HAVE_LOOP_SYNC */
 	pomp_loop_set_ops(loop_ops);
 }
 #endif /* POMP_HAVE_LOOP_POLL */
@@ -852,6 +944,9 @@ static void test_loop_win32(void)
 #ifdef POMP_HAVE_WATCHDOG
 	test_loop_watchdog();
 #endif /* POMP_HAVE_WATCHDOG */
+#ifdef POMP_HAVE_LOOP_SYNC
+	test_loop_sync();
+#endif /* POMP_HAVE_LOOP_SYNC */
 	pomp_loop_set_ops(loop_ops);
 }
 #endif /* POMP_HAVE_LOOP_WIN32 */

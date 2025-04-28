@@ -55,10 +55,27 @@
 #endif
 
 /** Disable copy constructor and assignment operator */
+
+#ifndef POMP_CXX11
 #define POMP_DISABLE_COPY(_cls) \
 	private: \
 		_cls(const _cls &); \
 		_cls &operator=(const _cls &);
+#define POMP_MOVE_ONLY(_cls) POMP_DISABLE_COPY(cls)
+#else
+#define POMP_DISABLE_COPY(_cls) \
+	public: \
+		_cls(const _cls &) = delete; \
+		_cls &operator=(const _cls &) = delete; \
+	private:
+#define POMP_MOVE_ONLY(_cls) \
+	public: \
+		_cls(const _cls &) = delete; \
+		_cls &operator=(const _cls &) = delete; \
+		_cls(_cls &&) = default; \
+		_cls &operator=(_cls &&) = default; \
+	private:
+#endif
 
 #include "libpomp.h"
 #ifdef POMP_CXX11
@@ -72,6 +89,7 @@ class Message;
 class Connection;
 class EventHandler;
 class Loop;
+class LoopSync;
 class Event;
 class Timer;
 class Context;
@@ -80,26 +98,12 @@ class Context;
  * Message class.
  */
 class Message {
-	POMP_DISABLE_COPY(Message)
+	POMP_MOVE_ONLY(Message)
 private:
 	struct pomp_msg        *mMsg;       /**< Internal message */
 	const struct pomp_msg  *mConstMsg;  /**< Internal const message */
-	friend class Connection;
-	friend class Context;
 	friend class Decoder;
 	friend class Encoder;
-
-private:
-	/** Internal constructor from a const message. */
-	inline Message(const struct pomp_msg *msg) {
-		mMsg = NULL;
-		mConstMsg = msg;
-	}
-
-	/** Get internal message. */
-	inline const struct pomp_msg *getMsg() const {
-		return mMsg != NULL ? mMsg : mConstMsg;
-	}
 
 public:
 	/** Constructor. */
@@ -108,15 +112,31 @@ public:
 		mConstMsg = NULL;
 	}
 
+	/** Constructor from a const message. */
+	inline Message(const struct pomp_msg *msg) {
+		mMsg = NULL;
+		mConstMsg = msg;
+	}
+
 	/** Destructor. */
 	inline ~Message() {
 		if (mMsg != NULL)
 			(void)pomp_msg_destroy(mMsg);
 	}
 
+	/** Get internal message (cast operator) */
+	inline operator const struct pomp_msg *() const {
+		return get();
+	}
+
+	/** Get internal message. */
+	inline const struct pomp_msg *get() const {
+		return mMsg != NULL ? mMsg : mConstMsg;
+	}
+
 	/** Get message Id. */
 	inline uint32_t getId() const {
-		return pomp_msg_get_id(getMsg());
+		return pomp_msg_get_id(get());
 	}
 
 	/** Write and encode a message. */
@@ -131,6 +151,8 @@ public:
 
 	/** Write and encode a message. */
 	inline int writev(uint32_t msgid, const char *fmt, va_list args) {
+		if (mMsg == NULL)
+			return -EINVAL;
 		pomp_msg_clear(mMsg);
 		return pomp_msg_writev(mMsg, msgid, fmt, args);
 	}
@@ -139,14 +161,14 @@ public:
 	inline int read(const char *fmt, ...) const POMP_ATTRIBUTE_FORMAT_SCANF(2, 3) {
 		va_list args;
 		va_start(args, fmt);
-		int res = pomp_msg_readv(getMsg(), fmt, args);
+		int res = pomp_msg_readv(get(), fmt, args);
 		va_end(args);
 		return res;
 	}
 
 	/** Read and decode a message. */
 	inline int readv(const char *fmt, va_list args) const {
-		return pomp_msg_readv(getMsg(), fmt, args);
+		return pomp_msg_readv(get(), fmt, args);
 	}
 
 #ifdef POMP_CXX11
@@ -171,7 +193,7 @@ public:
 		if (getId() != Fmt::id)
 			return -EINVAL;
 		struct pomp_decoder *dec = pomp_decoder_new();
-		pomp_decoder_init(dec, getMsg());
+		pomp_decoder_init(dec, get());
 		int res = Fmt::decode(dec, std::forward<ArgsR&>(args)...);
 		pomp_decoder_destroy(dec);
 		return res;
@@ -192,7 +214,7 @@ public:
 	Decoder(const Message &message) :
 		mMsg(message),
 		mDec(pomp_decoder_new()) {
-		pomp_decoder_init(mDec, mMsg.getMsg());
+		pomp_decoder_init(mDec, mMsg.get());
 	}
 
 	~Decoder() {
@@ -367,7 +389,7 @@ public:
  * Connection class.
  */
 class Connection {
-	POMP_DISABLE_COPY(Connection)
+	POMP_MOVE_ONLY(Connection)
 private:
 	struct pomp_conn  *mConn;  /**< Internal connection */
 	friend class Context;
@@ -406,7 +428,7 @@ public:
 
 	/** Send a message to the peer of the connection. */
 	inline int sendMsg(const Message &msg) {
-		return pomp_conn_send_msg(mConn, msg.getMsg());
+		return pomp_conn_send_msg(mConn, msg.get());
 	}
 
 	/** Format and send a message to the peer of the connection. */
@@ -456,7 +478,7 @@ typedef std::vector<Connection *> ConnectionArray;
  * Loop class.
  */
 class Loop {
-	POMP_DISABLE_COPY(Loop)
+	POMP_MOVE_ONLY(Loop)
 private:
 	struct pomp_loop  *mLoop;  /**< Internal loop */
 	bool              mOwner;  /**< True if owner of internal loop */
@@ -481,7 +503,7 @@ public:
 
 	/** Handler class */
 	class Handler {
-		POMP_DISABLE_COPY(Handler)
+		POMP_MOVE_ONLY(Handler)
 	public:
 		inline Handler() {}
 		inline virtual ~Handler() {}
@@ -555,10 +577,25 @@ public:
 		return mLoop;
 	}
 
+	/** Enable thread synchronization on the loop */
+	inline int enableThreadSync() {
+		return pomp_loop_enable_thread_sync(mLoop);
+	}
+
+	/** Lock the loop */
+	inline int lock() {
+		return pomp_loop_lock(mLoop);
+	}
+
+	/** Unlock the loop */
+	inline int unlock() {
+		return pomp_loop_unlock(mLoop);
+	}
+
 #ifdef POMP_CXX11
 	/** Handler wrapper that can take a std::function */
 	class HandlerFunc : public Handler {
-		POMP_DISABLE_COPY(HandlerFunc)
+		POMP_MOVE_ONLY(HandlerFunc)
 	public:
 		typedef std::function<void (int fd, uint32_t revents)> Func;
 		inline HandlerFunc() {}
@@ -575,7 +612,7 @@ public:
  * Event class.
  */
 class Event {
-	POMP_DISABLE_COPY(Event)
+	POMP_MOVE_ONLY(Event)
 private:
 	struct pomp_evt *mEvt;  /**< Internal event */
 private:
@@ -589,7 +626,7 @@ private:
 public:
 	/** Handler class */
 	class Handler {
-		POMP_DISABLE_COPY(Handler)
+		POMP_MOVE_ONLY(Handler)
 	public:
 		inline Handler() {}
 		inline virtual ~Handler() {}
@@ -631,7 +668,7 @@ public:
 #ifdef POMP_CXX11
 	/** Handler wrapper that can take a std::function */
 	class HandlerFunc : public Handler {
-		POMP_DISABLE_COPY(HandlerFunc)
+		POMP_MOVE_ONLY(HandlerFunc)
 	public:
 		typedef std::function<void ()> Func;
 		inline HandlerFunc() {}
@@ -648,7 +685,7 @@ public:
  * Timer class.
  */
 class Timer {
-	POMP_DISABLE_COPY(Timer)
+	POMP_MOVE_ONLY(Timer)
 private:
 	struct pomp_timer  *mTimer;  /**< Internal timer */
 private:
@@ -662,7 +699,7 @@ private:
 public:
 	/** Handler class */
 	class Handler {
-		POMP_DISABLE_COPY(Handler)
+		POMP_MOVE_ONLY(Handler)
 	public:
 		inline Handler() {}
 		inline virtual ~Handler() {}
@@ -697,7 +734,7 @@ public:
 #ifdef POMP_CXX11
 	/** Handler wrapper that can take a std::function */
 	class HandlerFunc : public Handler {
-		POMP_DISABLE_COPY(HandlerFunc)
+		POMP_MOVE_ONLY(HandlerFunc)
 	public:
 		typedef std::function<void ()> Func;
 		inline HandlerFunc() {}
@@ -757,7 +794,7 @@ private:
  * EventHandler class.
  */
 class EventHandler {
-	POMP_DISABLE_COPY(EventHandler)
+	POMP_MOVE_ONLY(EventHandler)
 public:
 	inline EventHandler() {}
 	inline virtual ~EventHandler() {}
@@ -771,7 +808,7 @@ public:
  * Context class.
  */
 class Context {
-	POMP_DISABLE_COPY(Context)
+	POMP_MOVE_ONLY(Context)
 private:
 	struct pomp_ctx  *mCtx;           /**< Internal context */
 	EventHandler     *mEventHandler;  /**< Event handler */
@@ -802,6 +839,7 @@ private:
 		Context *self = reinterpret_cast<Context *>(_userdata);
 		Connection *conn = NULL;
 		ConnectionArray::iterator it;
+		bool allocated = false;
 
 		switch (_event) {
 		case POMP_EVENT_CONNECTED:
@@ -824,7 +862,13 @@ private:
 			it = self->findConn(_conn);
 			if (it != self->mConnections.end())
 				conn = *it;
+			if (!conn) { // likely, a datagram transient connection
+				conn = new Connection(_conn);
+				allocated = true;
+			}
 			self->mEventHandler->recvMessage(self, conn, Message(_msg));
+			if (allocated)
+				delete conn;
 			break;
 
 		default:
@@ -843,6 +887,7 @@ private:
 		size_t len;
 		size_t capacity;
 		int res;
+		bool allocated = false;
 
 		/* Get our own object from user data */
 		Context *self = reinterpret_cast<Context *>(_userdata);
@@ -852,7 +897,10 @@ private:
 		it = self->findConn(_conn);
 		if (it != self->mConnections.end())
 			conn = *it;
-
+		if (!conn) { // likely, a datagram transient connection
+			conn = new Connection(_conn);
+			allocated = true;
+		}
 		res = pomp_buffer_get_cdata(_buf, &cdata, &len, &capacity);
 		if (res == 0) {
 			const uint8_t *start = reinterpret_cast<const uint8_t *>(cdata);
@@ -860,6 +908,8 @@ private:
 			v.assign(start, end);
 			self->mEventHandler->recvRawBuffer(self, conn, v);
 		}
+		if (allocated)
+			delete conn;
 	}
 
 public:
@@ -979,12 +1029,12 @@ public:
 
 	/** Send a message to all connections. */
 	inline int sendMsg(const Message &msg) {
-		return pomp_ctx_send_msg(mCtx, msg.getMsg());
+		return pomp_ctx_send_msg(mCtx, msg.get());
 	}
 
 	/** Send a message on dgram context to a remote address. */
 	inline int sendMsgTo(const Message &msg, const struct sockaddr *addr, uint32_t addrlen) {
-		return pomp_ctx_send_msg_to(mCtx, msg.getMsg(), addr, addrlen);
+		return pomp_ctx_send_msg_to(mCtx, msg.get(), addr, addrlen);
 	}
 
 	/** Send a message on dgram context to a remote address. */

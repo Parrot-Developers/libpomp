@@ -35,6 +35,10 @@
 #ifndef _POMP_LOOP_H_
 #define _POMP_LOOP_H_
 
+/** Check if current function is called from correct thread */
+#define POMP_LOOP_CHECK_OWNER(loop) \
+	pomp_loop_check_owner(loop, __func__)
+
 /** Idle entry */
 struct pomp_idle_entry {
 	pomp_idle_cb_t		cb;		/**< Registered callback */
@@ -72,6 +76,21 @@ struct pomp_loop {
 
 	pthread_mutex_t		lock;
 	struct pomp_watchdog	watchdog;	/**< Watchdog */
+
+	struct pomp_loop_sync	sync;		/**< Thread synchronization */
+
+	struct {
+		/* Thread that created the loop */
+		pthread_t	creator;
+		/* Thread currently doing a wait_and_process */
+		pthread_t	waiter;
+		/* Thread currently locking the loop */
+		pthread_t	current;
+	} owner;
+
+	/** Owner checking enabled */
+	int			owner_checked;
+
 
 #ifdef POMP_HAVE_LOOP_POLL
 	struct pollfd		*pollfds;	/**< Array of pollfd */
@@ -150,5 +169,7 @@ struct pomp_fd *pomp_loop_add_pfd(struct pomp_loop *loop, intptr_t fd,
 		uint32_t events, pomp_fd_event_cb_t cb, void *userdata);
 
 int pomp_loop_remove_pfd(struct pomp_loop *loop, struct pomp_fd *pfd);
+
+void pomp_loop_check_owner(struct pomp_loop *loop, const char *caller);
 
 #endif /* !_POMP_TIMER_H_ */

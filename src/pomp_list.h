@@ -5,7 +5,7 @@
  *
  * @author yves-marie.morgan@parrot.com
  *
- * Copyright (c) 2021 Parrot Donres SAS.
+ * Copyright (c) 2021 Parrot Drones SAS.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without

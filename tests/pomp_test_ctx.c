@@ -275,6 +275,7 @@ static void test_ctx_socket_cb(struct pomp_ctx *ctx,
 	if (!data->isdgram)
 		return;
 
+#ifdef __linux__
 	if (data->isipv6) {
 		ret = setsockopt(fd, IPPROTO_IPV6, IPV6_RECVPKTINFO,
 			&ip_pktinfo, sizeof(ip_pktinfo));
@@ -284,6 +285,7 @@ static void test_ctx_socket_cb(struct pomp_ctx *ctx,
 			&ip_pktinfo, sizeof(ip_pktinfo));
 		CU_ASSERT_EQUAL(ret, 0);
 	}
+#endif /* __linux__ */
 
 }
 
@@ -721,6 +723,16 @@ static void test_ctx(const struct sockaddr *addr1, uint32_t addrlen1,
 		res = pomp_ctx_setup_keepalive(NULL, 0, 0, 0, 0);
 		CU_ASSERT_EQUAL(res, -EINVAL);
 	}
+
+	/* TODO: check that it actually does something */
+	res = pomp_ctx_set_max_conn(data.srv.ctx, 64);
+	CU_ASSERT_EQUAL(res, 0);
+	res = pomp_ctx_set_max_conn(data.srv.ctx, 0);
+	CU_ASSERT_EQUAL(res, -EINVAL);
+	res = pomp_ctx_set_max_conn(NULL, 32);
+	CU_ASSERT_EQUAL(res, -EINVAL);
+	res = pomp_ctx_set_max_conn(data.srv.ctx, 32);
+	CU_ASSERT_EQUAL(res, 0);
 
 	/* Run contexts (they shall connect each other) */
 	run_ctx(data.srv.ctx, data.cli.ctx, 100);
@@ -1304,6 +1316,7 @@ static void test_invalid_addr(void)
 {
 	int res = 0;
 	struct test_data data;
+	struct sockaddr addr_unsupported;
 	struct sockaddr_in addr_in;
 	struct sockaddr *addr = NULL;
 	uint32_t addrlen = 0;
@@ -1311,19 +1324,33 @@ static void test_invalid_addr(void)
 
 	memset(&data, 0, sizeof(data));
 
+	/* Setup test address (unsupported family) */
+	memset(&addr_unsupported, 0, sizeof(addr_unsupported));
+	addr_unsupported.sa_family = AF_UNSPEC;
+
+	/* Create server context */
+	ctx = pomp_ctx_new(&test_event_cb_t, &data);
+	CU_ASSERT_PTR_NOT_NULL_FATAL(ctx);
+	addr = (struct sockaddr *)&addr_unsupported;
+	addrlen = sizeof(addr_unsupported);
+	res = pomp_ctx_listen(ctx, addr, addrlen);
+	CU_ASSERT_NOT_EQUAL(res, 0);
+	res = pomp_ctx_destroy(ctx);
+	CU_ASSERT_EQUAL(res, 0);
+
 	/* Setup test address (inexistent addr) */
 	memset(&addr_in, 0, sizeof(addr_in));
 	addr_in.sin_family = AF_INET;
 	addr_in.sin_addr.s_addr = 0x01000001;
 	addr_in.sin_port = htons(5656);
-	addr = (struct sockaddr *)&addr_in;
-	addrlen = sizeof(addr_in);
 
 	/* Create context */
 	ctx = pomp_ctx_new(&test_event_cb_t, &data);
 	CU_ASSERT_PTR_NOT_NULL_FATAL(ctx);
 
 	/* Start as server */
+	addr = (struct sockaddr *)&addr_in;
+	addrlen = sizeof(addr_in);
 	res = pomp_ctx_listen(ctx, addr, addrlen);
 	CU_ASSERT_EQUAL(res, 0);
 	res = pomp_ctx_wait_and_process(ctx, 2500);
@@ -1332,6 +1359,8 @@ static void test_invalid_addr(void)
 	CU_ASSERT_EQUAL(res, 0);
 
 	/* Start as client */
+	addr = (struct sockaddr *)&addr_in;
+	addrlen = sizeof(addr_in);
 	res = pomp_ctx_connect(ctx, addr, addrlen);
 	CU_ASSERT_EQUAL(res, 0);
 	res = pomp_ctx_wait_and_process(ctx, 2500);

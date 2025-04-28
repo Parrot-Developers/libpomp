@@ -130,7 +130,7 @@ static void pomp_prot_check_magic(struct pomp_prot *prot, int idx, int val,
  * @param prot : protocol decoder.
  *
  * @remarks in case of error during header decoding or message allocation,
- * the decoder state is reseted.
+ * the decoder state is reset.
  */
 static void pomp_prot_decode_header(struct pomp_prot *prot)
 {
@@ -145,7 +145,7 @@ static void pomp_prot_decode_header(struct pomp_prot *prot)
 
 	/* Check header and setup payload decoding */
 	if (prot->header.size < POMP_PROT_HEADER_SIZE) {
-		POMP_LOGW("Bad header size : %d", prot->header.size);
+		POMP_LOGW("Bad header size : %" PRIu32, prot->header.size);
 		prot->state = POMP_PROT_STATE_HEADER_MAGIC_0;
 	} else if (pomp_prot_alloc_msg(prot, prot->header.msgid,
 			prot->header.size) < 0) {
@@ -375,13 +375,12 @@ int pomp_prot_release_msg(struct pomp_prot *prot, struct pomp_msg *msg)
 	POMP_RETURN_ERR_IF_FAILED(prot != NULL, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(msg != NULL, -EINVAL);
 
-	/* if we already have one, destroy given one, otherwise get ownership
-	 * but clear it */
+	/* if we already have one, destroy given one, otherwise get ownership */
 	if (prot->msg != NULL) {
 		pomp_msg_destroy(msg);
 	} else {
+		/* Do not clear message to keep its allocated buffer */
 		prot->msg = msg;
-		pomp_msg_clear(prot->msg);
 	}
 	return 0;
 }

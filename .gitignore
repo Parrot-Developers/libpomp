@@ -4,6 +4,15 @@
 .project
 .settings/
 
+# gradle / android studio
+.gradle
+.idea
+*.iml
+local.gradle.properties
+
+# ant locol properties
+local.properties
+
 # backup files
 *~
 *.swp
@@ -27,18 +36,5 @@ tools/pomp-cli
 examples/pomp-ping
 examples/pomp-ping-cpp
 
-# autotools generated struff
-build-aux/
-m4/
-configure
-config.h.in
-aclocal.m4
-config.log
-config.h
-config.status
-Makefile
-Makefile.in
-libtool
-stamp-h1
-INSTALL
-
+# vscode settings
+.vscode/

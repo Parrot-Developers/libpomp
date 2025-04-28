@@ -101,7 +101,7 @@ static void test_addr(void)
 		CU_ASSERT_EQUAL(res, 0);
 		CU_ASSERT_EQUAL(addrlen, s_data[i].addrlen);
 
-		/* Compare only after familiy field (FreeBSD has an extra len field) */
+		/* Compare only after family field (FreeBSD has an extra len field) */
 		CU_ASSERT_EQUAL(memcmp(&addr.ss_family,
 				&s_data[i].addr->sa_family,
 				s_data[i].addrlen - offsetof(struct sockaddr, sa_family)), 0);
@@ -112,7 +112,7 @@ static void test_addr(void)
 		CU_ASSERT_EQUAL(res, 0);
 		CU_ASSERT_EQUAL(addrlen, s_data[i].addrlen);
 
-		/* Compare only after familiy field (FreeBSD has an extra len field) */
+		/* Compare only after family field (FreeBSD has an extra len field) */
 		CU_ASSERT_EQUAL(memcmp(&addr.ss_family,
 				&s_data[i].addr->sa_family,
 				s_data[i].addrlen - offsetof(struct sockaddr, sa_family)), 0);

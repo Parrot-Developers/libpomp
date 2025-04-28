@@ -36,6 +36,7 @@ LOCAL_SRC_FILES := \
 	src/pomp_evt.c \
 	src/pomp_log.c \
 	src/pomp_loop.c \
+	src/pomp_loop_sync.c \
 	src/pomp_msg.c \
 	src/pomp_prot.c \
 	src/pomp_timer.c \
@@ -74,31 +75,12 @@ LOCAL_LIBRARIES := libpomp
 include $(BUILD_EXECUTABLE)
 
 include $(CLEAR_VARS)
-LOCAL_MODULE := pomp-ping-vala
-LOCAL_CATEGORY_PATH := libs/pomp/examples
-LOCAL_DESCRIPTION := Example code for libpomp written in vala
-LOCAL_LDLIBS := -lglib-2.0 -lgio-2.0 -lgobject-2.0
-LOCAL_CFLAGS := -D_GNU_SOURCE
-LOCAL_VALAFLAGS := --pkg gio-2.0 --pkg posix --pkg libpomp
-LOCAL_SRC_FILES := examples/ping.vala
-LOCAL_LIBRARIES := glib libpomp libpomp-vala
-LOCAL_DEPENDS_HOST_MODULES := host.vala
-include $(BUILD_EXECUTABLE)
-
-include $(CLEAR_VARS)
 LOCAL_MODULE := pomp-cli
 LOCAL_CATEGORY_PATH := libs/pomp/tools
 LOCAL_DESCRIPTION := Command line tool for libpomp
 LOCAL_SRC_FILES := tools/pomp_cli.c
 LOCAL_LIBRARIES := libpomp
 include $(BUILD_EXECUTABLE)
-
-include $(CLEAR_VARS)
-LOCAL_MODULE := libpomp-vala
-LOCAL_CATEGORY_PATH := libs
-LOCAL_DESCRIPTION := Vala binding for libpomp
-LOCAL_INSTALL_HEADERS := libpomp.vapi:usr/share/vala/vapi/
-include $(BUILD_CUSTOM)
 
 ###############################################################################
 ###############################################################################

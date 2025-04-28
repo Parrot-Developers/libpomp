@@ -58,6 +58,7 @@ const struct pomp_evt_ops *pomp_evt_set_ops(
 
 /*
  * See documentation in public header.
+ * Thread safe.
  */
 struct pomp_evt *pomp_evt_new(void)
 {
@@ -66,6 +67,7 @@ struct pomp_evt *pomp_evt_new(void)
 
 /*
  * See documentation in public header.
+ * Thread safe.
  */
 int pomp_evt_destroy(struct pomp_evt *evt)
 {
@@ -90,6 +92,7 @@ int pomp_evt_attach_to_loop(struct pomp_evt *evt,
 	POMP_RETURN_ERR_IF_FAILED(evt != NULL, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(loop != NULL, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(cb != NULL, -EINVAL);
+	POMP_LOOP_CHECK_OWNER(loop);
 
 	/* Make sure event is not already attached */
 	if (evt->loop != NULL) {
@@ -118,6 +121,7 @@ int pomp_evt_detach_from_loop(struct pomp_evt *evt, struct pomp_loop *loop)
 	int res = 0;
 	POMP_RETURN_ERR_IF_FAILED(loop != NULL, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(evt != NULL, -EINVAL);
+	POMP_LOOP_CHECK_OWNER(loop);
 
 	/* Make sure event is properly attached in this loop */
 	if (evt->loop == NULL) {
@@ -147,6 +151,8 @@ int pomp_evt_is_attached(struct pomp_evt *evt, struct pomp_loop *loop)
 {
 	POMP_RETURN_ERR_IF_FAILED(evt != NULL, 0);
 
+	/* No check of owner (may have no loop has arg or attached) */
+
 	if (loop == NULL)
 		return evt->loop != NULL;
 	else
@@ -155,6 +161,7 @@ int pomp_evt_is_attached(struct pomp_evt *evt, struct pomp_loop *loop)
 
 /*
  * See documentation in public header.
+ * Thread safe.
  */
 int pomp_evt_signal(struct pomp_evt *evt)
 {
@@ -163,6 +170,7 @@ int pomp_evt_signal(struct pomp_evt *evt)
 
 /*
  * See documentation in public header.
+ * Thread safe.
  */
 int pomp_evt_clear(struct pomp_evt *evt)
 {

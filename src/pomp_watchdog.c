@@ -5,7 +5,7 @@
  *
  * @author yves-marie.morgan@parrot.com
  *
- * Copyright (c) 2021 Parrot Donres SAS.
+ * Copyright (c) 2021 Parrot Drones SAS.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -54,7 +54,7 @@ static void get_absolute_timeout(uint32_t delay, struct timespec *timeout)
 
 	timeout->tv_sec += delay / 1000;
 	timeout->tv_nsec += (delay % 1000) * 1000000;
-	while (timeout->tv_nsec > 1000000000) {
+	while (timeout->tv_nsec >= 1000000000) {
 		/* over one billion nsec, add 1 sec */
 		timeout->tv_sec++;
 		timeout->tv_nsec -= 1000000000;
@@ -73,6 +73,18 @@ static void *pomp_watchdog_thread_cb(void *userdata)
 	struct pomp_watchdog *watchdog = userdata;
 	struct timespec timeout = {0, 0};
 	uint32_t counter = 0;
+
+#if defined(__APPLE__)
+#	if !TARGET_OS_IPHONE
+	res = pthread_setname_np("pomp_watchdog");
+	if (res != 0)
+		ULOG_ERRNO("pthread_setname_np", res);
+#	endif
+#else
+	res = pthread_setname_np(pthread_self(), "pomp_watchdog");
+	if (res != 0)
+		ULOG_ERRNO("pthread_setname_np", res);
+#endif
 
 	pthread_mutex_lock(&watchdog->mutex);
 

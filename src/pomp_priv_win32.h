@@ -63,27 +63,9 @@ struct tcp_keepalive {
 };
 #endif /* !SIO_KEEPALIVE_VALS */
 
-#undef EWOULDBLOCK
-#undef EADDRNOTAVAIL
-#undef ENETDOWN
-#undef ENETUNREACH
-#undef ENOTCONN
-#undef ETIMEDOUT
-#undef ECONNREFUSED
-#undef EHOSTDOWN
-#undef EHOSTUNREACH
-#undef EINPROGRESS
-
-#define EWOULDBLOCK	WSAEWOULDBLOCK
-#define EADDRNOTAVAIL	WSAEADDRNOTAVAIL
-#define ENETDOWN	WSAENETDOWN
-#define ENETUNREACH	WSAENETUNREACH
-#define ENOTCONN	WSAENOTCONN
-#define ETIMEDOUT	WSAETIMEDOUT
-#define ECONNREFUSED	WSAECONNREFUSED
+#ifndef EHOSTDOWN
 #define EHOSTDOWN	WSAEHOSTDOWN
-#define EHOSTUNREACH	WSAEHOSTUNREACH
-#define EINPROGRESS	WSAEINPROGRESS
+#endif
 
 #define SHUT_RD		SD_RECEIVE	/**< No more receptions */
 #define SHUT_WR		SD_SEND	/**< No more transmissions */
@@ -123,6 +105,24 @@ struct sockaddr_un {
 	short	sun_family;	/**< AF_UNIX */
 	char	sun_path[108];	/**< pathname */
 };
+
+static inline int win32_socket(int domain, int type, int protocol)
+{
+	SOCKET s;
+	s = socket(domain, type, protocol);
+	if (s == INVALID_SOCKET)
+		return -1;
+	if (s > (SOCKET)0x7FFFFFFF) {
+		/* Winsock2's socket() returns the unsigned type SOCKET,
+		 * which is a 32-bit type for WIN32 and a 64-bit type for WIN64;
+		 * as we cast the result to an int, return an error if the
+		 * returned value does not fit into 31 bits. */
+		/*POMP_LOGE("%s: avoiding truncated socket handle", __func__);*/
+		closesocket(s);
+		return -1;
+	}
+	return (int)s;
+}
 
 static inline int win32_close(int fd)
 {
@@ -172,6 +172,14 @@ static inline int win32_getsockopt(int sockfd, int level, int optname,
 			(char *)optval, optlen);
 }
 
+int pomp_win32_error_to_errno(int error);
+
+static inline int win32_errno(void)
+{
+	return pomp_win32_error_to_errno(GetLastError());
+}
+
+#undef socket
 #undef close
 #undef read
 #undef recvfrom
@@ -182,6 +190,7 @@ static inline int win32_getsockopt(int sockfd, int level, int optname,
 #undef getsockopt
 #undef errno
 
+#define socket		win32_socket
 #define close		win32_close
 #define read		win32_read
 #define recvfrom	win32_recvfrom
@@ -190,7 +199,7 @@ static inline int win32_getsockopt(int sockfd, int level, int optname,
 #define fcntl		win32_fcntl
 #define setsockopt	win32_setsockopt
 #define getsockopt	win32_getsockopt
-#define errno		((int)GetLastError())
+#define errno		(win32_errno())
 
 #ifdef __cplusplus
 }

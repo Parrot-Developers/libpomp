@@ -73,6 +73,7 @@ const struct pomp_timer_ops *pomp_timer_set_ops(
 struct pomp_timer *pomp_timer_new(struct pomp_loop *loop,
 		pomp_timer_cb_t cb, void *userdata)
 {
+	POMP_LOOP_CHECK_OWNER(loop);
 	return (*s_pomp_timer_ops->timer_new)(loop, cb, userdata);
 }
 
@@ -81,31 +82,39 @@ struct pomp_timer *pomp_timer_new(struct pomp_loop *loop,
  */
 int pomp_timer_destroy(struct pomp_timer *timer)
 {
+	POMP_RETURN_ERR_IF_FAILED(timer != NULL, -EINVAL);
+	POMP_LOOP_CHECK_OWNER(timer->loop);
 	return (*s_pomp_timer_ops->timer_destroy)(timer);
 }
 
 /*
  * See documentation in public header.
+ * Thread safe.
  */
 int pomp_timer_set(struct pomp_timer *timer, uint32_t delay)
 {
+	POMP_RETURN_ERR_IF_FAILED(timer != NULL, -EINVAL);
 	return (*s_pomp_timer_ops->timer_set)(timer, delay, 0);
 }
 
 /*
  * See documentation in public header.
+ * Thread safe.
  */
 int pomp_timer_set_periodic(struct pomp_timer *timer, uint32_t delay,
 		uint32_t period)
 {
+	POMP_RETURN_ERR_IF_FAILED(timer != NULL, -EINVAL);
 	return (*s_pomp_timer_ops->timer_set)(timer, delay, period);
 }
 
 /*
  * See documentation in public header.
+ * Thread safe.
  */
 int pomp_timer_clear(struct pomp_timer *timer)
 {
+	POMP_RETURN_ERR_IF_FAILED(timer != NULL, -EINVAL);
 	return (*s_pomp_timer_ops->timer_clear)(timer);
 }
 

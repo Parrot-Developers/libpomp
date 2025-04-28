@@ -57,6 +57,11 @@ int pomp_buffer_get_fd(const struct pomp_buffer *buf, size_t off)
 	/* Read value, don't care about byte order, it can only be used with
 	 * local unix sockets */
 	memcpy(&v, buf->data + off, sizeof(v));
+
+	/* File descriptors are not expected to be negative */
+	if (v < 0)
+		return -EBADF;
+
 	return v;
 }
 
@@ -77,6 +82,7 @@ int pomp_buffer_register_fd(struct pomp_buffer *buf, size_t off, int fd)
 	POMP_RETURN_ERR_IF_FAILED(buf != NULL, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(buf->refcount <= 1, -EPERM);
 	POMP_RETURN_ERR_IF_FAILED(off + sizeof(v) <= buf->len, -EINVAL);
+	POMP_RETURN_ERR_IF_FAILED(fd >= 0, -EBADF);
 
 	/* Make sure there isn't too many fds already put in buffer */
 	if (buf->fdcount >= POMP_BUFFER_MAX_FD_COUNT) {
@@ -103,8 +109,21 @@ int pomp_buffer_register_fd(struct pomp_buffer *buf, size_t off, int fd)
  */
 int pomp_buffer_clear(struct pomp_buffer *buf)
 {
+	return pomp_buffer_clear_partial(buf, 0);
+}
+
+/**
+ * Clear content of buffer, but tries to keep already allocated buffer.
+ * @param buf : buffer.
+ * @param max_capacity : maximum capacity to keep from previous buffer.
+ * @return 0 in case of success, negative errno value in case of error.
+ * -EPERM is returned if the buffer is shared (ref count is greater than 1).
+ */
+int pomp_buffer_clear_partial(struct pomp_buffer *buf, size_t max_capacity)
+{
 	uint32_t i = 0;
 	int fd = 0;
+	void *new_data = NULL;
 	POMP_RETURN_ERR_IF_FAILED(buf != NULL, -EINVAL);
 	POMP_RETURN_ERR_IF_FAILED(buf->refcount <= 1, -EPERM);
 
@@ -121,11 +140,29 @@ int pomp_buffer_clear(struct pomp_buffer *buf)
 	buf->fdcount = 0;
 	memset(buf->fdoffs, 0, sizeof(buf->fdoffs));
 
-	/* Free internal data */
-	free(buf->data);
-	buf->data = NULL;
-	buf->capacity = 0;
-	buf->len = 0;
+	if (buf->data != NULL) {
+		if (max_capacity > 0 && max_capacity >= buf->capacity) {
+			/* Just clear the used size */
+			buf->len = 0;
+		} else if (max_capacity > 0) {
+			/* Try to resize the buffer */
+			new_data = realloc(buf->data, max_capacity);
+			if (new_data != NULL) {
+				buf->data = new_data;
+				buf->capacity = max_capacity;
+			}
+			buf->len = 0;
+		} else {
+			/* Free internal data */
+			free(buf->data);
+			buf->data = NULL;
+			buf->capacity = 0;
+			buf->len = 0;
+		}
+	} else {
+		/* Fields 'capacity' and 'len' should already be at 0 */
+	}
+
 	return 0;
 }
 
@@ -486,6 +523,12 @@ error:
 	if (dupfd >= 0)
 		close(dupfd);
 	return res;
+}
+
+int pomp_buffer_can_read(const struct pomp_buffer *buf, size_t pos, size_t n)
+{
+	POMP_RETURN_VAL_IF_FAILED(buf != NULL, -EINVAL, 0);
+	return pos + n <= buf->len;
 }
 
 /*
