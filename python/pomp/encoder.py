@@ -196,7 +196,7 @@ class Encoder(object):
     def writeStr(self, sval):
         # Check length
         if len(sval) + 1 > 0xffff:
-            raise EncodeException("Invalid string length: " + len(sval))
+            raise EncodeException(f"Invalid string length: {len(sval)}")
         # Write type, size, data and final null
         self._writeType(protocol.DATA_TYPE_STR)
         self._writeSizeU16(len(sval) + 1)

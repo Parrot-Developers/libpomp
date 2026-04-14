@@ -61,7 +61,7 @@
 	private: \
 		_cls(const _cls &); \
 		_cls &operator=(const _cls &);
-#define POMP_MOVE_ONLY(_cls) POMP_DISABLE_COPY(cls)
+#define POMP_MOVE_ONLY(_cls) POMP_DISABLE_COPY(_cls)
 #else
 #define POMP_DISABLE_COPY(_cls) \
 	public: \
@@ -274,7 +274,7 @@ public:
 		uint32_t n = 0;
 		int res = pomp_decoder_read_cbuf(mDec, &p, &n);
 		if (res == 0) {
-			const uint8_t *start = reinterpret_cast<const uint8_t *>(p);
+			const uint8_t *start = static_cast<const uint8_t *>(p);
 			const uint8_t *end = start + n;
 			v.assign(start, end);
 		}
@@ -488,8 +488,21 @@ private:
 private:
 	/** Internal fd event callback */
 	inline static void fdEventCb(int _fd, uint32_t _revents, void *_userdata) {
-		Handler *handler = reinterpret_cast<Handler *>(_userdata);
+		Handler *handler = static_cast<Handler *>(_userdata);
 		handler->processFd(_fd, _revents);
+	}
+
+	/** Internal idle function callback */
+	inline static void idleCb(void *_userdata) {
+		IdleHandler *handler = static_cast<IdleHandler *>(_userdata);
+		handler->cb();
+	}
+
+	/** Internal watchdog callback */
+	inline static void watchdogCb(struct pomp_loop *_loop, void *_userdata) {
+		(void)_loop; /* unused argument */
+		WatchdogHandler *handler = static_cast<WatchdogHandler *>(_userdata);
+		handler->cb();
 	}
 
 public:
@@ -508,6 +521,24 @@ public:
 		inline Handler() {}
 		inline virtual ~Handler() {}
 		virtual void processFd(int fd, uint32_t revents) = 0;
+	};
+
+	/** Idle handler class */
+	class IdleHandler {
+		POMP_MOVE_ONLY(IdleHandler)
+	public:
+		inline IdleHandler() {}
+		inline virtual ~IdleHandler() {}
+		virtual void cb(void) = 0;
+	};
+
+	/** Watchdog handler class */
+	class WatchdogHandler {
+		POMP_MOVE_ONLY(WatchdogHandler)
+	public:
+		inline WatchdogHandler() {}
+		inline virtual ~WatchdogHandler() {}
+		virtual void cb(void) = 0;
 	};
 
 	/** Constructor. */
@@ -535,6 +566,11 @@ public:
 	/** Modify the set of events to monitor for a registered fd. */
 	inline int update(int fd, uint32_t events) {
 		return pomp_loop_update(mLoop, fd, events);
+	}
+
+	/** Modify the set of events to monitor for a registered fd. */
+	inline int update(int fd, uint32_t eventsToAdd, uint32_t eventsToRemove) {
+		return pomp_loop_update2(mLoop, fd, eventsToAdd, eventsToRemove);
 	}
 
 	/** Unregister a fd from the loop. */
@@ -577,6 +613,46 @@ public:
 		return mLoop;
 	}
 
+	/** Register a function to be called when loop is idle. */
+	inline int idleAdd(IdleHandler *handler) {
+		return pomp_loop_idle_add(mLoop, &Loop::idleCb, handler);
+	}
+
+	/** Register a function to be called when loop is idle (with associated cookie). */
+	inline int idleAdd(IdleHandler *handler, void *cookie) {
+		return pomp_loop_idle_add_with_cookie(mLoop, &Loop::idleCb, handler, cookie);
+	}
+
+	/** Unregister a function registered with idleAdd. */
+	inline int idleRemove(IdleHandler *handler) {
+		return pomp_loop_idle_remove(mLoop, &Loop::idleCb, handler);
+	}
+
+	/** Unregister a function registered with idleAdd (associated to a cookie). */
+	inline int idleRemove(void *cookie) {
+		return pomp_loop_idle_remove_by_cookie(mLoop, cookie);
+	}
+
+	/** Flush idle entries. Calls all pending idles. */
+	inline int idleFlush(void) {
+		return pomp_loop_idle_flush(mLoop);
+	}
+
+	/** Flush idle entries. Calls all pending idles (associated to a cookie). */
+	inline int idleFlush(void *cookie) {
+		return pomp_loop_idle_flush_by_cookie(mLoop, cookie);
+	}
+
+	/** Enable the watchdog on the loop. */
+	inline int watchdogEnable(uint32_t delay, WatchdogHandler *handler) {
+		return pomp_loop_watchdog_enable(mLoop, delay, &Loop::watchdogCb, handler);
+	}
+
+	/** Disable the watchdog on the loop. */
+	inline int watchdogDisable(void) {
+		return pomp_loop_watchdog_disable(mLoop);
+	}
+
 	/** Enable thread synchronization on the loop */
 	inline int enableThreadSync() {
 		return pomp_loop_enable_thread_sync(mLoop);
@@ -605,6 +681,32 @@ public:
 	private:
 		Func mFunc;
 	};
+
+	/** IdleHandler wrapper that can take a std::function */
+	class IdleHandlerFunc : public IdleHandler {
+		POMP_MOVE_ONLY(IdleHandlerFunc)
+	public:
+		typedef std::function<void (void)> Func;
+		inline IdleHandlerFunc() {}
+		inline IdleHandlerFunc(const Func &func) : mFunc(func) {}
+		inline void set(const Func &func) {mFunc = func;}
+		inline virtual void cb(void) {mFunc();}
+	private:
+		Func mFunc;
+	};
+
+	/** WatchdogHandler wrapper that can take a std::function */
+	class WatchdogHandlerFunc : public WatchdogHandler {
+		POMP_MOVE_ONLY(WatchdogHandlerFunc)
+	public:
+		typedef std::function<void (void)> Func;
+		inline WatchdogHandlerFunc() {}
+		inline WatchdogHandlerFunc(const Func &func) : mFunc(func) {}
+		inline void set(const Func &func) {mFunc = func;}
+		inline virtual void cb(void) {mFunc();}
+	private:
+		Func mFunc;
+	};
 #endif /* POMP_CXX11 */
 };
 
@@ -619,7 +721,7 @@ private:
 	/** Internal event callback */
 	inline static void eventCb(struct pomp_evt *_evt, void *_userdata) {
 		(void)_evt;
-		Handler *handler = reinterpret_cast<Handler *>(_userdata);
+		Handler *handler = static_cast<Handler *>(_userdata);
 		handler->processEvent();
 	}
 
@@ -692,7 +794,7 @@ private:
 	/** Internal timer callback */
 	inline static void timerCb(struct pomp_timer *_timer, void *_userdata) {
 		(void)_timer;
-		Handler *handler = reinterpret_cast<Handler *>(_userdata);
+		Handler *handler = static_cast<Handler *>(_userdata);
 		handler->processTimer();
 	}
 
@@ -836,7 +938,7 @@ private:
 		(void)_ctx;
 
 		/* Get our own object from user data */
-		Context *self = reinterpret_cast<Context *>(_userdata);
+		Context *self = static_cast<Context *>(_userdata);
 		Connection *conn = NULL;
 		ConnectionArray::iterator it;
 		bool allocated = false;
@@ -890,7 +992,7 @@ private:
 		bool allocated = false;
 
 		/* Get our own object from user data */
-		Context *self = reinterpret_cast<Context *>(_userdata);
+		Context *self = static_cast<Context *>(_userdata);
 
 		Connection *conn = NULL;
 		ConnectionArray::iterator it;
@@ -903,7 +1005,7 @@ private:
 		}
 		res = pomp_buffer_get_cdata(_buf, &cdata, &len, &capacity);
 		if (res == 0) {
-			const uint8_t *start = reinterpret_cast<const uint8_t *>(cdata);
+			const uint8_t *start = static_cast<const uint8_t *>(cdata);
 			const uint8_t *end = start + len;
 			v.assign(start, end);
 			self->mEventHandler->recvRawBuffer(self, conn, v);

@@ -123,7 +123,35 @@ static int pomp_evt_fd_clear(struct pomp_evt *evt)
 static void pomp_evt_fd_cb(int fd, uint32_t revents, void *userdata)
 {
 	struct pomp_evt *evt = userdata;
-	pomp_evt_fd_clear(evt);
+	ssize_t ret;
+	uint64_t count;
+
+	do {
+		ret = read(evt->efd, &count, sizeof(count));
+	} while (ret < 0 && errno == EINTR);
+
+	if (ret < 0) {
+		if (errno == EAGAIN)
+			POMP_LOGI("evt %p(fd=%d): err=%d(%s), ignored",
+				  evt, evt->efd, errno, strerror(errno));
+		else
+			POMP_LOGE("evt %p(fd=%d): err=%d(%s)",
+				  evt, evt->efd, errno, strerror(errno));
+		return;
+	}
+
+	if ((size_t)ret != sizeof(count)) {
+		POMP_LOGE("evt %p(fd=%d): invalid read, %zu/%zu",
+			  evt, evt->efd, (size_t)ret, sizeof(count));
+		return;
+	}
+
+	if (!count) {
+		POMP_LOGE("evt %p(fd=%d): no event !",
+			  evt, evt->efd);
+		return;
+	}
+
 	(*evt->cb)(evt, evt->userdata);
 }
 
