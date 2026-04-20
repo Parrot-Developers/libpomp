@@ -75,15 +75,15 @@ static void *pomp_watchdog_thread_cb(void *userdata)
 	uint32_t counter = 0;
 
 #if defined(__APPLE__)
-#	if !TARGET_OS_IPHONE
+	#if !TARGET_OS_IPHONE
 	res = pthread_setname_np("pomp_watchdog");
 	if (res != 0)
-		ULOG_ERRNO("pthread_setname_np", res);
-#	endif
+		POMP_LOG_ERRNO("pthread_setname_np");
+	#endif
 #else
 	res = pthread_setname_np(pthread_self(), "pomp_watchdog");
 	if (res != 0)
-		ULOG_ERRNO("pthread_setname_np", res);
+		POMP_LOG_ERRNO("pthread_setname_np");
 #endif
 
 	pthread_mutex_lock(&watchdog->mutex);
