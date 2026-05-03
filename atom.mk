@@ -50,6 +50,7 @@ ifeq ("$(TARGET_OS_FLAVOUR)","android")
   LOCAL_LDLIBS += -llog
 endif
 
+
 LOCAL_DOXYFILE := Doxyfile
 
 include $(BUILD_LIBRARY)
